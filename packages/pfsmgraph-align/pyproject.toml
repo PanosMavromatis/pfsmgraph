@@ -1,0 +1,63 @@
+# pfsmgraph-align -- sequence alignment (DP-heavy, compiled).
+#
+# Distributes as "pfsmgraph-align", imports as "pfsmgraph.align".
+# Common mid-layer: hseg, hmm, and dl all depend on it (PRD §3.4).
+
+[project]
+name = "pfsmgraph-align"
+version = "0.1.0.dev0"
+description = "Sequence alignment for the pfsmgraph family: pure-Python -> Cython -> Numba CUDA wavefront backends."
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "Panos Mavromatis", email = "panos.mav.ai@gmail.com" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Cython",
+]
+
+dependencies = [
+    # Published lower bound -- keep honest; a workspace source satisfies any
+    # constraint locally, so this only bites pip users after publish (PRD §5.6).
+    "pfsmgraph-dataseq>=0.1",
+    "numpy>=2.1",
+]
+
+[project.optional-dependencies]
+# "GPU" here means numba-cuda for the anti-diagonal wavefront DP passes (lifecycle
+# phase 3, not yet implemented). This is unrelated to dl's torch extra -- do not
+# unify the two (PRD §6). Pin the lower bound when the wavefront backend lands.
+gpu = ["numba-cuda"]
+
+[build-system]
+# TEMPORARILY hatchling, not meson-python.
+#
+# align and hmm are meson-python members by design (PRD §6.1 / D8). But
+# meson-python's editable-install import hook injects a meta-path finder that
+# claims the whole `pfsmgraph` PEP 420 namespace and shadows the sibling
+# distributions (dataseq, hseg, dl) -- `uv sync` then yields an environment where
+# `import pfsmgraph.dataseq` raises ModuleNotFoundError. Two meson editables also
+# conflict with each other. The PRD §6.1 "namespace is fine" evidence was
+# gathered with setuptools editable, which composes; meson-python's does not.
+#
+# There is no compiled code here yet (meson.build's extension block is a dormant
+# `if fs.exists()` guard), so meson-python currently produces a pure-Python wheel
+# and buys nothing. The sibling meson.build is kept in place for the switch back.
+#
+# Revert when the first .pyx lands, and solve the namespace/editable interaction
+# then (non-editable install of the compiled members, a single combined compiled
+# distribution, or an upstream fix). To revert:
+#   requires = ["meson-python", "cython>=3.0", "numpy>=2.1"]
+#   build-backend = "mesonpy"
+# then drop the [tool.hatch.*] block below and restore meson-python/cython/ninja
+# to the workspace-root dev group. NW extension target:
+# pfsmgraph.align.algorithms.needleman_wunsch._cython (PRD §11).
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pfsmgraph"]
+
+[tool.uv.sources]
+pfsmgraph-dataseq = { workspace = true }

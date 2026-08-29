@@ -1,0 +1,29 @@
+# Workspace root for the pfsmgraph package family.
+#
+# This is a *virtual* workspace root: it has no [project] table, so it is not
+# itself a distributable package. Its only job is to group the five publishable
+# members under packages/* so they resolve together against a single uv.lock
+# during development (PRD §5.1, §5.6).
+#
+# The workspace is a development-time construct only. Build backends ignore the
+# [tool.uv.*] tables, and published wheels carry ordinary PyPI dependencies, so
+# pip users never know a workspace existed (PRD §5.3).
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[dependency-groups]
+# Family-wide dev tooling, synced by default for every member.
+#
+#   pytest  - the test runner (PRD §1). One parameterized suite per algorithm,
+#             run against every available backend, so backend equivalence is
+#             enforced rather than assumed (CLAUDE.md "Invariants").
+#
+# When align/hmm move back to meson-python (they are temporarily on hatchling --
+# see packages/pfsmgraph-align/pyproject.toml), re-add: "meson-python", "cython",
+# "ninja". They belong here rather than in build isolation because meson-python's
+# editable install rebuilds on import and its isolated build env is deleted after
+# the initial build (PRD §6.1).
+dev = [
+    "pytest>=8",
+]
