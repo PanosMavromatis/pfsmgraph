@@ -2,7 +2,7 @@
 
 A composable ecosystem of Python packages for modeling symbolic data sequences. Probabilistic finite-state models (PFSMs) are the unifying core, bridging sequence alignment, hierarchical segmentation, HMMs (Baum-Welch), deep learning (RNNs, Transformers), interpretability, and graph operations.
 
-> **Status: scaffolding.** The workspace layout, package boundaries, and build backends are in place. No algorithms are implemented yet — every package is an empty namespace subpackage. See [`docs/design/PRD.md`](docs/design/PRD.md) for the design; decision records will live in [`docs/design/adr/`](docs/design/adr/) (none written yet).
+> **Status: scaffolding.** The workspace layout, package boundaries, and build backends are in place. No algorithms are implemented yet — every package is an empty namespace subpackage. See [`docs/design/PRD.md`](docs/design/PRD.md) for the design and [`docs/design/adr/`](docs/design/adr/README.md) for the decision records, which are authoritative.
 
 ## Packages
 
@@ -33,7 +33,7 @@ A composable ecosystem of Python packages for modeling symbolic data sequences. 
 ```
 pyproject.toml                 # uv workspace root (virtual — not a package)
 docs/design/PRD.md             # authoritative design document
-docs/design/adr/               # decision records (to be written)
+docs/design/adr/               # decision records (authoritative)
 packages/
 ├── pfsmgraph-dataseq/
 ├── pfsmgraph-align/           # + meson.build

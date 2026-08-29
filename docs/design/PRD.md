@@ -3,7 +3,7 @@
 **Status:** Draft — naming, distribution, and build-backend decisions settled; dependency graph partially open
 **Date:** 2026-06-29 (updated 2026-08-21: `pfsmgraph-dataseq` added; PyPI names secured)
 **Intended location:** `docs/design/PRD.md` (repo root, alongside `docs/design/adr/`)
-**ADRs:** none yet — this document is the source from which the initial ADR set is authored (§9)
+**ADRs:** authored — see [`docs/design/adr/`](adr/README.md). The ADRs are authoritative for D1–D11 (§9); this document remains the narrative design record
 
 > A composable ecosystem of Python packages for modeling symbolic data sequences. Probabilistic finite-state models (PFSMs) are the unifying core, bridging sequence alignment, hierarchical segmentation, HMMs (Baum-Welch), deep learning (RNNs, Transformers), interpretability, and graph operations.
 
@@ -345,6 +345,10 @@ This keeps `dl` a regular package and `pfsmgraph` the **only** namespace level. 
 ## 9. ADRs seeded by this document
 
 This PRD is the source for the repository's initial ADR set. Numbering starts fresh; no ADRs are carried over from earlier iterations of the project. Each decision below should be promoted to a standalone ADR at scaffolding time, and the ADR — not this document — becomes the authoritative record thereafter.
+
+> **Status: done (2026-08-29).** The initial set is authored — see [`adr/README.md`](adr/README.md) for the index. Twelve records: the seven topics below (ADRs 0005–0011), the inherited §1.2 decisions (ADRs 0001–0004), and one for the temporary hatchling deviation (ADR 0012), which postdates this document and qualifies §6.1.
+>
+> **The ADRs are now authoritative for D1–D11.** Amend decisions there, not here. Two carry a non-`Accepted` status: **ADR 0010** is `Proposed` until the encoder API reconciliation lands with the `dataseq` merge (per the prerequisite noted at the end of this section), and **ADR 0012** is `Accepted (temporary)`, expiring when the first `.pyx` lands.
 
 | Decision | Proposed ADR topic | Source |
 |---|---|---|

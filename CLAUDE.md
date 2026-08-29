@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-**The workspace is scaffolded and `uv sync`s cleanly; no algorithms are implemented.** In place: the uv workspace root `pyproject.toml` (virtual — no `[project]` table), `uv.lock`, all five `packages/*` members with their own `pyproject.toml`, the (currently dormant) `meson.build` files for `align` and `hmm`, and one empty `pfsmgraph/<pkg>/__init__.py` per member (plus `dl/rnn/` and `dl/transformer/`). Not yet present: any implementation code, any tests, any ADRs (`docs/design/adr/` exists but is empty). The proof-of-concept alignment/HMM code has not been moved in. The PRD remains the authoritative design document.
+**The workspace is scaffolded and `uv sync`s cleanly; no algorithms are implemented.** In place: the uv workspace root `pyproject.toml` (virtual — no `[project]` table), `uv.lock`, all five `packages/*` members with their own `pyproject.toml`, the (currently dormant) `meson.build` files for `align` and `hmm`, and one empty `pfsmgraph/<pkg>/__init__.py` per member (plus `dl/rnn/` and `dl/transformer/`). Not yet present: any implementation code, any tests. The proof-of-concept alignment/HMM code has not been moved in. The initial ADR set (twelve records) is authored in `docs/design/adr/` and is authoritative for the decisions it covers; the PRD remains the narrative design document.
 
 **`align` and `hmm` are temporarily on hatchling, not meson-python.** meson-python's editable-install import hook injects a `sys.meta_path` finder that claims the entire `pfsmgraph` PEP 420 namespace and shadows the other distributions, so `import pfsmgraph.dataseq` (and `hseg`, `dl`) fails after `uv sync`. Neither package has compiled code yet — the `meson.build` extension blocks are dormant `if fs.exists()` guards — so the switch to meson-python is deferred to when the first `.pyx` lands, at which point the namespace/editable interaction must be solved (non-editable install of the compiled members, a single combined compiled distribution, or an upstream fix). The `meson.build` files and the revert recipe are kept in `packages/pfsmgraph-{align,hmm}/pyproject.toml`. This qualifies the PRD §6.1 note, whose "namespace is fine" evidence was gathered with *setuptools* editable, which composes; meson-python's finder does not.
 
-Still to do, in PRD order (§11): author the initial ADR set (§9); then implement `dataseq` (merge of three existing implementations, `dl` version as base — §3.5); then `hmm` (Lush translation); then `align`, then `hseg`.
+Still to do, in PRD order (§11): implement `dataseq` (merge of three existing implementations, `dl` version as base — §3.5); then `hmm` (Lush translation); then `align`, then `hseg`. The `dataseq` merge also promotes ADR 0010 from `Proposed` to `Accepted` by settling the encoder API.
 
 ## Commands
 
@@ -53,7 +53,7 @@ These constrain any code written here. They are inherited from the proof-of-conc
 - **Encode at the boundary.** Multi-character string symbols are mapped to integers at the entry point of every public call; all inner computation is integer-only; results decode back to strings at exit. This is what makes Cython and CUDA backends mechanical to write — they never touch string types.
 - **Fixed reserved symbol block** in `dataseq`, not configurable: `PAD`=0, `UNK`=1, `BOS`=2, `EOS`=3, `GAP`=4, `MSK`=5; user symbols from 6. `PAD` must be 0 because PyTorch's zero-fill idioms (`pad_sequence`, `torch.zeros()` buffers) would otherwise silently mean something other than "absent". Encoding is **strict by default** — unseen symbols raise; `UNK` fallback is explicit opt-in.
 - **Three-phase algorithm lifecycle**, applied in order wherever dynamic programming appears: pure Python (correctness) → Cython (performance) → Numba CUDA anti-diagonal wavefront (scale).
-- **One parameterized test suite per algorithm**, run automatically against every available backend, so backend equivalence is enforced rather than assumed.
+- **One parameterized test suite per algorithm**, run automatically against every available backend, so backend equivalence is enforced rather than assumed. Absent hardware (no CUDA device) skips, but *loudly* — the session header names every backend excluded and why; a backend that is implemented but not importable (missing or stale Cython build) is a hard failure, never a skip; a lifecycle phase not yet reached contributes no parameter at all. `PFSMGRAPH_REQUIRE_BACKENDS` escalates skips to failures for CI. See ADR 0003.
 - **Build backends are per-package, not family-wide.** meson-python for compiled members (`align`, the Baum-Welch core of `hmm`); hatchling for pure-Python members. meson-python editable installs need `ninja` present for rebuild-on-import. *(Currently `align`/`hmm` are on hatchling too, pending their first `.pyx` — see "Current state".)*
 - **"GPU" means two unrelated things.** `numba-cuda` for the DP packages, `torch` for `dl`. Do not unify these into one `[gpu]` extra.
 
@@ -66,4 +66,4 @@ The `0.0.0` placeholder releases already on PyPI are intentionally dependency-fr
 ## Design docs
 
 - `docs/design/PRD.md` — packaging, naming, and distribution architecture; the source for the initial ADR set (§9).
-- `docs/design/adr/` — exists but empty; ADRs still to be written. Numbering starts fresh at 0001; do not import earlier ADR numbering.
+- `docs/design/adr/` — the twelve initial ADRs, authoritative for the decisions they cover; [`adr/README.md`](docs/design/adr/README.md) indexes them. Add new records with the next unused number and a row in that index; numbers are never reused.
