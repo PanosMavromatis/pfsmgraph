@@ -27,3 +27,12 @@ members = ["packages/*"]
 dev = [
     "pytest>=8",
 ]
+
+[tool.pytest.ini_options]
+# -ra reports the reason for every skipped test in the run summary. Pytest's
+# default prints a bare "s" and swallows the reason, which would defeat the
+# unavailable-backend policy of ADR 0003: a CUDA backend skipped for absent
+# hardware must say so in the run's own output, never silently. The companion
+# mechanism -- a pytest_report_header hook printing the backend matrix once at
+# session start -- lands with the first test suite.
+addopts = "-ra"

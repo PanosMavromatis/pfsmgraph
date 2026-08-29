@@ -66,4 +66,5 @@ The `0.0.0` placeholder releases already on PyPI are intentionally dependency-fr
 ## Design docs
 
 - `docs/design/PRD.md` — packaging, naming, and distribution architecture; the source for the initial ADR set (§9).
+- `docs/plan/DEFERRED.md` — decided-but-not-yet-actionable work, indexed by the trigger that unblocks it (the `dataseq` merge, the first `.pyx`, CI existing, the first real release). Check it when starting any of those; several items must land *as part of* their trigger rather than after it.
 - `docs/design/adr/` — the twelve initial ADRs, authoritative for the decisions they cover; [`adr/README.md`](docs/design/adr/README.md) indexes them. Add new records with the next unused number and a row in that index; numbers are never reused.
