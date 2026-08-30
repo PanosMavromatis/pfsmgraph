@@ -231,3 +231,6 @@ __marimo__/
 .VolumeIcon.icns
 .com.apple.timemachine.donotpresent
 .apdisk
+
+# Codex working-tree review output (see docs/agents/codex.md)
+REVIEW.md
