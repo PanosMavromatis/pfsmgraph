@@ -7,10 +7,13 @@ and 2 (settle the encoder API and promote ADR 0010)
 
 ## Tasks
 
-- [ ] Create a scratch location where the three implementations will be imported to be analyzed and merged
-  - [ ] The location does not interfere with any build, should `uv` be run deliberately or accidentally: it sits **outside `packages/`**, which the workspace glob `members = ["packages/*"]` would otherwise claim as a member and fail on for want of a `pyproject.toml`
-  - [ ] It is not collected by `uv run pytest`, which has no `testpaths` and so walks the whole tree — a dot-prefixed name such as `.scratch/` is excluded by pytest's default `norecursedirs` (`.*`) with no config change; `_scratch/` would **not** be
-  - [ ] Its name is not one `.gitignore` already swallows (`lib/`, `build/`, `var/`, `share/`), since this code is meant to be committed on the branch
+- [x] Create a scratch location where the three implementations will be imported to be analyzed and merged
+  - [x] The location does not interfere with any build, should `uv` be run deliberately or accidentally: it sits **outside `packages/`**, which the workspace glob `members = ["packages/*"]` would otherwise claim as a member and fail on for want of a `pyproject.toml`
+  - [x] It is not collected by `uv run pytest`, which has no `testpaths` and so walks the whole tree — a dot-prefixed name such as `.scratch/` is excluded by pytest's default `norecursedirs` (`.*`) with no config change; `_scratch/` would **not** be
+  - [x] Its name is not one `.gitignore` already swallows (`lib/`, `build/`, `var/`, `share/`), since this code is meant to be committed on the branch
+  > **Q:** Where should the scratch location live, and how should it escape pytest collection — `.scratch/` (zero config, dot-excluded), `scratch/` with a self-contained `conftest.py` setting `collect_ignore_glob`, or `scratch/` with `norecursedirs` added to the root `pyproject.toml`?
+  > **A:** `.scratch/` at the repo root. Zero configuration to add now or remove at cleanup; deleting the directory removes every trace.
+  > **Done:** `.scratch/` created with `README.md` and one subdirectory per implementation (`dl/`, `hmm-lush/`, `py-rudimentary/`, each with a `.gitkeep` so the committed tree matches the documented layout). Root `pyproject.toml` unchanged. All three criteria verified empirically rather than asserted: `uv sync` resolved 51 packages without claiming `.scratch` as a member; `git check-ignore` found no match, so the tree commits; and a deliberately-failing `test_canary.py` placed inside `.scratch/` left `uv run pytest` at "collected 0 items", while the identical file at the repo root produced `Interrupted: 1 error during collection` — demonstrating the exclusion works and that the failure mode it prevents is real. Both canaries removed. Verified against pytest 9.1.1, whose default `norecursedirs` was read from source as `["*.egg", ".*", "_darcs", "build", "CVS", "dist", "node_modules", "venv", "{arch}"]`.
 
 - [ ] Import the existing `dl` implementation into the scratch location
   - [ ] The first implementation is readable in the scratch location and its provenance is recorded

@@ -54,11 +54,24 @@ suite; the `dependencies = []` fix; the 0.1.0 release.
 - `docs/plan/DEFERRED.md`, trigger "the `dataseq` merge" — the register of what this
   revision must not leave behind.
 
-**Dependency:** the preexisting code is not in this repo yet. The first goal cannot start
-until it is imported, and will be marked `[!]` if that has not happened.
+**Dependency:** the preexisting code is not in this repo yet. The three import goals
+(2–4 in the branch plan) cannot start until it is available, and will be marked `[!]` if
+that has not happened. The first goal, creating the scratch location, does not depend on
+it and is complete.
 
 ## Notes
 
 Running log — decisions made, things tried, things deferred.
 
 - 2026-08-31 — Branch created from `main` at 73e15a0. No code imported yet.
+- 2026-08-31 — Import goal split into a prelude, one goal per implementation in merge
+  order, and a postlude. Under the Lush import, the semantic account of the original now
+  precedes the translation: a close translation is defined by fidelity to something you
+  must already understand, so translating first would run the comparison against our
+  reading of the original rather than the original itself.
+- 2026-08-31 — Scratch location is `.scratch/` at the repo root, tracked, with one
+  subdirectory per implementation. The leading dot is load-bearing: `uv run pytest` has no
+  `testpaths`, so its walk reaches everywhere, and the dot matches pytest's default
+  `norecursedirs` entry `.*` — no config to add now or remove at cleanup. Verified with a
+  deliberately-failing canary inside `.scratch/` (not collected) against the same file at
+  the repo root (collection error). Root `pyproject.toml` untouched.
