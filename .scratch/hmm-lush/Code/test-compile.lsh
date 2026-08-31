@@ -1,0 +1,12 @@
+
+
+(de test-compile (state-n)
+  ((-int-) state-n)
+  (when (and (>= state-n 0)
+	     (< state-n 3))
+    (printf "Success!\n")))
+
+
+(dhc-make ()
+  test-compile
+  )

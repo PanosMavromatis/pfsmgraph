@@ -1,0 +1,21 @@
+#!/bin/bash
+exec lush "$0" "$@"
+!#
+
+; Load HMM library
+(libload "../Code/HMMlib/hmm-trainer-view")
+
+; Initialize GUI framework
+(ogre)
+
+; Create the top-level trainer.
+(defvar hmm-trainer-w (new HMMtrainerWindow ()))
+
+
+; From this point on, the GUI takes over.
+
+; Exit script when user closes main window.
+(wait hmm-trainer-w)
+
+
+

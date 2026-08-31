@@ -1,0 +1,80 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;;  seq-state.lsh
+;;
+
+
+#? ** seq-state
+;; Class representing a sequence.
+;; It is a direct subclass of gb-state.
+
+(defclass seq-state object
+  ((-str-) name)
+  ((-int-) size)
+  ((-idx1- (-gptr-)) alphabet)
+  ((-idx1- (-int-)) symbol-data)
+  ((-idx1- (-int-)) path-states)
+  ((-idx1- (-float-)) path-entropy))
+
+(defmethod seq-state seq-state (in-name init-size)
+  ((-str-) in-name)
+  ((-int-) init-size)
+  (setq name in-name)
+  (setq size init-size)
+  (setq symbol-data (int-matrix init-size))
+  (setq path-states (int-matrix (1+ init-size)))
+  (setq path-entropy (float-matrix (1+ init-size)))
+  ())
+
+(defmethod seq-state resize (new-size) 
+  ((-int-) new-size)
+  (setq size new-size)
+  (midx-m1resize symbol-data new-size)
+  (midx-m1resize path-states (1+ new-size))
+  (midx-m1resize path-entropy (1+ new-size))
+  ())
+
+
+(defmethod seq-state set-alphabet (in-alphabet)
+  ((-idx1- (-gptr-)) in-alphabet)
+  (setq alphabet in-alphabet))
+
+
+(defmethod seq-state view-string ()
+  (let ((current-str "")
+	(symbol-str "")
+	(path-str ""))
+    (setq current-str
+	  (sprintf " [%d]"
+		   (path-states 0)))
+    (setqC path-str current-str)
+    (setqC symbol-str (blank-str current-str))
+    (for (pos-i 0 (1- size))
+	 (setq current-str
+	       ;; Before Patrick's hack:
+	       ;;(sprintf " %l"
+	       ;;         (alphabet (symbol-data pos-i))))
+	       (sprintf " %s"
+			(ptr-str (alphabet (symbol-data pos-i)))))
+	 (setqC symbol-str current-str)
+	 (setqC path-str (blank-str current-str))
+	 (setq current-str
+	       (sprintf " [%d]"
+			(path-states (1+ pos-i))))
+	 (setqC path-str current-str)
+	 (setqC symbol-str (blank-str current-str)))		
+	 (concat "\n" symbol-str " \n\n" path-str " \n")))
+
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(dhc-make
+ ()
+ (seq-state
+  seq-state
+  set-alphabet
+  ))
+
+

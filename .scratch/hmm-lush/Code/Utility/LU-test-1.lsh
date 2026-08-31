@@ -1,0 +1,204 @@
+
+(dmd setq+ (lhs rhs)
+  `(setq ,lhs (+ ,lhs ,rhs)))
+
+(dmd setq- (lhs rhs)
+  `(setq ,lhs (- ,lhs ,rhs)))
+
+(dmd setq* (lhs rhs)
+  `(setq ,lhs (* ,lhs ,rhs)))
+
+(dmd setq/ (lhs rhs)
+  `(setq ,lhs (/ ,lhs ,rhs)))
+
+
+;; The following is adapted from Numerical Recipes in C
+;;  Given a N x N matrix A, this routine replaces it by the LU decomposition of 
+;;  a row-wise permutation of itself.  A and N are input.  A is output, arranged
+;;  in the following form:
+;;      U00  U01  U02 ...
+;;      L10  U11  U12 ...
+;;      L20  L21  U22 ...
+;;       ...
+;;  INDX is an output vector of length N that records the row permutation 
+;;  effected by the partial pivoting.  D is returned as +1/-1 depending on
+;;  whether the number of row interchanges was even or odd, respectively.
+;; This function is used in combination with LU-back-substitution to solve
+;;  linear equations or invert a matrix.
+;;    beta_ij = a_ij - sum_{k=1,i-1} alpha_ik beta_kj                 (2.3.12)
+;;    alpha_ij = ( a_ij - sum_{k=1,j-1} alpha_ik beta_kj ) / beta_jj  (2.3.13)
+
+(de LU-decomposition (A N INDX)
+  ((-idx2- (-float-)) A)
+  ((-int-) N)
+  ((-idx1- (-float-)) INDX)
+  (let ((D 1.0)             ; No row interchanges yet.
+        (*TINY* 1e-20)
+        (I 0)
+        (IMAX 0)
+        (J 0)
+        (K 0)
+        (BIG 0.0)
+        (DUM 0.0)
+        (SUM 0.0)
+        (TEMP 0.0)
+        (VV (float-matrix (1+ N))))
+    ; VV stores the implicit scaling of each row.
+    ((-float-) D)
+    ((-float-) *TINY*)
+    ((-int-) I)
+    ((-int-) IMAX)
+    ((-int-) J)
+    ((-int-) K)
+    ((-float-) BIG)
+    ((-float-) DUM)
+    ((-float-) SUM)
+    ((-float-) TEMP)
+    ((-idx1- (-float-)) VV)
+    ; Loop over rows to get the implicit scaling information.
+    (for (I 1 N)
+	 (setq BIG 0.0)
+	 (for (J 1 N)
+	      (setq TEMP (abs (A I J)))
+	      (when (> TEMP BIG)
+		(setq BIG TEMP)))
+	 (when (= BIG 0.0)
+	   (error "Singular matrix in function LU-decomposition"))
+	 ; No non-zero largest element.  Save the scaling.
+	 (VV I (/ 1.0 BIG)))
+    ; This is the loop over columns of Crout's method.
+    (for (J 1 N)
+	 ; This is eq. 2.3.12, except for i = j.
+	 (for (I 1 (1- J))
+	      (setq SUM (A I J))
+	      (for (K 1 (1- I))
+		   (setq- SUM (* (A I K) (A K J))))
+	      (A I J SUM))
+	 ; Initialize for the search for largest pivot element.
+	 (setq BIG 0.0)
+	 ; This is i = j of equation 2.3.12 and i = j+1 ... N
+	 ;   of equation 2.3.13.
+	 (for (I J N)
+	      (setq SUM (A I J))
+	      (for (K 1 (1- J))
+		   (setq- SUM (* (A I K) (A K J))))
+	      (A I J SUM)
+	      (setq DUM (* (VV I) (abs SUM)))
+	      ; Is the figure of merit for the pivot better than the best so far?
+	      (when (>= DUM BIG)
+		(setq BIG DUM)
+		(setq IMAX I)))
+	 ; Do we need to interchange rows?
+	 (when (<> J IMAX)
+	   ; Yes, do so...
+	   (for (K 1 N)
+		(setq DUM (A IMAX K))
+		(A IMAX K (A J K))
+		(A J K DUM))
+	   ; ...and change the parity of D.
+	   (setq* D -1.0)
+	   ; Also interchange the scale factor.
+	   (VV IMAX (VV J)))
+	 (INDX J IMAX)
+	 ; If the pivot element is zero, the matrix is singular (at least to the
+	 ;   precision of the algorithm).  For some applications on singular
+	 ;   matrices, it is desirable to substitute *TINY* for zero.
+	 (when (= (A J J) 0.0)
+	   (A J J *TINY*))
+	 ; Now, finally, divide by the pivot element.
+	 (when (<> J N)
+	   (setq DUM (/ 1.0 (A J J)))
+	   (for (I (1+ J) N)
+		(A I J (* (A I J) DUM)))))
+    ; Go back for the next column in the reduction
+    D))
+
+
+;; The following is adapted from Numerical Recipes in C
+;;  Solves the set of linear equations A X = B.  Here A is input, not as the
+;;  matrix A but rather as its LU decomposition, determined by the function
+;;  LU-decomposition.  INDX is input as the permutation vector returned by 
+;;  LU-decomposition.  B is input as the right-hand side vector, and returns
+;;  with the solution vector X.  A, N, and INDX are not modified by this
+;;  function, and can be left in place for successive calls with different 
+;;  right-hand sides B.  This function takes into account the possibility
+;;  that B will begin with many zero elements, so it is efficient for use
+;;  in matrix inversion.
+;;    y_1 = b+1 / alpha_11
+;;    y_i = ( b_i - sum_{j=1,i-1} alpha_ij y_j ) / alpha_ii  (2.3.6)
+;;          i = 2,3, ... N
+;;    x_N = y_N / beta_NN
+;;    x_i = ( y_i - sum_{j=i+1,N} beta_ij x_j ) / beta_ii    (2.3.7)
+;;          i = N-1, N-2, ... 1
+
+(de LU-back-substitution (A N INDX B)
+  ((-idx2- (-float-)) A)
+  ((-int-) N)
+  ((-idx1- (-float-)) INDX)
+  ((-idx1- (-float-)) B)
+  (let ((I 0)
+	(II 0)
+	(IP 0)
+	(J 0)
+	(SUM 0.0))
+    ((-int-) I)
+    ((-int-) II)
+    ((-int-) IP)
+    ((-int-) J)
+    ((-float-) SUM)
+    ; When II is set to a positive value, it will become the index of the 
+    ;  first non-vanishing element of B.  We now do the forward substitution,
+    ;  equation 2.3.6.  The only wrinkle is to unscramble the permutation
+    ;  as we go.
+    (for (I 1 N)
+	 (setq IP (INDX I))
+	 (setq SUM (B IP))
+	 (B IP (B I))
+	 (if (<> II 0)
+	     (for (J II (1- I))
+		  (setq- SUM (* (A I J) (B J))))
+	   ; A non-zero element was encountered, so from now on we will
+	   ;  have to do the sums in the loop above.
+	   (when (<> SUM 0.0)
+	     (setq II I)))
+	 (B I SUM))
+    ; Now we do the back-substitution, equation 2.3.7.
+    (for (I N 1 -1)
+	 (setq SUM (B I))
+	 (for (J (1+ i) N)
+	      (setq- SUM (* (A I J) (B J))))
+	 ; Store a component of the solution vector X.
+	 (B I (/ SUM (A I I))))))
+
+
+(de LU-solve (A B)
+  ((-idx2- (-float-)) A)
+  ((-idx1- (-float-)) B)
+  (let* ((N (1- (idx-dim B 0)))
+	 (INDX (float-matrix (1+ N))))
+    ((-int-) N)
+    ((-idx1- (-float-)) INDX)
+    (LU-decomposition A N INDX)
+    (LU-back-substitution A N INDX B)))
+
+
+(setq i [f 0 0 0])
+
+(setq a1 [f [0 0 0] [0 1 1] [0 0 1]])
+(setq b1 [f 0 5 3])
+
+(setq a2 [f [0 0 0] [0 1 0] [0 1 1]])
+(setq b2 [f 0 2 5])
+
+(setq a3 [f [0 0 0] [0 1 -1] [0 1 1]])
+(setq b3 [f 0 -1 5])
+
+(setq a4 [f [0 0 0 0] [0 5 0 6] [0 4 3 2] [0 1 0 -1]])
+(setq b4 [f 0 52 31 -5])
+
+(setq a5 [f [0 0 0 0] [0 1 0 1] [0 0 -1 0] [0 -1 0 1]])
+(setq b5 [f 0 9 -3 5])
+
+
+
+

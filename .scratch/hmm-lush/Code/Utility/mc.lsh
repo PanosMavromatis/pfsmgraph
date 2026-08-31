@@ -1,0 +1,47 @@
+;;;
+;;; mc.lsh
+;;;
+
+; Code for simple Monte-Carlo simulations
+
+(libload "util")
+
+
+(de p-normalize (ps)
+  (let ((sum 0.0))
+    (each ((i ps))
+      (setq+ sum i))
+    (mapcar (lambda (x)
+	      (safe-/ x sum))
+	    ps)))
+
+
+(de p-cumulative (ps)
+  (setq ps (p-normalize ps))
+  (let* ((M (length ps))
+	 (cum-ps (float-matrix M))
+	 (sum 0.0))
+    (for (i 0 (1- M))
+	 (setq+ sum (nth i ps))
+	 (cum-ps i sum))
+    cum-ps))
+
+
+(de mc-fin (symbols cum-ps)
+  (let ((M (length symbols)))
+    (if (<> M (idx-nelements cum-ps))
+	(error 'mc-fin "Arguments must have the same length.")
+      (let ((x (rand))
+	    (i 0))
+	(while (< (cum-ps i) x)
+	  (incr i))
+	(nth i symbols)))))
+
+
+(de mc-n (cum-ps)
+  (let ((x (rand))
+	(i 0))
+    (while (< (apply cum-ps (list i)) x)
+      (incr i))
+    i))
+

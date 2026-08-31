@@ -1,0 +1,237 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;;  hmm-trainer-view.lsh
+;;
+
+(libload "../HMMlib/hmm-trainer")
+
+
+(defclass HMMtrainerWindow WindowObject
+  
+  ((-obj- (hmm-trainer)) hmm-trainer-m)
+  
+  ((-obj- (EditText)) seq-path-v)
+  
+  ((-obj- (String)) model-name-v)
+  ((-obj- (EditText)) transition-v)
+  ((-obj- (EditText)) output-v)
+  
+  ((-obj- (EditNumber)) total-cycles-v)
+  ((-obj- (EditNumber)) add-cycles-v)
+  ((-obj- (EditNumber)) data-p-v)
+  
+  ((-obj- (EditNumber)) data-dl-v)
+  ((-obj- (EditNumber)) model-dl-v)
+  ((-obj- (EditNumber)) total-dl-v)
+  ((-obj- (EditNumber)) d-v)
+  ((-obj- (EditNumber)) test-data-dl-v)
+
+  ((-obj- (EditNumber)) next-split-v)
+  ((-obj- (EditNumber)) next-merge-1-v)
+  ((-obj- (EditNumber)) next-merge-2-v)
+  
+  ((-obj- (String)) split?-v)
+  ((-obj- (String)) merge?-v)
+  ((-obj- (String)) move?-v)
+  
+  ((-obj- (EditString)) history-labels-v)
+  ((-str-) history-labels)
+  ((-obj- (EditText)) history-v)
+  
+  ((-obj- (EditNumber)) n-new-moves-v))
+
+
+(defmethod HMMtrainerWindow HMMtrainerWindow (in-hmm-trainer-m
+					      &optional
+					      (x 0) (y 1) (w 1017) (h 720))
+  (setq hmm-trainer-m in-hmm-trainer-m)
+  
+  (==> this WindowObject x y w h "HMM Trainer Window"
+       (new Column
+	    (new Row
+		 (new String "Viterbi Path - Training Data Set:")
+		 (new String :hmm-trainer-m:data-source:name)
+		 (new String "          ")
+		 (new DarkSpace 3)
+		 (new String "Test Data Set:")
+		 (new String "none"))
+	    (setq seq-path-v
+		  (new EditText 140 5))
+	    (new Row
+		 (new Column
+		      (new String "Topology Search History:")
+		      (setq history-labels-v
+			    (new EditString 72 ""))
+		      (setq history-v (new EditText 72 21))
+		      (new Grid 6
+			   (new String "Next split:")
+			   (new String "")
+			   (setq next-split-v
+				 (new EditNumber 6 0))
+			   (setq split?-v (new String ""))
+			   (new stdbutton "Try Split"
+				(lambda (c)
+				  (==> hmm-trainer-m try-split-with-update
+				       (==> next-split-v getdata))
+				  (==> thiswindowobject update-view)))
+			   (new stdbutton "Suggest Split"
+				(lambda (c)
+				  (==> hmm-trainer-m suggest-split)
+				  (==> thiswindowobject update-view)))
+			   (new String "Next merge:")
+			   (setq next-merge-1-v
+				 (new EditNumber 6 0))
+			   (setq next-merge-2-v
+				 (new EditNumber 6 0))
+			   (setq merge?-v (new String ""))
+			   (new stdbutton "Try Merge"
+				(lambda (c)
+				  (==> hmm-trainer-m try-merge-with-update
+				       (==> next-merge-1-v getdata)
+				       (==> next-merge-2-v getdata))
+				  (==> thiswindowobject update-view)))
+			   (new stdbutton "Suggest Merge"
+				(lambda (c)
+				  (==> hmm-trainer-m suggest-merge)
+				  (==> thiswindowobject update-view)))
+			   (new stdbutton "Continue for "
+				(lambda (c)
+					; Simulates repeated sequence of button presses:
+				  (repeat (==> n-new-moves-v getdata)
+				    (==> hmm-trainer-m suggest-move)
+				    (==> hmm-trainer-m keep-model))
+				  (==> thiswindowobject update-view)))
+			   (setq n-new-moves-v
+				 (new EditNumber 6 0))
+			   (new String " moves")
+			   (new String "          ")
+			   (setq move?-v (new String ""))
+			   (new stdbutton "Suggest Move"
+				(lambda (c)
+				  (==> hmm-trainer-m suggest-move)
+				  (==> thiswindowobject update-view))))
+		      (new DarkSpace 3)
+		      (new Grid 5
+			   (new String "Data DL")
+			   (new String "Model DL")
+			   (new String "Total DL")
+			   (new String "d")
+			   (new String "Test Data DL")
+			   (setq data-dl-v
+				 (new EditNumber 14 0.0000))
+			   (setq model-dl-v
+				 (new EditNumber 14 0.0000))
+			   (setq total-dl-v
+				 (new EditNumber 14 0.0000))
+			   (setq d-v
+				 (new EditNumber 10 0.0000))
+			   (setq test-data-dl-v
+				 (new EditNumber 14 0.0000))))
+		 (new Column
+		      (new Grid 2
+			   (new String "Model:")
+			   (setq model-name-v
+				 (new String "")))
+		      (new Row
+			   (new Column
+				(new String "Transitions:")
+				(setq transition-v
+				      (new EditText 21 23)))
+			   (new Column
+				(new String "Outputs:")
+				(setq output-v
+				      (new EditText 37 23))))
+		      (new Row
+			   (new stdbutton "Keep model"
+				(lambda (c)
+				  (==> hmm-trainer-m keep-model)
+				  (==> thiswindowobject update-view)))
+			   (new stdbutton "Reset model"
+				(lambda (c)
+				  (==> hmm-trainer-m reset-model)
+				  (==> thiswindowobject update-view)))
+			   (new String "           ")
+			   (new String "           ")
+			   (new DarkSpace 3)
+			   (new DarkSpace 3)
+			   (new stdbutton "Update View"
+				(lambda (c)
+				  (==> thiswindowobject update-view)))
+			   (new DarkSpace 3)
+			   (new DarkSpace 3))
+		      (new DarkSpace 3)
+		      (new Row
+			   (new Column
+				(new String "Baum-Welch Training cycles:")
+				(new Row
+				     (new String "Total")
+				     (setq total-cycles-v
+					   (new EditNumber 8))
+				     (new String "New")
+				     (setq add-cycles-v
+					   (new EditNumber 6 10))
+				     (new stdbutton "Add"
+					  (lambda (c)
+					    (==> hmm-trainer-m run-add-with-update
+						 (==> add-cycles-v getdata))
+					    (==> thiswindowobject update-view)))
+				     (new stdbutton "Converge"
+					  (lambda (c)
+					    (==> hmm-trainer-m run-converge-with-update)
+					    (==> thiswindowobject update-view)))))
+			   (new Column
+				(new String "Data -log( p )")
+				(setq data-p-v
+				      (new EditNumber 14 0.0000))))
+		      (new Row
+			   (new stdbutton "Update DL"
+				(lambda (c)
+				  (setq :hmm-trainer-m:params:d
+					(==> d-v getdata))
+				  (==> hmm-trainer-m update-dl ())
+				  (==> thiswindowobject update-view)))
+			   (new stdbutton "Suggest d"
+				(lambda (c)
+				  (==> hmm-trainer-m suggest-d-with-update)
+				  (==> thiswindowobject update-view)))
+			   (new stdbutton "Keep d"
+				(lambda (c)
+				  (==> hmm-trainer-m keep-d)
+				  (==> thiswindowobject update-view)))
+			   (new stdbutton "Reset d"
+				(lambda (c)
+				  (==> hmm-trainer-m reset-d)
+				  (==> hmm-trainer-m update-dl ())
+				  (==> thiswindowobject update-view))))))))
+  (setq history-labels
+	" Size     Move      Data DL    Model DL   Total DL   d      Test Data DL")
+  (==> this update-view))
+
+
+(defmethod HMMtrainerWindow update-view ()
+  (==> seq-path-v setdata (==> :hmm-trainer-m:data-seq view-string))
+  (==> model-name-v setdata
+       (concat :hmm-trainer-m:model:name
+	       (if :hmm-trainer-m:dirty " --- [ not saved ]" "")))
+  (let ((view-strings (==> :hmm-trainer-m:params view-string)))
+    (==> transition-v setdata (nth 0 view-strings))
+    (==> output-v setdata (nth 1 view-strings)))
+  (==> total-cycles-v setdata :hmm-trainer-m:total-cycles)
+  (==> data-p-v setdata :hmm-trainer-m:data-p)
+  (==> data-dl-v setdata :hmm-trainer-m:data-dl)
+  (==> model-dl-v setdata :hmm-trainer-m:model-dl)
+  (==> total-dl-v setdata :hmm-trainer-m:total-dl)
+  (==> d-v setdata :hmm-trainer-m:params:d)
+  (==> test-data-dl-v setdata :hmm-trainer-m:test-data-dl)
+  (==> next-split-v setdata :hmm-trainer-m:next-split)
+  (==> next-merge-1-v setdata :hmm-trainer-m:next-merge-1)
+  (==> next-merge-2-v setdata :hmm-trainer-m:next-merge-2)
+  (==> split?-v setdata (if :hmm-trainer-m:split? "<====" ""))
+  (==> merge?-v setdata (if :hmm-trainer-m:merge? "<====" ""))
+  (==> move?-v setdata (cond (:hmm-trainer-m:split? " * S P L I T * ")
+			     (:hmm-trainer-m:merge? " * M E R G E * ")
+			     (t "")))
+  (==> history-labels-v setdata history-labels)
+  (==> history-v setdata :hmm-trainer-m:params:training-log))
+
+

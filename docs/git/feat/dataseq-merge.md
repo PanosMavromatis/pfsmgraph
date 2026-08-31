@@ -92,3 +92,15 @@ Running log — decisions made, things tried, things deferred.
   whose V x V transition matrix would be ~1.74e8 entries at V = 13,177 for an alphabet of a few
   dozen real symbols. This is the substance of what ADR 0010 is `Proposed` pending, so goal 7
   now has its decision section in draft.
+- 2026-08-31 — Lush implementation imported to `.scratch/hmm-lush/`; 135 tracked files
+  (≈129 KB) out of 929 MB, again deny-by-default. Not version-controlled, so provenance
+  is dates rather than a revision: sources span 2008–2011. Neither of the MelodyHPO
+  renames applied — no `.git`, no nested `CLAUDE.md` — both checked before reading.
+  The import already answers the question goals 3–4 were given: this encoder is a
+  **dense vocabulary index**, built in first-appearance order, and its reserved block is
+  `0 begin`, `1 end` with user symbols from **2**. That is a third offset, and the first
+  one that collides with ADR 0011 destructively rather than merely differing: the loader
+  packs ragged sequences into a dense `size × seq_size_max` integer matrix, so the unused
+  tail of every short row is `0`, which here means `begin`. The original is safe only
+  because `_seq_sizes` is consulted at every read. This is the ADR 0011 `PAD`=0 rationale
+  observed in the wild rather than argued from first principles.

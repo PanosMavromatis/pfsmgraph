@@ -44,7 +44,7 @@ directory is gone.
 | Implementation | Source | Revision / date | Imported |
 |---|---|---|---|
 | `dl` | `github.com/PanosMavromatis/MelodyHPO`, branch `main` | `5f423118fa7cda0d7ca347ef0f112a326cca819c` — 2026-03-23, "Automate doc_paths construction in minicorps layer definitions" | 2026-08-31 |
-| `hmm-lush` | _tbd_ | _tbd_ | _tbd_ |
+| `hmm-lush` | A personal project of the repository owner's, not under version control | No VCS. Source mtimes span 2008-01-24 – 2011-02-01; the tree was last reorganised 2022-08-26 | 2026-08-31 |
 | `py-rudimentary` | _tbd_ | _tbd_ | _tbd_ |
 
 The MelodyHPO working tree was copied whole, so it also carries a checkout of a
@@ -85,6 +85,35 @@ vendored, since it belongs to MelodyData rather than to MelodyHPO.
 
 Both `.venv` trees, the caches, and `LLMsFS/` account for essentially all of the 2.2 GB.
 None of it is needed to read the merge base; **do not walk the tree indiscriminately.**
+
+## The `hmm-lush` import
+
+**No renames were needed.** Both of the edits recorded above for MelodyHPO were
+checked for before anything in this tree was read — it carries no `.git`, so there is
+no embedded-repository trap, and no nested `CLAUDE.md` or `AGENTS.md`, so no foreign
+agent instructions enter a session here. It does carry `CVS/` control directories
+under `Code/_Old Lisp Code/`, which git does not treat specially the way it treats
+`.git`, and which the deny-by-default rules exclude in any case.
+
+`.scratch/hmm-lush/.gitignore` admits 135 files (≈129 KB) out of 929 MB. Nearly all of
+what it turns away is `Training/`: saved checkpoints from training runs between 2008
+and 2011, which are *outputs* of the algorithm being translated rather than inputs to
+it. The exclusions carry their reasons inline in that file.
+
+Two things about the tracked set are worth knowing without opening it.
+
+- **`Code/SeqData/C/` is not tracked, and its absence is not an oversight.** Every `.c`
+  there opens `WARNING: Automatically generated code ... by the DH compiler`: Lush's
+  compiler emitting C from the `.lsh` beside it. It is a build artefact, and the `.o`
+  files are built for two dead architectures (`powerpc-apple-darwin8`,
+  `x86_64-unknown-linux-gnu`).
+- **Two `.sds` directories are tracked whole**, `set11a_dInt.sds` and
+  `set01z0_100.sds`. A `.sds` is a *directory*, not a file, and it is the only
+  specification of the on-disk sequence format that exists — nothing in the tree
+  documents it. Tracking one partially would be worse than not tracking it at all,
+  since `_size` is a count the loader trusts: a directory missing some of its `.seq`
+  files is not a smaller example but a corrupt one. That is why one specimen accounts
+  for 107 of the 135 tracked files.
 
 ## Before deleting
 

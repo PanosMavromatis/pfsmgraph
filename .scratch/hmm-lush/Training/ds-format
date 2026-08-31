@@ -1,0 +1,9 @@
+#!/bin/bash
+exec lush "$0" "$@"
+!#
+
+; Load HMM library
+(libload "../Code/load-hmm")
+
+(format-sds (nth 1 argv))
+

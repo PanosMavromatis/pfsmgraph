@@ -1,0 +1,130 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;;  dsource-seq.lsh
+;;
+
+; My code.
+(libload "../Utility/util")
+(libload "../SeqData/seq-state")
+
+
+#? **** Sequence Data Sources
+;; Classes and methods for sequence data sets (sources).
+
+
+#? ** dsource-seq
+;; Class representing a sequence data source.
+;; It is a direct subclass of dsource.
+;; The size and alphabet size are explicitly represented as slots.
+;; Each alphabet symbol is represented by an integer in the contents
+;;  slot, which is a 2-dimensional matrix.
+
+(defclass dsource-seq object
+  ((-str-) name)
+  ((-int-) alphabet-size)
+  ((-idx1- (-gptr-)) alphabet)
+  ((-int-) size)
+  ((-int-) seq-size-max)
+  ((-idx1- (-int-)) seq-sizes)
+  ((-idx2- (-int-)) seq-data))
+
+
+#? (==> <dsource-seq> dsource-seq <basename>)
+;; Constructor; loads a saved data source.
+;; Not compilable.
+
+(defmethod dsource-seq dsource-seq (basename)
+  (==> this load basename))
+
+
+#? (==> <dsource-seq> save [<basename>])
+;; Saves a data source.
+;; If <basename> is not specified, the data source's name is used.
+;; Not compilable.
+
+(defmethod dsource-seq save (&optional basename)
+  (if (not basename)
+      (setq basename name))
+  (setq basename (concat basename ".sds/"))
+  (mkdir-on-need basename)
+  (writing (open-write (concat basename "_alphabet_size"))
+    (print alphabet-size))
+  (writing (open-write (concat basename "_alphabet"))
+    (for (i-symb 0 (1- alphabet-size))
+	 (printf "%d\t%s\n" i-symb (ptr-str (alphabet i-symb)))))
+  (writing (open-write (concat basename "_size"))
+    (print size))
+  (writing (open-write (concat basename "_seq_size_max"))
+    (print seq-size-max))
+  (writing (open-write (concat basename "_seq_sizes"))
+    (for (i-seq 0 (1- size))
+	 (printf "%d\t%d\n" i-seq (seq-sizes i-seq))))
+  (for (i-seq 0 (1- size))
+       (writing (open-write (concat basename (str i-seq) ".seq"))
+	 (for (j-symb 0 (1- (seq-sizes i-seq)))
+	      (print (seq-data i-seq j-symb))))))
+
+
+#? (==> <dsource-seq> load <basename>)
+;; Loads a saved data source.
+;; Not compilable.
+
+(defmethod dsource-seq load (basename)
+  (setq name basename)
+  (setq basename (concat basename ".sds/"))
+  ; [ Will call the 'check consistency' script here. ]
+  (reading (open-read (concat basename "_alphabet_size"))
+    (setq alphabet-size (read)))
+  (setq alphabet (gptr-matrix alphabet-size))
+
+  (reading (open-read (concat basename "_alphabet"))
+    (for (i 0 (1- alphabet-size))
+	 (let ((n (read)) (s (read)))
+	 (alphabet n (str-ptr (symbol->string s))))))
+
+  (reading (open-read (concat basename "_size"))
+    (setq size (read)))
+  (reading (open-read (concat basename "_seq_size_max"))
+    (setq seq-size-max (read)))
+  (setq seq-sizes (int-matrix size))
+  (reading (open-read (concat basename "_seq_sizes"))
+    (for (i 0 (1- size))
+	 (seq-sizes (read) (read))))
+  (setq seq-data (int-matrix size seq-size-max))
+  (for (i-seq 0 (1- size))
+       (reading (open-read (concat basename (str i-seq) ".seq"))
+	 (for (j-symb 0 (1- (seq-sizes i-seq)))
+	      (seq-data i-seq j-symb (read))))))
+
+
+
+#? (==> <dsource-seq> fprop-all)
+;; Returns a seq-state with all the sequences concatenated together.
+;; Not compiled.
+
+(defmethod dsource-seq fprop-all ()
+  (let ((out-seq-state (new seq-state name ((idx-sum seq-sizes))))
+        (current-pos 0))
+    ((-obj- (seq-state)) out-seq-state)
+    ((-int-) current-pos)
+    (idx-bloop ((current-size seq-sizes)
+		(current-seq seq-data))
+      (for (i 0 (1- (current-size)))
+	   ((-int-) i)
+	   (:out-seq-state:symbol-data current-pos (current-seq i))
+	   (incr current-pos)))
+    (==> out-seq-state set-alphabet alphabet)
+    out-seq-state))
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(dhc-make
+ ()
+ (dsource-seq
+  fprop-all
+  ))
+
+
+
