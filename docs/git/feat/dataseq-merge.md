@@ -143,3 +143,25 @@ Running log — decisions made, things tried, things deferred.
   and the dense packing are confirmed rather than assumed. The goal-2 gitignore trap fired
   again — deny-by-default `/*` swallowed the whole `translation/` directory — and was caught
   before the commit this time, by running `git check-ignore` per file rather than assuming.
+- 2026-08-31 — Goal 3 complete. `.scratch/hmm-lush/COMPARISON.md` sets the Lush
+  implementation against the `dl` base, with §2 (overrides, on matters the ADRs leave open)
+  and §3 (divergences, ADR-settled) kept in separate sections so the two cannot blur when
+  this feeds ADR 0010. Five overrides: first-appearance ordering rather than set iteration;
+  per-sequence true lengths as container state; vocabulary persistence with the format owning
+  its quoting rule; frozen-as-explicit-state; decode on the tested surface. Two of those turn
+  arguments already made in `ANALYSIS.md` into evidence — the ordering fix was proposed there
+  on stability grounds and is now backed by the translation reproducing the 2009 `_alphabet`
+  code for code, and `dependencies = []` was argued there and is now supported by a
+  stdlib-only translation that handles both corpora.
+  The finding neither analysis could have produced alone: **both implementations bake a
+  consumer's view into the container** — `dl` next-token `(input, target)` pairs, Lush the
+  flat concatenated stream Baum-Welch wants. Two unrelated consumers, the same category
+  error, arrived at independently, which promotes `ANALYSIS.md` §2.2's separation from a
+  judgement call about layering to a correction of a mistake made twice.
+  Scoping honoured: `seq-state` is named as an `hmm` object, not a `dataseq` one. What
+  `dataseq` owes it is a per-sequence view an annotation can align against, which is the
+  concrete reason the true-lengths override is not merely tidiness.
+  The branch plan also gained a `## Constraint on every comparison below` header block, and
+  three subgoal criteria were reworded to carry the ADR-precedence rule inline. The notes
+  alone were not enough: `/hitl-step` treats subgoals as the acceptance criteria and notes as
+  context, so a constraint stated only in commentary does not bind the executor.

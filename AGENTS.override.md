@@ -113,7 +113,7 @@ that standard produces findings against code that ships nowhere. Anchor both tar
 
 Note also that **each import carries its own deny-by-default `.gitignore`**, and each admits a
 small fraction of what is on disk: `.scratch/dl/` tracks 35 files out of 2.2 GB, `.scratch/hmm-lush/`
-143 out of 929 MB (both counts include our own written analysis, which lives alongside). If something in an imported tree looks conspicuously absent, that is the
+144 out of 929 MB (both counts include our own written analysis, which lives alongside). If something in an imported tree looks conspicuously absent, that is the
 intended behaviour and not a finding — the exclusions carry their reasons inline in each of those
 files, and what they turn away is overwhelmingly not source: virtualenvs and tool caches in the
 first, saved model checkpoints from 2008–2011 training runs in the second.
@@ -131,11 +131,22 @@ account of the Lush original and the translation beside it disagree, that is a r
 the account wins. It was written first precisely so the comparison could not be run against our
 reading of the original instead of the original.
 
-This generalises to every written analysis under `.scratch/` — `.scratch/dl/ANALYSIS.md` is
-the first. Those documents are load-bearing in a way the imported code is not: they decide what
-`packages/pfsmgraph-dataseq/` becomes and they are the draft of ADR 0010's decision section, so a
-claim in one that the code does not support is a real finding even though the code it describes
-ships nowhere. Check the claims, not the style.
+This generalises to every written analysis under `.scratch/` — `.scratch/dl/ANALYSIS.md` was
+the first, joined by `.scratch/hmm-lush/ACCOUNT.md` and `COMPARISON.md`. Those documents are
+load-bearing in a way the imported code is not: they decide what `packages/pfsmgraph-dataseq/`
+becomes and they are the draft of ADR 0010's decision section, so a claim in one that the code
+does not support is a real finding even though the code it describes ships nowhere. Check the
+claims, not the style.
+
+**One structural point about `COMPARISON.md`, because it governs which findings against it are
+valid.** Its §2 lists the places the `dl` base must be overridden; its §3 lists divergences that
+are deliberately *not* adopted, because an Accepted ADR settles them. The split is load-bearing:
+the ADRs outrank all three implementations, the base included (see `AGENTS.md` under
+"Invariants"), so "the merge ignores Lush's X" is a finding only when X falls in §2. Against §3
+it is the intended behaviour — most visibly for the reserved block, where all three
+implementations disagree with each other *and* with [ADR 0011](../design/adr/0011-fixed-reserved-symbol-block-and-strict-encoding.md),
+and the ADR wins regardless of what any of them does. If a §3 item looks wrongly classified,
+that is worth raising; that it was not adopted is not.
 
 **Lower-priority targets.** Claude Code handles these reliably; do not spend review budget
 on them unless something looks actively wrong: prose style and structure in `docs/`, ADR

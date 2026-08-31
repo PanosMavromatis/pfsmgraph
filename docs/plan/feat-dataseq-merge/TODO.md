@@ -5,6 +5,16 @@
 **Subgoal**: revision `01-dataseq-v0.1.0`, subgoals 1 (merge the three implementations)
 and 2 (settle the encoder API and promote ADR 0010)
 
+## Constraint on every comparison below
+
+The ADRs outrank all three implementations, the `dl` base included. "Base" means starting
+point, not authority: where any implementation disagrees with an Accepted ADR, the ADR wins
+and the implementation changes — unless that ADR carves out an exception in its own text, as
+[ADR 0011](../../design/adr/0011-fixed-reserved-symbol-block-and-strict-encoding.md) does for
+the *spelling* of the strictness switch while holding its semantics settled. So wherever a
+goal below says the base "must be overridden", it means the points the ADRs leave **open**,
+never the ones they close. Recorded as an invariant in `docs/agents/core.md`.
+
 ## Tasks
 
 - [x] Create a scratch location where the three implementations will be imported to be analyzed and merged
@@ -28,7 +38,14 @@ and 2 (settle the encoder API and promote ADR 0010)
   > **Done:** Analysis written to `.scratch/dl/ANALYSIS.md`. Central finding: the base conflates two different kinds of encoder -- a dense vocabulary index (`control.py`, PAD/BOS/EOS at 0/1/2) and a stateless structured code (`PitchCode`, 100*chromatic + diatonic), fused into one `encoder_map`. Seven `dl`-specific features identified with proposals, the load-bearing one being that `dataseq` can satisfy "a stock `DataLoader` works" with **zero torch imports**, since `torch.utils.data.Dataset` is duck-typed and needs only `__len__`/`__getitem__`. Seven essential gaps named: the reserved block is both wrong and incomplete (`GAP` absent, which `align` cannot do without, and user symbols start at 3 -- a *third* offset, distinct from the proof-of-concept's 4 that `DEFERRED.md` anticipates); no frozen vocabulary, so train/test splits are inexpressible; nothing decodes; the vocabulary is neither persistable nor shareable. Also recorded: `dataseq`'s `dependencies = []` is very likely already correct, which closes a `DEFERRED.md` question in the negative. One forward-looking trap flagged -- `MiniCorpus` registers symbols by iterating a `set`, harmless today because `PitchCode.encode` is pure, but a reproducibility bug the moment codes are assigned by insertion order, since CPython randomises `str` hashing per process.
   > **Note:** Writing the analysis exposed a hole in the `.gitignore` committed one step earlier: `/*` swallowed `.scratch/dl/ANALYSIS.md`, so the file was invisible to `git status` and would have been silently lost. Fixed with an anchored `!/*.md`, verified not to reach into `MelodyHPO/`.
 
-- [~] Import the earlier `hmm` implementation (in Lush) and tabulate its divergence with the previous implementation
+- [x] Import the earlier `hmm` implementation (in Lush) and tabulate its divergence with the previous implementation
+  > **Done:** import (`aee7a3d`), `ACCOUNT.md`, `translation/`, `COMPARISON.md`. The goal was
+  > set to answer whether this encoder is a vocabulary or a codec and where its reserved block
+  > starts; both are answered — a dense vocabulary index in first-appearance order, reserved
+  > `0 begin` / `1 end`, user symbols from 2 — and the first answer independently corroborates
+  > the dense-index decision taken during goal 2, arrived at fifteen years earlier under no
+  > influence from it. The `dl` base is the only one of the three that fuses a structured codec
+  > into the vocabulary.
   - [x] The second implementation is readable in the scratch location and its provenance is recorded
     > **Done:** commit `aee7a3d`. 135 files (~129 KB) out of 929 MB, deny-by-default;
     > provenance recorded in `.scratch/README.md` as dates rather than a revision (sources
@@ -77,7 +94,29 @@ and 2 (settle the encoder API and promote ADR 0010)
     > `!/translation/`, `/translation/*`, `!/translation/*.py` triple, which also keeps
     > `__pycache__/` out for free, since children of an excluded directory cannot be
     > re-included. Verified with `git check-ignore` per file rather than assumed.
-  - [ ] A written comparison against the `dl` base, and every point where that base must be overridden by this implementation, with why
+  - [x] A written comparison against the `dl` base, and every point where that base must be overridden by this implementation — **among the points the ADRs leave open** — with why; a point an Accepted ADR settles is recorded as a divergence of the original, never as a candidate to adopt
+    > **Done:** `.scratch/hmm-lush/COMPARISON.md` (281 lines), with §2 (overrides, ADR-open)
+    > and §3 (divergences, ADR-settled) deliberately in separate sections so the two cannot be
+    > confused when this feeds ADR 0010. **Five overrides**, all on matters no Accepted ADR
+    > settles: (2.1) first-appearance ordering, not set iteration — the `dl` base's
+    > `symbol_set - self.alphabet` iteration is a reproducibility bug under a dense index, and
+    > the translation's rebuild against 2009 output is a sixteen-year determinism test we could
+    > not have written; (2.2) per-sequence true lengths as container state — both pad to a
+    > global max, but `dl` *discards* the lengths so a mask is not even derivable, where Lush's
+    > `seq_sizes` is consulted by every reader; (2.3) vocabulary persistence, with the format
+    > owning its own quoting rule, since a name unwrapped to a plain string has lost the
+    > knowledge that it needed quoting; (2.4) frozen as an explicit state — `dl` has an encoder
+    > that cannot freeze, Lush a freeze achieved by having no encoder, so neither is a model to
+    > copy; (2.5) decode on the tested surface, `dl`'s `decoder_map` being built, kept in sync,
+    > and never read.
+    > **Finding neither analysis could have produced alone (§4):** both implementations bake a
+    > consumer's view into the container — `dl` next-token `(input, target)` pairs, Lush the
+    > flat concatenated stream Baum-Welch wants. Two unrelated consumers, the same category
+    > error, independently. That promotes `ANALYSIS.md` §2.2's separation from a judgement call
+    > to a correction of a mistake made twice.
+    > **Scoping honoured (§5.1):** `seq-state` is identified as an `hmm` object, not a
+    > `dataseq` one. What `dataseq` owes it is a per-sequence view an annotation can align
+    > against, which is the concrete reason §2.2 is not merely tidiness.
   > **Q:** Goal 3 has three deliverables — account, translation, comparison. How should they
   > be laid out in `.scratch/hmm-lush/`?
   > **A:** Three artefacts: `ACCOUNT.md`, `translation/` (`dsource_seq.py`, `format_sds.py`),
@@ -132,10 +171,10 @@ and 2 (settle the encoder API and promote ADR 0010)
 - [ ] Import the last implementation (rudimentary, in Python) and tabulate its divergence with the merged implementation so far
   - [ ] The third implementation is readable in the scratch location and its provenance is recorded
   - [ ] A written comparison of container semantics, encoder shape, and vocabulary handling
-  - [ ] Every point where the `dl`/`hmm` merged base must be overridden by this last implementation is named, with why
+  - [ ] Every point where the `dl`/`hmm` merged base must be overridden by this last implementation is named, with why — **among the points the ADRs leave open**, on the same terms as goal 3
 
 - [ ] Land the merged container in `packages/pfsmgraph-dataseq/`
-  - [ ] `dl` version is the base; divergences resolved per the comparisons above
+  - [ ] `dl` version is the base; divergences resolved per the comparisons above, and **per the ADRs wherever the two disagree**
   - [ ] Conforms to `torch.utils.data.Dataset`; a stock `DataLoader` works without subclassing
   - [ ] No `pfsmgraph/__init__.py` introduced anywhere; PEP 420 namespace intact
   - [ ] `uv sync && uv run python -c "import pfsmgraph.dataseq"` succeeds, and the other four still import
