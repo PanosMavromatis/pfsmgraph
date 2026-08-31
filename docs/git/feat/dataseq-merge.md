@@ -118,3 +118,28 @@ Running log — decisions made, things tried, things deferred.
   reclassifies the dense-matrix finding logged above: it is an illustration of the
   failure ADR 0011 prevents, not evidence for `PAD`=0, and goal 3 now carries a note
   saying so before its semantic account is written.
+- 2026-08-31 — Goal 3 subgoals 2 and 3 done. `.scratch/hmm-lush/ACCOUNT.md` describes the
+  Lush original in its own terms, before any translation; `.scratch/hmm-lush/translation/`
+  is a runnable, stdlib-only rendering of it. Three findings changed the shape of the merge
+  question. **(1)** `format-sds` is a free `de`, not a method, so the vocabulary is a
+  build-time artefact and a loaded container has no encoding path at all — which is why the
+  strict-vs-`UNK` question never arises in the original. It is a structural absence, not a
+  lenient choice, and that reframes what ADR 0011's strictness clause adds. **(2)** The dense
+  `size × seq_size_max` matrix is a staging buffer, not the corpus representation:
+  `hmm-trainer.lsh:66` is the only caller of `fprop-all` and nothing else reads `seq-data`,
+  so `load` unpacks ragged data into a rectangle whose sole consumer immediately repacks it
+  ragged. 71% of `set01z0`'s matrix is `begin`-valued padding bought for nothing — the
+  hazard was taken on without even the performance argument that usually excuses it.
+  **(3)** The `%l`/`%s` split between the two `_alphabet` writers is not an oversight but a
+  downstream cost of the compile boundary: `alphabet` is `-idx1- (-gptr-)` because
+  `fprop-all` and `set-alphabet` are what `dhc-make` compiles, and `dsource-seq.lsh:83`
+  (`str-ptr (symbol->string s)`) is where the knowledge that a name ever needed delimiters
+  is discarded. `format-sds`, outside the class, keeps symbols and can still use `%l`. Dates
+  agree: 2009-07-05 precedes 2009-07-15. Corrected in the account after review — the tracked
+  corpora are fine, `|…|` is multiple-escape and round-trips, and only the unmeasured half
+  (that `%s` emits the string bare) was ever at issue; it is now flagged as inference.
+  The translation's rebuild check re-derives both corpora from their own `_raw_data` and
+  reproduces the 2009 output exactly, so first-appearance ordering, `begin`/`end` wrapping
+  and the dense packing are confirmed rather than assumed. The goal-2 gitignore trap fired
+  again — deny-by-default `/*` swallowed the whole `translation/` directory — and was caught
+  before the commit this time, by running `git check-ignore` per file rather than assuming.

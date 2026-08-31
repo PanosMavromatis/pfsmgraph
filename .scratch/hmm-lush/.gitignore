@@ -29,6 +29,17 @@
 # it is simply invisible to `git status`, so the work looks committed and is not.
 !/*.md
 
+# Our Python transliteration of the Lush sources (goal 3, subgoal 3). Source only:
+# `/translation/*` re-excludes the directory's contents so `__pycache__/` and the
+# `.pyc` files inside it stay out -- a directory that is excluded cannot have its
+# children re-included, which is what makes the single `*.py` negation sufficient.
+# The same silent-failure warning as above applies, and it very nearly fired here:
+# these files were written, verified to run, and were invisible to `git status`
+# until `git check-ignore` was run on them deliberately.
+!/translation/
+/translation/*
+!/translation/*.py
+
 # --- Code: source only, and only the live source -----------------------------
 # `*.lsh` and nothing else. This is what keeps out, without naming them:
 #   C/**/*.o          compiled objects for two dead architectures,

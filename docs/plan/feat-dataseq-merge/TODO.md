@@ -28,11 +28,88 @@ and 2 (settle the encoder API and promote ADR 0010)
   > **Done:** Analysis written to `.scratch/dl/ANALYSIS.md`. Central finding: the base conflates two different kinds of encoder -- a dense vocabulary index (`control.py`, PAD/BOS/EOS at 0/1/2) and a stateless structured code (`PitchCode`, 100*chromatic + diatonic), fused into one `encoder_map`. Seven `dl`-specific features identified with proposals, the load-bearing one being that `dataseq` can satisfy "a stock `DataLoader` works" with **zero torch imports**, since `torch.utils.data.Dataset` is duck-typed and needs only `__len__`/`__getitem__`. Seven essential gaps named: the reserved block is both wrong and incomplete (`GAP` absent, which `align` cannot do without, and user symbols start at 3 -- a *third* offset, distinct from the proof-of-concept's 4 that `DEFERRED.md` anticipates); no frozen vocabulary, so train/test splits are inexpressible; nothing decodes; the vocabulary is neither persistable nor shareable. Also recorded: `dataseq`'s `dependencies = []` is very likely already correct, which closes a `DEFERRED.md` question in the negative. One forward-looking trap flagged -- `MiniCorpus` registers symbols by iterating a `set`, harmless today because `PitchCode.encode` is pure, but a reproducibility bug the moment codes are assigned by insertion order, since CPython randomises `str` hashing per process.
   > **Note:** Writing the analysis exposed a hole in the `.gitignore` committed one step earlier: `/*` swallowed `.scratch/dl/ANALYSIS.md`, so the file was invisible to `git status` and would have been silently lost. Fixed with an anchored `!/*.md`, verified not to reach into `MelodyHPO/`.
 
-- [ ] Import the earlier `hmm` implementation (in Lush) and tabulate its divergence with the previous implementation
-  - [ ] The second implementation is readable in the scratch location and its provenance is recorded
-  - [ ] A semantic account of the Lush original **in its own terms** — container model, encoder shape, vocabulary handling — written before any translation, so the comparison is against the original rather than against our reading of it
-  - [ ] Draft a close translation to Python alongside the original in the scratch location, noting each choice the account left open where Lush does not map mechanically
+- [~] Import the earlier `hmm` implementation (in Lush) and tabulate its divergence with the previous implementation
+  - [x] The second implementation is readable in the scratch location and its provenance is recorded
+    > **Done:** commit `aee7a3d`. 135 files (~129 KB) out of 929 MB, deny-by-default;
+    > provenance recorded in `.scratch/README.md` as dates rather than a revision (sources
+    > span 2008-2011, tree reorganised 2022-08-26), the project never having been under
+    > version control.
+  - [x] A semantic account of the Lush original **in its own terms** — container model, encoder shape, vocabulary handling — written before any translation, so the comparison is against the original rather than against our reading of it
+    > **Done:** `.scratch/hmm-lush/ACCOUNT.md` (337 lines), written from the three
+    > `Code/SeqData/*.lsh` sources, the `util.lsh` helpers they call, and both tracked
+    > `.sds` specimens; every quantitative claim measured rather than inferred. Load-bearing
+    > findings: (1) `format-sds` is a free `de`, not a method, so **the vocabulary is a
+    > build-time artefact and a loaded container has no encoding path at all** — which is why
+    > the strict-vs-`UNK` question never arises in the original, rather than arising and being
+    > answered leniently. (2) The dense `size x seq_size_max` matrix is a *staging buffer*, not
+    > the corpus representation: `hmm-trainer.lsh:66` is the only caller of `fprop-all`,
+    > nothing else reads `seq-data`, so `load` unpacks ragged data into a rectangle whose sole
+    > consumer immediately repacks it ragged — 71% of `set01z0`'s matrix is `begin`-valued
+    > padding bought for nothing. (3) the two writers spell `_alphabet` differently —
+    > `format-sds` prints the symbol with `%l`, `save` prints `(ptr-str …)` with `%s`. The
+    > tracked corpora are **fine**: `%l` emits the multiple-escape delimiters `|…|`, and the
+    > reader takes everything between them as one symbol name whatever it contains, so
+    > `set11a_dInt`'s two whitespace-bearing symbols round-trip correctly. The open question
+    > concerns only `save`-written output, which exists nowhere in the tree, and its final
+    > step is **inference, not measurement** — Lush cannot be run here to confirm `%s` emits
+    > the string bare. Carried forward as a regression test for the merged package, not as a
+    > defect of the original. (4) `seq-state`'s parallel `size` / `size+1` arrays are
+    > the design idea most worth carrying forward, and are an annotation idea rather than a
+    > container one.
+  - [x] Draft a close translation to Python alongside the original in the scratch location, noting each choice the account left open where Lush does not map mechanically
+    > **Done:** `.scratch/hmm-lush/translation/` — six stdlib-only modules
+    > (`lush_reader`, `seq_state`, `dsource_seq`, `format_sds`, `__init__`, `__main__`).
+    > Idiomatic rather than literal per the Q&A above; every divergence carries a
+    > `DEVIATION` comment giving the original's behaviour and the reason for departing.
+    > `python3 -m translation` loads both tracked `.sds` corpora and reproduces ACCOUNT.md's
+    > appendix from measurement. The load-bearing check is the **rebuild**: re-deriving each
+    > corpus from its own `_raw_data` reproduces the 2009 output exactly — alphabet (so
+    > first-appearance ordering is confirmed, not assumed), `_size`, `_seq_size_max`,
+    > `_seq_sizes`, and the full dense matrix including its padding. A save/load round-trip
+    > also carries `set11a_dInt`'s two whitespace-bearing symbols intact, demonstrating that
+    > one writer owning the quoting rule closes what the original's `%l`/`%s` split left open.
+    > Four modules where the plan anticipated two: the `_raw_data` tokenizer is isolated
+    > because it is the one place faithfulness is not optional (the corpora are its
+    > specification), and `seq_state` follows its own Lush file.
+    > **Note:** the goal-2 gitignore trap fired again and was caught before committing, not
+    > after — deny-by-default `/*` swallowed the whole `translation/` directory, so six
+    > verified-working files were invisible to `git status`. Fixed with an anchored
+    > `!/translation/`, `/translation/*`, `!/translation/*.py` triple, which also keeps
+    > `__pycache__/` out for free, since children of an excluded directory cannot be
+    > re-included. Verified with `git check-ignore` per file rather than assumed.
   - [ ] A written comparison against the `dl` base, and every point where that base must be overridden by this implementation, with why
+  > **Q:** Goal 3 has three deliverables — account, translation, comparison. How should they
+  > be laid out in `.scratch/hmm-lush/`?
+  > **A:** Three artefacts: `ACCOUNT.md`, `translation/` (`dsource_seq.py`, `format_sds.py`),
+  > `COMPARISON.md`. Splitting the account from the comparison keeps subgoal 2's "written
+  > before any translation" ordering legible in the diff, and the two documents have
+  > different audiences — the account describes the original, the comparison serves the merge.
+  > **Q:** Was `dsource-seq save` ever actually used, or did every `.sds` come from
+  > `format-sds`? Decides whether the `%s`/`%l` alphabet asymmetry is a live defect or dead code.
+  > **A:** Don't recall — sixteen years. The account states what the code does and declines to
+  > claim what was run; the finding is flagged "provenance unknown".
+  > **Q:** How faithful should the Python translation be?
+  > **A:** Runnable, and it reads the real `.sds` specimens. The two specimens were tracked for
+  > exactly this, so the account's claims about padding, empty sequences and alphabet parsing
+  > are demonstrated rather than asserted.
+  > **Q:** How literal should the translation be, and how much does the `hmm` side matter?
+  > **A:** Not literal. Idiomatic Python that reproduces the *implementation decisions*
+  > rather than the Lush constructs — a transliteration would preserve accidents of the
+  > language and obscure the choices. The `hmm` branch matters only insofar as it shows how
+  > the `hmm` model implementation will have to be modified to suit the new decisions, so
+  > the translation's job is to expose the seams `hmm` depends on (the flat concatenated
+  > stream from `fprop-all`, `seq-state`'s parallel `size`/`size+1` arrays), not to model
+  > the trainer.
+  > **Note (cause of the `%l`/`%s` asymmetry, resolved after the account was first written):**
+  > not interpreted-vs-compiled code — neither writer is compiled — but the representation
+  > compilation *forced*. `alphabet` is `-idx1- (-gptr-)` because `fprop-all` and
+  > `set-alphabet` are what `dhc-make` compiles and the alphabet must cross that boundary;
+  > that slot type routes every class-side access through `str-ptr`/`ptr-str`, and
+  > `dsource-seq.lsh:83` is where `symbol->string` discards the knowledge that a name ever
+  > needed delimiters. `format-sds` sits outside the class, never touches a `gptr`, and keeps
+  > symbols. Dates agree: `format-sds.lsh` 2009-07-05 precedes `dsource-seq.lsh` 2009-07-15.
+  > The asymmetry is a downstream cost of the compile boundary, which is why it is worth
+  > carrying into the merge — the same boundary exists there for the same reason.
   > **Note (framing, settled before the account is written):** the ADRs outrank all three
   > imported implementations — see `docs/agents/core.md` under "Invariants". So the fourth
   > subgoal's "every point where that base must be overridden" means the points the ADRs

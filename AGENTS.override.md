@@ -87,11 +87,16 @@ packages and will get its own sidecar once that settles; do not improvise review
 it from this file in the meantime.
 
 **`.scratch/` is not a review target.** On the `feat/dataseq-merge` branch, `.scratch/` holds
-the three existing `dataseq` implementations imported for side-by-side comparison, including a
-deliberately *close* translation of the Lush original. That translation is meant to track its
-source rather than read as idiomatic Python, so the priorities above — the encode seam most of
-all — generate noise when applied to it: a finding against scratch input is a finding against
-the thing being compared, not against anything that ships. Nothing in `.scratch/` is part of any
+the three existing `dataseq` implementations imported for side-by-side comparison, together
+with our own account of them and a Python transliteration of the Lush original. **That
+transliteration is deliberately idiomatic rather than literal** — it reproduces the original's
+*implementation decisions* in ordinary Python instead of transliterating Lush constructs, and
+every departure carries a `DEVIATION` comment naming the original behaviour and the reason.
+So do not read a divergence from the `.lsh` as infidelity: fidelity is claimed for the
+decisions, not the constructs, and `ACCOUNT.md` is where the original is described. The
+priorities above — the encode seam most of all — generate noise when applied to any of it: a
+finding against scratch input is a finding against the thing being compared, not against
+anything that ships. Nothing in `.scratch/` is part of any
 distribution, nothing outside it may import from it, and it is deleted before the branch merges.
 Review the merged result under `packages/pfsmgraph-dataseq/`, never the inputs. The directory
 states its own lifetime in `.scratch/README.md`.
@@ -107,8 +112,8 @@ that standard produces findings against code that ships nowhere. Anchor both tar
 `packages/`, and treat any path under `.scratch/` as out of scope by default.
 
 Note also that **each import carries its own deny-by-default `.gitignore`**, and each admits a
-small fraction of what is on disk: `.scratch/dl/` tracks 33 files out of 2.2 GB, `.scratch/hmm-lush/`
-135 out of 929 MB. If something in an imported tree looks conspicuously absent, that is the
+small fraction of what is on disk: `.scratch/dl/` tracks 35 files out of 2.2 GB, `.scratch/hmm-lush/`
+143 out of 929 MB (both counts include our own written analysis, which lives alongside). If something in an imported tree looks conspicuously absent, that is the
 intended behaviour and not a finding — the exclusions carry their reasons inline in each of those
 files, and what they turn away is overwhelmingly not source: virtualenvs and tool caches in the
 first, saved model checkpoints from 2008–2011 training runs in the second.

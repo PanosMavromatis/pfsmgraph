@@ -9,11 +9,14 @@ Shared project knowledge for any coding agent working in this repository.
 **`align` and `hmm` are temporarily on hatchling, not meson-python.** meson-python's editable-install import hook injects a `sys.meta_path` finder that claims the entire `pfsmgraph` PEP 420 namespace and shadows the other distributions, so `import pfsmgraph.dataseq` (and `hseg`, `dl`) fails after `uv sync`. Neither package has compiled code yet — the `meson.build` extension blocks are dormant `if fs.exists()` guards — so the switch to meson-python is deferred to when the first `.pyx` lands, at which point the namespace/editable interaction must be solved (non-editable install of the compiled members, a single combined compiled distribution, or an upstream fix). The `meson.build` files and the revert recipe are kept in `packages/pfsmgraph-{align,hmm}/pyproject.toml`. This qualifies the PRD §6.1 note, whose "namespace is fine" evidence was gathered with *setuptools* editable, which composes; meson-python's finder does not.
 
 **On the `feat/dataseq-merge` branch only, `.scratch/` holds imported source that is not
-ours.** It is where the three existing `dataseq` implementations are read side by side before
-anything is merged into `packages/pfsmgraph-dataseq/`, and it is deleted by the last goal of
-that branch's plan. So "no implementation code, no tests" above is a claim about `pfsmgraph`:
-`.scratch/` does contain Python, and a `tests/` directory, belonging to other projects. Nothing
-there is part of any distribution and nothing outside it may import from it. The leading dot is
+ours, together with our own writing about it.** It is where the three existing `dataseq`
+implementations are read side by side before anything is merged into
+`packages/pfsmgraph-dataseq/`, and it is deleted by the last goal of that branch's plan. So
+"no implementation code, no tests" above is a claim about `pfsmgraph`: `.scratch/` does
+contain Python and a `tests/` directory belonging to other projects, and now also Python of
+our own — a runnable transliteration of the Lush original under
+`.scratch/hmm-lush/translation/`, written as a reading aid for the merge and deleted with the
+rest. Nothing there is part of any distribution and nothing outside it may import from it. The leading dot is
 load-bearing — it matches pytest's default `norecursedirs` entry `.*`, which is why `uv run
 pytest` still collects zero items with those files present; and the directory sits outside
 `packages/`, so the workspace glob never claims it. `.scratch/README.md` states the rest,
