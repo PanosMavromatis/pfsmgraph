@@ -49,7 +49,9 @@ standard. The renumbering especially — deferring it past the merge is how a co
 edit becomes a data migration.
 
 - [ ] Merge the three `dataseq` implementations into `packages/pfsmgraph-dataseq/`, taking the `dl` version as the base (PRD §3.5): container semantics, PyTorch `Dataset` conformance, and the symbol↔code encoder/decoder. Stock `DataLoader` must remain usable without subclassing.
+  > **Branch:** feat/dataseq-merge
 - [ ] Settle the encoder API — constructor signature, the spelling of the strictness switch, and how `align` consumes the mapping at its boundary — then promote ADR 0010 from `Proposed` to `Accepted` and update its row in `docs/design/adr/README.md`.
+  > **Branch:** feat/dataseq-merge
 - [ ] Renumber the proof-of-concept alignment code to the reserved block (user symbols from 6, new gap index), auditing every hard-coded index assumption. Lands here, not after.
 - [ ] Fix `dataseq`'s third-party runtime dependencies — `dependencies = []` is a placeholder — and confirm its build backend stays hatchling ([ADR 0008](../design/adr/0008-per-package-build-backends.md)).
 - [ ] Write the first test suite to the ADR 0003 standard, including the `pytest_report_header` hook that prints the backend matrix and names every excluded backend with its reason.
