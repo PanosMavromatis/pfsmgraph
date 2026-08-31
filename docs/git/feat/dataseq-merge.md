@@ -165,3 +165,49 @@ Running log — decisions made, things tried, things deferred.
   three subgoal criteria were reworded to carry the ADR-precedence rule inline. The notes
   alone were not enough: `/hitl-step` treats subgoals as the acceptance criteria and notes as
   context, so a constraint stated only in commentary does not bind the executor.
+- 2026-08-31 — Third implementation imported and its tracking policy set, ahead of goal 4.
+  The search surfaced **two** trees rather than one, both now under
+  `.scratch/py-rudimentary/`: `segalign` (`ca97809`, 2025-09-05) and the predecessor it was
+  refactored from, `SegAlign-Draft` (`9dc37b9`, 2025-06-30). They are counted as **one**
+  implementation. Only `segalign` has anything resembling a `dataseq` — a `seq/` subpackage
+  with `Dataset` and `Alignment` — and `SegAlign-Draft` earns its place by lacking one, both
+  of its alignment entry points taking bare `List[Any]`. Since that is a negative claim, it is
+  tracked at a single file, `glob/ss2_alignment.py`, whose signature makes it checkable after
+  `.scratch/` is gone.
+  `.scratch/py-rudimentary/.gitignore` admits 72 files (356 KB) of 1.7 GB. The bar is
+  deliberately higher than `hmm-lush`'s, and the reason is provenance rather than importance:
+  that import had no version control and was irreplaceable, whereas both of these are clean
+  checkouts of live GitHub repositories at recorded revisions, so anything excluded costs one
+  `git clone`. The largest thing turned away is `SegAlign-Draft/src/segalign/tcoffee/` — six
+  modules of T-Coffee multiple alignment — which is `align`'s scope, and which tracking here
+  would not have preserved for `align` anyway, since `.scratch/` is deleted by this branch's
+  last goal.
+  Both documented import renames were needed this time, where `hmm-lush` needed neither: two
+  live `.git` directories and one nested `CLAUDE.md`. Revisions were captured *before*
+  disabling, which is the only convenient moment. `segalign`'s working copy is dirty at
+  `ca97809` in `glob/needleman_wunsch.py`, which is tracked regardless because
+  `src/segalign/__init__.py` imports `glob` — without it the merge target does not import and
+  its tests do not run. The 50 `All.csv` files (200 KB) are tracked for the same reason: the
+  `seq/` tests hit the real corpus through `from_directories` rather than fixtures. Unlike the
+  `.sds` directories, a partial copy would be safe here — nothing records an expected count.
+  The three `.scratch/*/.gitkeep` placeholders were removed, having been made redundant by the
+  content each directory now holds, along with the `!/.gitkeep` negation each import's
+  `.gitignore` carried to punch them through its `/*` catch-all.
+
+  **Two measurements, and one discrepancy that goal 4 must settle before either is acted on.**
+  `segalign`'s `Dataset` allocates `{':EOS': 0, ':PAD': 1}` with user symbols from **2**, so
+  `PAD` is not 0 — the one part of [ADR 0011](../../design/adr/0011-fixed-reserved-symbol-block-and-strict-encoding.md)
+  `core.md` calls non-negotiable, since PyTorch's zero-fill idioms would otherwise mean
+  something other than "absent". Its `_encode_sequences` also falls back to the *`PAD`* index
+  for unseen tokens, collapsing "unknown" and "absent" onto one integer. And neither tree has
+  any integer gap index at all: both represent a gap as in-band Python `None`, rendered `"-"`
+  at print time only. That is the third implementation with no `GAP`, in the one project of
+  the three that exists to do alignment.
+  The discrepancy: `docs/plan/DEFERRED.md` and the `core.md` invariant both state that "the
+  proof-of-concept allocates user symbols from 4, with a different gap index". Neither tree
+  matches that — the offset is 2 and there is no gap index. Either "the proof-of-concept" is a
+  fourth codebase (`core.md` does separately say the proof-of-concept alignment/HMM code "has
+  not been moved in"), or the recollection was wrong. **Both claims were left unedited**,
+  because if `py-rudimentary` *is* the proof-of-concept then `core.md`'s "every one of the
+  three uses a different offset" also fails — Lush and this one would both be 2 — and that is
+  a tabulation for goal 4, not a docs-sync edit made in passing on an import commit.

@@ -26,7 +26,7 @@ a `pyproject.toml`. And `.scratch` is not a name `.gitignore` already swallows
 |---|---|---|
 | `dl/` | The `dl` version — the merge base, per PRD §3.5 | Python |
 | `hmm-lush/` | The earlier `hmm` implementation, plus its Python translation | Lush → Python |
-| `py-rudimentary/` | The rudimentary third implementation | Python |
+| `py-rudimentary/` | The rudimentary third implementation, plus the predecessor it was refactored from | Python |
 
 **"`dl`" is a slot in this repository's package family, not the name of the source
 project.** The merge base comes from **MelodyHPO**, a standalone and now defunct
@@ -45,7 +45,8 @@ directory is gone.
 |---|---|---|---|
 | `dl` | `github.com/PanosMavromatis/MelodyHPO`, branch `main` | `5f423118fa7cda0d7ca347ef0f112a326cca819c` — 2026-03-23, "Automate doc_paths construction in minicorps layer definitions" | 2026-08-31 |
 | `hmm-lush` | A personal project of the repository owner's, not under version control | No VCS. Source mtimes span 2008-01-24 – 2011-02-01; the tree was last reorganised 2022-08-26 | 2026-08-31 |
-| `py-rudimentary` | _tbd_ | _tbd_ | _tbd_ |
+| `py-rudimentary` (`segalign/`) | `github.com/PanosMavromatis/segalign`, branch `main` | `ca9780916fcf24e0c2293e6f6b3bc960f02239dc` — 2025-09-05, "Finished cleaning up existing Mode 8 tract corpus" | 2026-08-31 |
+| `py-rudimentary` (`SegAlign-Draft/`) | `github.com/PanosMavromatis/SegAlign-Draft`, branch `main` | `9dc37b9afbd4f29f2222580f31cbedc761bf8070` — 2025-06-30, "Finished TISMIR submission" | 2026-08-31 |
 
 The MelodyHPO working tree was copied whole, so it also carries a checkout of a
 *second* repository at `MelodyHPO/data/MelodyData` —
@@ -114,6 +115,51 @@ Two things about the tracked set are worth knowing without opening it.
   since `_size` is a count the loader trusts: a directory missing some of its `.seq`
   files is not a smaller example but a corrupt one. That is why one specimen accounts
   for 107 of the 135 tracked files.
+
+## The `py-rudimentary` import
+
+**Two trees, one implementation.** `SegAlign-Draft` is the predecessor and
+`segalign` is a refactoring of it into a `src/` layout with a `seq/` subpackage;
+they are separate GitHub repositories, not two branches of one. Only `segalign`
+contains anything that counts as a `dataseq` implementation, and it is the one
+goal 4 compares against. `SegAlign-Draft` earns its place by *lacking* one: it has
+no sequence abstraction at all, and both of its alignment entry points take bare
+`List[Any]`, so sequences in it are unadorned lists of Python strings.
+
+**Both renames were needed this time**, unlike the `hmm-lush` import where neither
+was. Each tree carried a live `.git` (`SegAlign-Draft/.git`, `segalign/.git`), and
+`segalign` additionally carried its own `CLAUDE.md`. All three are renamed as
+recorded above — `.git-disabled` and `CLAUDE.md.orig`. **The revisions in the table
+above were captured before disabling**, which is the only convenient moment: after
+the rename every query needs an explicit `--git-dir`, as in
+`git --git-dir=segalign/.git-disabled log`.
+
+One thing the table cannot show: `segalign`'s working copy is **not** clean at
+`ca97809`. `src/segalign/glob/needleman_wunsch.py` is modified and uncommitted, so
+it is the one tracked file here that will not match GitHub. It is tracked at all
+only because `src/segalign/__init__.py` imports `glob`, which imports it — without
+it the merge target does not import and the tests do not run.
+
+`.scratch/py-rudimentary/.gitignore` admits 72 files (≈356 KB) out of 1.7 GB, and
+the exclusions carry their reasons inline in that file. Two things about the
+tracked set are worth knowing without opening it.
+
+- **The bar for tracking is deliberately higher here than for `hmm-lush`.** That
+  import had no version control and was irreplaceable, so tracking it was
+  preservation. These two are clean checkouts of live repositories at recorded
+  revisions, so anything turned away costs one `git clone` to recover. The
+  `tcoffee/` package — a T-Coffee multiple-alignment implementation, six modules —
+  is the largest thing this reasoning turns away. It is real work, but it is
+  `pfsmgraph-align`'s scope rather than `dataseq`'s, and since `.scratch/` is
+  deleted by the last goal of this branch, tracking it here would not survive to
+  reach `align` anyway.
+- **The 50 `All.csv` files are tracked so the tests are runnable**, not for their
+  own sake. `Dataset.from_directories` walks that tree and builds its vocabulary
+  from a chosen column, and `tests/seq/test_dataset.py` calls it against the real
+  corpus rather than fixtures. Unlike the `.sds` directories, a partial copy would
+  be *safe* here — nothing records an expected count, so a missing verse yields a
+  smaller dataset rather than a corrupt one. All 50 are kept because they are
+  200 KB.
 
 ## Before deleting
 

@@ -1,0 +1,11 @@
+google-cloud-aiplatform
+numpy
+scipy
+matplotlib
+pandas
+scikit-learn
+seaborn
+jupyterlab
+ipython
+abjad
+abjad-ext-ipython

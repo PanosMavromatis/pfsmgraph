@@ -19,7 +19,10 @@ implementations are read side by side before anything is merged into
 contain Python and a `tests/` directory belonging to other projects, and now also Python of
 our own — a runnable transliteration of the Lush original under
 `.scratch/hmm-lush/translation/`, written as a reading aid for the merge and deleted with the
-rest. Nothing there is part of any distribution and nothing outside it may import from it. The leading dot is
+rest. **Three imported directories, but four source trees**: `.scratch/py-rudimentary/` holds
+two repositories, `segalign/` (the implementation) and `SegAlign-Draft/` (the predecessor it
+was refactored from, tracked at one file because what it contributes is the *absence* of a
+sequence abstraction). It is still three implementations — the draft has none. Nothing there is part of any distribution and nothing outside it may import from it. The leading dot is
 load-bearing — it matches pytest's default `norecursedirs` entry `.*`, which is why `uv run
 pytest` still collects zero items with those files present; and the directory sits outside
 `packages/`, so the workspace glob never claims it. `.scratch/README.md` states the rest,

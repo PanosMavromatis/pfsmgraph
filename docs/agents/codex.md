@@ -110,7 +110,8 @@ that standard produces findings against code that ships nowhere. Anchor both tar
 
 Note also that **each import carries its own deny-by-default `.gitignore`**, and each admits a
 small fraction of what is on disk: `.scratch/dl/` tracks 35 files out of 2.2 GB, `.scratch/hmm-lush/`
-144 out of 929 MB (both counts include our own written analysis, which lives alongside). If something in an imported tree looks conspicuously absent, that is the
+144 out of 929 MB, and `.scratch/py-rudimentary/` 72 out of 1.7 GB (the counts include our own
+written analysis, which lives alongside). If something in an imported tree looks conspicuously absent, that is the
 intended behaviour and not a finding — the exclusions carry their reasons inline in each of those
 files, and what they turn away is overwhelmingly not source: virtualenvs and tool caches in the
 first, saved model checkpoints from 2008–2011 training runs in the second.
@@ -123,13 +124,32 @@ there is no Python/C equivalence to check there. And `Code/_Old Lisp Code/` is a
 is an interpreted Common Lisp predecessor that the owner has ruled out as a source; the Lush
 version under `Code/` is the original the translation must be faithful to.
 
+**`.scratch/py-rudimentary/` holds two repositories, and the asymmetry between them is
+deliberate.** `segalign/` is the third `dataseq` implementation; `SegAlign-Draft/` is the
+predecessor it was refactored from, and exactly one file of it is tracked
+(`glob/ss2_alignment.py`). That is not an incomplete import. What the draft contributes is a
+*negative* — it has no sequence abstraction at all — and one signature taking `List[Any]` is
+what makes that claim checkable after `.scratch/` is deleted. Its `tcoffee/` package (six
+modules of T-Coffee multiple alignment) is absent for the same reason `Training/` is absent
+from `hmm-lush`: it is real work, but it is `pfsmgraph-align`'s scope rather than `dataseq`'s.
+
+The tracking bar is also higher here than for `hmm-lush`, and the reason is provenance, not
+importance: `hmm-lush` was under no version control and was irreplaceable, whereas both trees
+here are clean checkouts of live GitHub repositories at revisions recorded in
+`.scratch/README.md`. Anything turned away costs one `git clone`. One caveat that file records
+and a reviewer would otherwise not see: `segalign`'s working copy is **dirty** at `ca97809` in
+`glob/needleman_wunsch.py`, so that one tracked file will not match GitHub. It is tracked only
+because `src/segalign/__init__.py` imports `glob`, without which the merge target does not
+import and its tests do not run.
+
 What *is* worth reviewing there is the written comparison rather than the code: if the semantic
 account of the Lush original and the translation beside it disagree, that is a real finding, and
 the account wins. It was written first precisely so the comparison could not be run against our
 reading of the original instead of the original.
 
 This generalises to every written analysis under `.scratch/` — `.scratch/dl/ANALYSIS.md` was
-the first, joined by `.scratch/hmm-lush/ACCOUNT.md` and `COMPARISON.md`. Those documents are
+the first, joined by `.scratch/hmm-lush/ACCOUNT.md` and `COMPARISON.md`, and by whatever
+goal 4 writes for `py-rudimentary`. Those documents are
 load-bearing in a way the imported code is not: they decide what `packages/pfsmgraph-dataseq/`
 becomes and they are the draft of ADR 0010's decision section, so a claim in one that the code
 does not support is a real finding even though the code it describes ships nowhere. Check the

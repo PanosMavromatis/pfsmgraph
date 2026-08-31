@@ -20,7 +20,6 @@
 # --- deny everything at this level -------------------------------------------
 /*
 !/.gitignore
-!/.gitkeep
 !/Code/
 !/Training/
 

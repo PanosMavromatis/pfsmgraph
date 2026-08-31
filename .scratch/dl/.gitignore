@@ -14,7 +14,6 @@
 # --- deny everything at this level -------------------------------------------
 /*
 !/.gitignore
-!/.gitkeep
 !/MelodyHPO/
 
 # Our own writing about the import -- ANALYSIS.md and anything joining it. This
