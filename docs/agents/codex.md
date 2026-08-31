@@ -83,6 +83,21 @@ cheapest to fix and most expensive to leave:
 packages and will get its own sidecar once that settles; do not improvise review criteria for
 it from this file in the meantime.
 
+**`.scratch/` is not a review target.** On the `feat/dataseq-merge` branch, `.scratch/` holds
+the three existing `dataseq` implementations imported for side-by-side comparison, including a
+deliberately *close* translation of the Lush original. That translation is meant to track its
+source rather than read as idiomatic Python, so the priorities above — the encode seam most of
+all — generate noise when applied to it: a finding against scratch input is a finding against
+the thing being compared, not against anything that ships. Nothing in `.scratch/` is part of any
+distribution, nothing outside it may import from it, and it is deleted before the branch merges.
+Review the merged result under `packages/pfsmgraph-dataseq/`, never the inputs. The directory
+states its own lifetime in `.scratch/README.md`.
+
+What *is* worth reviewing there is the written comparison rather than the code: if the semantic
+account of the Lush original and the translation beside it disagree, that is a real finding, and
+the account wins. It was written first precisely so the comparison could not be run against our
+reading of the original instead of the original.
+
 **Lower-priority targets.** Claude Code handles these reliably; do not spend review budget
 on them unless something looks actively wrong: prose style and structure in `docs/`, ADR
 formatting and index-row bookkeeping, commit message shape, and general Python idiom in
