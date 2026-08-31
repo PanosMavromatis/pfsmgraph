@@ -84,3 +84,11 @@ Running log — decisions made, things tried, things deferred.
   `norecursedirs` entry `.*` — no config to add now or remove at cleanup. Verified with a
   deliberately-failing canary inside `.scratch/` (not collected) against the same file at
   the repo root (collection error). Root `pyproject.toml` untouched.
+- 2026-08-31 — Merge base analysed; `.scratch/dl/ANALYSIS.md`. The base fuses two different
+  kinds of encoder into one map: a dense vocabulary index (`PAD`/`BOS`/`EOS` at 0/1/2) and a
+  stateless structured code (`PitchCode`, `100*chromatic + diatonic`, range 1207-13176).
+  **Decided:** `dataseq` owns the dense index per ADR 0011; structured codecs are demoted to a
+  symbol canonicaliser running before vocabulary assignment. The decisive argument is `hmm`,
+  whose V x V transition matrix would be ~1.74e8 entries at V = 13,177 for an alphabet of a few
+  dozen real symbols. This is the substance of what ADR 0010 is `Proposed` pending, so goal 7
+  now has its decision section in draft.

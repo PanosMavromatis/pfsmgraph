@@ -17,6 +17,11 @@
 !/.gitkeep
 !/MelodyHPO/
 
+# Our own writing about the import -- ANALYSIS.md and anything joining it. This
+# negation is easy to forget and fails silently: a file written here without it
+# is simply invisible to `git status`, so the work looks committed and is not.
+!/*.md
+
 # --- deny everything one level in, then name the exceptions ------------------
 /MelodyHPO/*
 

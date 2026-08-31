@@ -112,6 +112,12 @@ account of the Lush original and the translation beside it disagree, that is a r
 the account wins. It was written first precisely so the comparison could not be run against our
 reading of the original instead of the original.
 
+This generalises to every written analysis under `.scratch/` — `.scratch/dl/ANALYSIS.md` is
+the first. Those documents are load-bearing in a way the imported code is not: they decide what
+`packages/pfsmgraph-dataseq/` becomes and they are the draft of ADR 0010's decision section, so a
+claim in one that the code does not support is a real finding even though the code it describes
+ships nowhere. Check the claims, not the style.
+
 **Lower-priority targets.** Claude Code handles these reliably; do not spend review budget
 on them unless something looks actively wrong: prose style and structure in `docs/`, ADR
 formatting and index-row bookkeeping, commit message shape, and general Python idiom in

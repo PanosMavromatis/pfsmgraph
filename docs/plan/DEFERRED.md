@@ -29,12 +29,27 @@ and several of these must land *as part of* the merge rather than after it.
   — **but it must land as part of the merge, not after**, and every hard-coded index
   assumption in the alignment code needs auditing. Deferring it past the merge is how it
   becomes a data migration instead of an edit.
+  **Wider than it reads (2026-08-31).** The `dl` merge base allocates user symbols from
+  **3** (`PAD` 0, `BOS` 1, `EOS` 2), a *second* wrong offset distinct from the
+  proof-of-concept's 4, and it is missing `UNK`, `GAP`, and `MSK` entirely — `GAP` being
+  the symbol `align` exists to produce. So this entry covers at least two implementations,
+  and the Lush one may add a third. Its padding is also written as the literal `[0]`, never
+  as `PAD`, so it agrees with ADR 0011 only by coincidence. See
+  `.scratch/dl/ANALYSIS.md` §3.1 and §2.3.
 - **Confirm `dataseq`'s build backend.** Its `pyproject.toml` presumes pure-Python
   (hatchling) on the strength of the `dl`-derived base; switch to meson-python only if a
   compiled inner loop is found ([ADR 0008](../design/adr/0008-per-package-build-backends.md)).
+  Provisionally holds (2026-08-31): the `dl` base is pure Python over pandas and torch,
+  with no compiled inner loop. Re-check after the Lush and rudimentary imports.
 - **Fix `dataseq`'s third-party runtime dependencies.** `dependencies = []` is a
   placeholder — whether `numpy`, `torch`, or neither belongs there is determined by what
   the merge base actually needs.
+  Provisionally **neither** (2026-08-31). `torch` leaves with the dataset views and
+  `pandas` with ingestion, neither of which belongs in the base layer; and
+  `torch.utils.data.Dataset` is duck-typed, so a stock `DataLoader` works against a
+  container that never imports torch. `numpy` may earn its way in for the code arrays, but
+  nothing in the base requires it. Recorded because "no change needed" is otherwise
+  indistinguishable from "not yet looked at". See `.scratch/dl/ANALYSIS.md` §4.
 - **Write the first test suite to the ADR 0003 standard,** including the
   `pytest_report_header` hook that prints the backend matrix. `addopts = "-ra"` is
   already configured in the root `pyproject.toml`; the header hook is the half that
