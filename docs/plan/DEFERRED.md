@@ -101,6 +101,16 @@ and several of these must land *as part of* the merge rather than after it.
   {`hseg`, `hmm`, `dl`}.
 - **Do not add dependency declarations to the placeholders** before then. A stub
   declaring `pfsmgraph-dataseq>=0.1` cannot resolve, because no such version exists.
+- **Drop the `.dev0` suffix and tag the release, per package.** All five members declare
+  `0.1.0.dev0`; the release commit for a package changes only that package's version to
+  `0.1.0` and is tagged `pfsmgraph-<pkg>-v<version>` — `pfsmgraph-dataseq-v0.1.0`. Hyphen,
+  not slash: git refs are paths, so `pfsmgraph-dataseq/v0.1.0` cannot coexist with a plain
+  `pfsmgraph-dataseq` tag, and some tooling mishandles the nesting. `git tag --list
+  'pfsmgraph-dataseq-*'` then gives one package's release history. Tagging is manual — no
+  command in use here creates a per-package tag (see `docs/agents/claude.md`). Keeping
+  `.dev0` until that commit is deliberate: a bare `0.1.0` on an incomplete package means an
+  accidental `uv build` + publish burns `0.1.0` on PyPI permanently, since versions are
+  immutable and deleting a release does not free the number.
 
 ## Trigger: `align` acquiring a backend-selection API
 
