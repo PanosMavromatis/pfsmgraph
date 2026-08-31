@@ -74,6 +74,16 @@ and several of these must land *as part of* the merge rather than after it.
   order is claim-by-placeholder first (done), then attach a normal trusted publisher to
   the now-existing project when CI is ready. A pending publisher reserves nothing, so
   there was no point doing this earlier.
+- **Run the agent-docs sync check in CI.** `AGENTS.md` and `AGENTS.override.md` are
+  generated from `docs/agents/` but committed, so drift between source and artifact is
+  silent: a stale artifact still parses, still reads plausibly, and makes agents act on
+  outdated instructions while every test stays green. The check that catches it exists
+  (`check-agents-md.sh`, surfaced as `/agents-docs-check`) and passes today. **The wrinkle
+  is that it lives in the workflow-claude plugin under the untracked `.claude/`, not in
+  this repo, and CI cannot invoke a slash command** — so wiring it up means vendoring the
+  script, installing the plugin in the job, or reimplementing the regenerate-and-diff in a
+  few lines of shell. Decide which when the workflow exists; the entry is here so the
+  question is not rediscovered by a confusing review months later.
 
 ## Trigger: the first real release
 
