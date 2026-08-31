@@ -54,10 +54,11 @@ suite; the `dependencies = []` fix; the 0.1.0 release.
 - `docs/plan/DEFERRED.md`, trigger "the `dataseq` merge" — the register of what this
   revision must not leave behind.
 
-**Dependency:** the preexisting code is not in this repo yet. The three import goals
-(2–4 in the branch plan) cannot start until it is available, and will be marked `[!]` if
-that has not happened. The first goal, creating the scratch location, does not depend on
-it and is complete.
+**Dependency:** each import goal waits on its own source arriving in `.scratch/`. The
+merge base (goal 2) landed on 2026-08-31 — MelodyHPO, `main` at `5f42311`; the Lush and
+rudimentary implementations (goals 3–4) are still outside the repo and will be marked
+`[!]` if they have not arrived when their turn comes. Goal 1, creating the scratch
+location, never depended on any of them and is complete.
 
 ## Notes
 
@@ -69,6 +70,14 @@ Running log — decisions made, things tried, things deferred.
   precedes the translation: a close translation is defined by fidelity to something you
   must already understand, so translating first would run the comparison against our
   reading of the original rather than the original itself.
+- 2026-08-31 — Merge base imported. It is **MelodyHPO**, not a project named `dl`: that
+  label is this repository's package slot, applied retroactively to a standalone and now
+  defunct project. Copied whole (2.2 GB) and reduced to 33 tracked files by a
+  deny-by-default `.scratch/dl/.gitignore`. Two renames inside the copy were forced
+  rather than chosen — `.git` → `.git-disabled`, since an embedded repository makes
+  `git add` on interior paths a silent no-op that exits `0`; and `CLAUDE.md` →
+  `CLAUDE.md.orig`, since a nested `CLAUDE.md` is loaded when reading files beside it and
+  would have injected another project's agent instructions into sessions here.
 - 2026-08-31 — Scratch location is `.scratch/` at the repo root, tracked, with one
   subdirectory per implementation. The leading dot is load-bearing: `uv run pytest` has no
   `testpaths`, so its walk reaches everywhere, and the dot matches pytest's default

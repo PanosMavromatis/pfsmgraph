@@ -1,0 +1,162 @@
+# MelodyHPO Project
+# Hyperparameter optimization for AI models of melody
+# Managed with uv: https://github.com/astral-sh/uv
+
+[project]
+name = "melody-hpo"
+version = "0.1.0"
+description = "Hyperparameter optimization for transformer and RNN models of melody"
+readme = "README.md"
+requires-python = ">=3.14"
+license = { text = "MIT" }
+authors = [
+    { name = "Panos" }
+]
+
+keywords = ["music", "melody", "machine-learning", "pytorch", "hpo"]
+
+dependencies = [
+    # Core ML
+    "torch>=2.10.0",
+
+    # Experiment tracking
+    "tensorboard>=2.20.0",
+
+    # Data handling
+    "pandas>=3.0.0",
+
+    # Configuration
+    "pyyaml>=6.0.2",
+
+    # Utilities
+    "tqdm>=4.67.0",          # Progress bars
+    "python-dotenv>=1.0.1",  # Environment variable management
+]
+
+[project.optional-dependencies]
+# Google Cloud / Vertex AI dependencies
+# Install with: uv add melody-hpo[gcp]
+gcp = [
+    "google-cloud-aiplatform>=1.75.0",
+    "google-cloud-storage>=2.19.0",
+]
+
+# Development tools
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=6.0.0",
+    "ruff>=0.9.0",
+    "mypy>=1.13.0",
+    "pandas-stubs>=2.2.0",    # Type stubs for pandas
+    "types-PyYAML>=6.0.12",   # Type stubs for PyYAML
+    "types-tqdm>=4.67.0",     # Type stubs for tqdm
+]
+
+# Jupyter for exploratory analysis
+notebooks = [
+    "jupyter>=1.1.0",
+    "ipykernel>=6.29.0",
+    "matplotlib>=3.10.0",
+    "seaborn>=0.13.2",
+]
+
+# All optional dependencies
+all = [
+    "melody-hpo[gcp,dev,notebooks]",
+]
+
+[project.scripts]
+# CLI entry points (add as needed)
+# melody-train = "melody_hpo.cli:train"
+# melody-eval = "melody_hpo.cli:evaluate"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["melody_hpo"]
+
+# =============================================================================
+# Tool Configuration
+# =============================================================================
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+    "data",
+    "experiments",
+    "notebooks",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+    "SIM",    # flake8-simplify
+]
+ignore = [
+    "E501",   # line too long (handled by ruff format)
+    "B008",   # do not perform function calls in argument defaults
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["melody_hpo"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.14"
+warn_return_any = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+strict_optional = true
+ignore_missing_imports = true  # Relaxed for ML libraries with incomplete stubs
+
+exclude = [
+    "data/",
+    "experiments/",
+    "notebooks/",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests requiring external resources",
+]
+
+[tool.coverage.run]
+source = ["melody_hpo"]
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]

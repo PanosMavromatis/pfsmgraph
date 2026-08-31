@@ -93,6 +93,20 @@ distribution, nothing outside it may import from it, and it is deleted before th
 Review the merged result under `packages/pfsmgraph-dataseq/`, never the inputs. The directory
 states its own lifetime in `.scratch/README.md`.
 
+**What arrives there is a whole third-party working tree, not an extracted module.** The merge
+base is imported as `.scratch/dl/MelodyHPO/` — a defunct standalone project, of which
+`melody_hpo/data/` is the part being merged and the rest (models, training, evaluation,
+generation) is context. Two of the high-signal targets above will match inside it and must not:
+its `pyproject.toml` is *not* one of the `packages/*/pyproject.toml` whose dependency bounds are
+literal claims about PyPI — it belongs to a project that is not published and not built here —
+and its `tests/` is not a backend-parameterized suite under ADR 0003, so measuring it against
+that standard produces findings against code that ships nowhere. Anchor both targets on
+`packages/`, and treat any path under `.scratch/` as out of scope by default.
+
+Note also that `.scratch/dl/.gitignore` is deny-by-default: 33 files are tracked out of 2.2 GB
+on disk. If something in an imported tree looks conspicuously absent, that is the intended
+behaviour and not a finding — the exclusions carry their reasons inline in that file.
+
 What *is* worth reviewing there is the written comparison rather than the code: if the semantic
 account of the Lush original and the translation beside it disagree, that is a real finding, and
 the account wins. It was written first precisely so the comparison could not be run against our
