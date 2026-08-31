@@ -8,18 +8,31 @@ Shared project knowledge for any coding agent working in this repository.
 
 **`align` and `hmm` are temporarily on hatchling, not meson-python.** meson-python's editable-install import hook injects a `sys.meta_path` finder that claims the entire `pfsmgraph` PEP 420 namespace and shadows the other distributions, so `import pfsmgraph.dataseq` (and `hseg`, `dl`) fails after `uv sync`. Neither package has compiled code yet — the `meson.build` extension blocks are dormant `if fs.exists()` guards — so the switch to meson-python is deferred to when the first `.pyx` lands, at which point the namespace/editable interaction must be solved (non-editable install of the compiled members, a single combined compiled distribution, or an upstream fix). The `meson.build` files and the revert recipe are kept in `packages/pfsmgraph-{align,hmm}/pyproject.toml`. This qualifies the PRD §6.1 note, whose "namespace is fine" evidence was gathered with *setuptools* editable, which composes; meson-python's finder does not.
 
-**On the `feat/dataseq-merge` branch only, `.scratch/` holds imported source that is not
-ours, together with our own writing about it.** It is where the three existing `dataseq`
-implementations are read side by side before anything is merged into
-`packages/pfsmgraph-dataseq/`, and it is deleted by the last goal of that branch's plan. So
-"no implementation code, no tests" above is a claim about `pfsmgraph`: `.scratch/` does
-contain Python and a `tests/` directory belonging to other projects, and now also Python of
-our own — a runnable transliteration of the Lush original under
-`.scratch/hmm-lush/translation/`, written as a reading aid for the merge and deleted with the
-rest. **Three imported directories, but four source trees**: `.scratch/py-rudimentary/` holds
-two repositories, `segalign/` (the implementation) and `SegAlign-Draft/` (the predecessor it
-was refactored from, tracked at one file because what it contributes is the *absence* of a
-sequence abstraction). It is still three implementations — the draft has none. Nothing there is part of any distribution and nothing outside it may import from it. The leading dot is
+**`.scratch/` holds imported source that is not ours, together with our own writing about
+it.** It is where the four existing implementations are read side by side before anything is
+merged into `packages/pfsmgraph-dataseq/`. So "no implementation code, no tests" above is a
+claim about `pfsmgraph`: `.scratch/` does contain Python, Cython and `tests/` directories
+belonging to other projects, and now also Python of our own — a runnable transliteration of
+the Lush original under `.scratch/hmm-lush/translation/`, written as a reading aid for the
+merge.
+
+**It is retained across branches, and that changed on 2026-08-31.** It was created as a
+temporary `dataseq` working area to be deleted by the last goal of the `feat/dataseq-merge`
+plan; it is not, because the same imports are the migration source for `hmm` and `align`
+0.1.0. What is re-scoped per package is not the contents but the **`.gitignore` policies**:
+each import's rules surface the files relevant to the package being migrated, so the tracked
+set follows the work. `.scratch/align-poc/.gitignore` is the first written in explicit
+phases (`dataseq` active, `hmm` empty by design, `align` written but commented), and
+advancing it is an uncomment rather than a re-derivation.
+
+**Four imported directories, six source trees**: `.scratch/py-rudimentary/` holds two
+repositories — `segalign/` (the implementation) and `SegAlign-Draft/` (the predecessor it was
+refactored from, tracked at one file because what it contributes is the *absence* of a
+sequence abstraction) — and `.scratch/align-poc/tokalign/` carries two more nested inside it.
+`.scratch/align-poc/` is the proof-of-concept alignment library that PRD §1.2 describes and
+that ADRs 0001–0004 derive from, so unlike the other three it is a *source* of this project's
+invariants rather than only evidence about them. Nothing there is part of any distribution
+and nothing outside it may import from it. The leading dot is
 load-bearing — it matches pytest's default `norecursedirs` entry `.*`, which is why `uv run
 pytest` still collects zero items with those files present; and the directory sits outside
 `packages/`, so the workspace glob never claims it. `.scratch/README.md` states the rest,

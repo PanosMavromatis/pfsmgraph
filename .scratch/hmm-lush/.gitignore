@@ -3,9 +3,12 @@
 # surroundings to read it are wanted, so the rule is deny-by-default: nothing
 # here is tracked unless it is named below.
 #
-# This file lives in `.scratch/hmm-lush/` rather than the repo root so that
-# deleting `.scratch/` at the end of the merge removes the rules along with what
-# they describe -- see `.scratch/README.md`.
+# This file lives in `.scratch/hmm-lush/` rather than the repo root so that each
+# import owns its own rules -- see `.scratch/README.md`. (It originally said "so
+# that deleting `.scratch/` at the end of the merge removes the rules along with
+# what they describe". `.scratch/` is no longer deleted, as of 2026-08-31: it is
+# the migration source for `hmm` and `align` 0.1.0 too. The tracked set is now
+# re-scoped per package instead, which a per-import policy supports directly.)
 #
 # The repo-root `.gitignore` still applies underneath these rules, and is what
 # keeps the 42 `.DS_Store` files out even inside the re-included directories. Do

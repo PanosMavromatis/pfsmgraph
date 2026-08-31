@@ -211,3 +211,59 @@ Running log — decisions made, things tried, things deferred.
   because if `py-rudimentary` *is* the proof-of-concept then `core.md`'s "every one of the
   three uses a different offset" also fails — Lush and this one would both be 2 — and that is
   a tabulation for goal 4, not a docs-sync edit made in passing on an import commit.
+- 2026-08-31 — The fourth implementation found, and `.scratch/` made permanent. Two changes,
+  and the second is a reversal.
+  **`tokalign` is the proof-of-concept, and it exists.** The previous entry recorded that
+  `DEFERRED.md` and the `core.md` invariant described a proof-of-concept allocating user
+  symbols from 4 with a distinct gap index, and that neither `py-rudimentary` tree matched.
+  Verification widened the gap rather than closing it: `Alphabet`, `ScoringMatrix`,
+  `AlignmentResult` and a Needleman-Wunsch `.pyx` -- all named in PRD §1.2 and ADR 0002 --
+  were absent too, which put four ADRs and the PRD's opening section in doubt. The choice
+  offered was to trim those claims or to hold; holding was chosen, and it was right. The
+  library is `github.com/PanosMavromatis/tokalign`, now imported at `.scratch/align-poc/`,
+  and every claim is exact: all three types are in `src/tokalign/_types.py`,
+  `algorithms/needleman_wunsch/_cython.pyx` is present, and
+  `Alphabet.RESERVED_INDICES = 3` gives padding/BOS/EOS at 0-2, gap at 3 and user symbols
+  from 4 -- PRD §11 verbatim. **Nothing was trimmed.** The near-miss is recorded in
+  `.scratch/README.md` because it generalises: a documentation claim that cannot be matched
+  to code is not thereby false, and six documents were close to being rewritten to assert
+  that a real library never existed.
+  This also corrects the previous entry's framing. `Alphabet.encode` raises `KeyError` on an
+  unseen symbol -- strict by default, which is what ADR 0011 mandates -- and it has a real
+  `gap_index` and a working `decode`. Three of the four implementations are flawed on the
+  reserved block; this one needs *renumbering* only, ADR 0011 inserting `UNK` and `MSK` to
+  move user symbols from 4 to 6. That is unsurprising in hindsight: ADRs 0001-0004 were
+  derived from this library, so it agrees with them by construction, and it is a *source* of
+  the invariants rather than evidence to be weighed against them.
+  **`.scratch/` is no longer deleted when this branch merges.** The same imports seed `hmm`
+  and `align` 0.1.0, so the tree is retained and what is re-scoped per package is the
+  `.gitignore` policies rather than the contents. `.scratch/align-poc/.gitignore` is the
+  first written in explicit phases -- `dataseq` active (the `Alphabet` encoder, plus
+  `_backends.py` and `conftest.py` because pytest loads that conftest for the whole `tests/`
+  tree), `hmm` empty by design and recorded as a finding rather than an oversight, `align`
+  written out but commented. Advancing a phase is an uncomment, not a re-derivation.
+  The reversal contradicted a claim in seven places, all corrected. The urgent one was
+  `docs/plan/feat-dataseq-merge/TODO.md`, whose last goal read `[ ] Delete the scratch
+  location` and would have been executed as written by the next `/hitl-step` to reach it.
+  Its retention reasoning is kept under an "if this directory is ever deleted" heading rather
+  than discarded, since the squash-merge hazard returns intact if the decision is ever
+  revisited. One consequence worth noting: `py-rudimentary`'s exclusion of `tcoffee/` was
+  argued partly *from* deletion, and that premise is now void. The exclusion stands on better
+  footing -- `tokalign` is the actual ancestor of `pfsmgraph-align` and supersedes
+  SegAlign-Draft's alignment code as a migration source, so the `align` phase widens
+  `align-poc`'s policy, not `py-rudimentary`'s.
+  **Eight renames on import, the most of any so far**: three nested repositories and five
+  agent-instruction files. Two are worth knowing before re-running it. `AGENTS.md` and
+  `AGENTS.override.md` sat at tokalign's root because that project uses the same agent-docs
+  toolchain as this one -- they are the *generated artefacts* of another project, and
+  `protect-agent-docs.py` matches on filename, so under their own names this repository would
+  have treated them as its own. And `dev/plugins/workflow-claude/` is mode 555, a vendored
+  clone of the same plugin installed here; renaming a child needs write permission on the
+  parent, so those two renames required `chmod u+w` first, with the mode restored afterwards.
+  The failure presents as a bare `Permission denied` that reads like a sandbox restriction.
+  A drag-and-drop slip on the owner's part turned out to be load-bearing. The import first
+  landed at `.scratch/tokalign/` with its policy inside it, where the `!/*.md` negation --
+  meant for our own analysis files -- also matched tokalign's `TODO.md` and `TODO.human.md`,
+  silently tracking another project's planning documents as ours. Moving the tree into
+  `align-poc/` and the policy one level above it, as `.scratch/dl/.gitignore` already governs
+  `MelodyHPO/`, excludes them structurally rather than by a named exception.

@@ -97,7 +97,12 @@ decisions, not the constructs, and `ACCOUNT.md` is where the original is describ
 priorities above — the encode seam most of all — generate noise when applied to any of it: a
 finding against scratch input is a finding against the thing being compared, not against
 anything that ships. Nothing in `.scratch/` is part of any
-distribution, nothing outside it may import from it, and it is deleted before the branch merges.
+distribution and nothing outside it may import from it. **It is no longer deleted when this
+branch merges** (changed 2026-08-31): the same imports seed `hmm` and `align` 0.1.0, so the
+tree is retained and each import's `.gitignore` is re-scoped as the migration target changes.
+`.scratch/align-poc/.gitignore` is written in explicit phases for that reason, with only its
+`dataseq` block active — so a file that is present on disk but untracked there is scoped out
+of the current phase, not overlooked.
 Review the merged result under `packages/pfsmgraph-dataseq/`, never the inputs. The directory
 states its own lifetime in `.scratch/README.md`.
 
@@ -152,7 +157,15 @@ reading of the original instead of the original.
 
 This generalises to every written analysis under `.scratch/` — `.scratch/dl/ANALYSIS.md` was
 the first, joined by `.scratch/hmm-lush/ACCOUNT.md` and `COMPARISON.md`, and by whatever
-goal 4 writes for `py-rudimentary`. Those documents are
+goal 4 writes for `py-rudimentary` and `align-poc`.
+
+**One caution specific to `.scratch/align-poc/`.** It holds `tokalign`, the proof-of-concept
+alignment library that PRD §1.2 and ADRs 0001–0004 were written *from*. It is therefore not
+evidence to be weighed against those records the way the other three imports are — it is
+their source. Where it and an ADR disagree, the ADR is still the later word (`Alphabet` puts
+user symbols at 4; ADR 0011 moves them to 6), but a divergence there is a deliberate
+renumbering rather than a defect, and `Alphabet` already satisfies ADR 0011 on strictness,
+`gap_index` and `decode`. Those documents are
 load-bearing in a way the imported code is not: they decide what `packages/pfsmgraph-dataseq/`
 becomes and they are the draft of ADR 0010's decision section, so a claim in one that the code
 does not support is a real finding even though the code it describes ships nowhere. Check the

@@ -193,5 +193,15 @@ never the ones they close. Recorded as an invariant in `docs/agents/core.md`.
 
 - [ ] Clean up once the merge is completed
   - [ ] All migration decisions are recorded in [ADR 0010](../../design/adr/0010-dataseq-composition-merging-three-implementations.md), which is the merge's record; anything the encoder API decision does not cover gets a new ADR with the next free number and a row in `docs/design/adr/README.md`
-  - [ ] Decide how the scratch code is retained **before** deleting it: a squash merge collapses the add and the delete to nothing and loses it from `main` entirely, so retention needs a merge commit, a tag on the pre-deletion SHA, or a branch left unmerged
-  - [ ] Delete the scratch location
+  - [ ] Narrow `.scratch/*/.gitignore` to what the *next* migration needs, rather than deleting anything — `.scratch/` now survives this branch (see the note below), so cleanup here means re-scoping the four policies, not removing the tree
+  - [ ] `.scratch/align-poc/.gitignore` advanced from its Phase 1 (`dataseq`) block to Phase 2/3 as appropriate, and the equivalent judgement recorded for the other three imports
+  > **Superseded (2026-08-31):** this goal originally read "decide how the scratch code is
+  > retained **before** deleting it" and "delete the scratch location", on the assumption
+  > that `.scratch/` existed only for the `dataseq` merge. It does not: the imports are now
+  > the migration source for `hmm` and `align` 0.1.0 as well, so the tree stays and the
+  > per-package `.gitignore` policies are re-scoped as each migration begins. The retention
+  > problem the old wording guarded against — a squash merge collapsing the add and the
+  > delete into nothing, losing the code from `main` — **no longer arises**, because nothing
+  > is deleted. It returns only if `.scratch/` is ever removed for real, at which point the
+  > original reasoning still applies: retention needs a merge commit, a tag on the
+  > pre-deletion SHA, or a branch left unmerged.
