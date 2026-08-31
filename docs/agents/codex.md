@@ -103,9 +103,20 @@ and its `tests/` is not a backend-parameterized suite under ADR 0003, so measuri
 that standard produces findings against code that ships nowhere. Anchor both targets on
 `packages/`, and treat any path under `.scratch/` as out of scope by default.
 
-Note also that `.scratch/dl/.gitignore` is deny-by-default: 33 files are tracked out of 2.2 GB
-on disk. If something in an imported tree looks conspicuously absent, that is the intended
-behaviour and not a finding — the exclusions carry their reasons inline in that file.
+Note also that **each import carries its own deny-by-default `.gitignore`**, and each admits a
+small fraction of what is on disk: `.scratch/dl/` tracks 33 files out of 2.2 GB, `.scratch/hmm-lush/`
+135 out of 929 MB. If something in an imported tree looks conspicuously absent, that is the
+intended behaviour and not a finding — the exclusions carry their reasons inline in each of those
+files, and what they turn away is overwhelmingly not source: virtualenvs and tool caches in the
+first, saved model checkpoints from 2008–2011 training runs in the second.
+
+Two exclusions in `hmm-lush` are worth knowing before reading, because both look like gaps in the
+translation record and are not. `Code/SeqData/C/` is absent because every `.c` in it opens
+`WARNING: Automatically generated code ... by the DH compiler` — Lush's own compiler emitting C
+from the `.lsh` beside it, so it is a build artefact rather than a hand-written fast path, and
+there is no Python/C equivalence to check there. And `Code/_Old Lisp Code/` is absent because it
+is an interpreted Common Lisp predecessor that the owner has ruled out as a source; the Lush
+version under `Code/` is the original the translation must be faithful to.
 
 What *is* worth reviewing there is the written comparison rather than the code: if the semantic
 account of the Lush original and the translation beside it disagree, that is a real finding, and

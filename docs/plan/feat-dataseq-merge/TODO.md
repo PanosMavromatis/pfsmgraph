@@ -33,6 +33,24 @@ and 2 (settle the encoder API and promote ADR 0010)
   - [ ] A semantic account of the Lush original **in its own terms** — container model, encoder shape, vocabulary handling — written before any translation, so the comparison is against the original rather than against our reading of it
   - [ ] Draft a close translation to Python alongside the original in the scratch location, noting each choice the account left open where Lush does not map mechanically
   - [ ] A written comparison against the `dl` base, and every point where that base must be overridden by this implementation, with why
+  > **Note (framing, settled before the account is written):** the ADRs outrank all three
+  > imported implementations — see `docs/agents/core.md` under "Invariants". So the fourth
+  > subgoal's "every point where that base must be overridden" means the points the ADRs
+  > leave open, never the ones they close. In particular the reserved block is not among
+  > them: [ADR 0011](../../design/adr/0011-fixed-reserved-symbol-block-and-strict-encoding.md)
+  > fixes `PAD`=0 … `MSK`=5 with user symbols from 6, and Lush's `0 begin`, `1 end`, users
+  > from 2 is a divergence to record, not a candidate to adopt.
+  > **Note (for the semantic account):** `dsource-seq.lsh` packs ragged sequences into a
+  > dense `size x seq_size_max` integer matrix, so the unused tail of every short row is
+  > `0` — which in that alphabet means `begin`, a real symbol. The original is correct
+  > only because `_seq_sizes` is consulted at every read; the padding is indistinguishable
+  > from data by inspection. Write this into the account as an **illustration of the
+  > failure ADR 0011 prevents**, not as evidence for `PAD`=0. The ADR is Accepted and does
+  > not need corroborating from an import, and treating an implementation as support for a
+  > decision already made is the same category error as treating it as authority against
+  > one. It earns its place because it is that hazard observed in working code rather than
+  > argued from first principles — the strongest available answer to "is the zero-fill
+  > argument really load-bearing, or just tidy?"
 
 - [ ] Import the last implementation (rudimentary, in Python) and tabulate its divergence with the merged implementation so far
   - [ ] The third implementation is readable in the scratch location and its provenance is recorded

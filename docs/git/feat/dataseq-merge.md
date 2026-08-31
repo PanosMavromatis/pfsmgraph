@@ -104,3 +104,17 @@ Running log — decisions made, things tried, things deferred.
   tail of every short row is `0`, which here means `begin`. The original is safe only
   because `_seq_sizes` is consulted at every read. This is the ADR 0011 `PAD`=0 rationale
   observed in the wild rather than argued from first principles.
+- 2026-08-31 — Precedence between the ADRs and the three imports stated explicitly, as a
+  new invariant in `docs/agents/core.md`: the `dl` version is the merge's *base* because
+  it is the most mature, but base means starting point, not authority. Where any import
+  disagrees with an Accepted ADR the ADR wins, unless that ADR carves out an exception in
+  its own text — as ADR 0011 does for the *spelling* of the strictness switch while
+  holding its semantics settled. Prompted by re-reading goals 3–4, whose "every point
+  where that base must be overridden" reads, on its own, as licence to let an import
+  reopen a closed decision; it means the points the ADRs leave open. Sharpest instance:
+  the three imports start user symbols at 3 (`dl`), 2 (Lush) and 4 (proof-of-concept),
+  and none of them has a `GAP` code at all, so there was never a majority to defer to —
+  ADR 0011 is supplying something all three lack rather than breaking a tie. This also
+  reclassifies the dense-matrix finding logged above: it is an illustration of the
+  failure ADR 0011 prevents, not evidence for `PAD`=0, and goal 3 now carries a note
+  saying so before its semantic account is written.

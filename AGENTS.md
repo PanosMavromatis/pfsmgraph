@@ -71,6 +71,18 @@ These constrain any code written here. They are inherited from the proof-of-conc
 - **One parameterized test suite per algorithm**, run automatically against every available backend, so backend equivalence is enforced rather than assumed. Absent hardware (no CUDA device) skips, but *loudly* — the session header names every backend excluded and why; a backend that is implemented but not importable (missing or stale Cython build) is a hard failure, never a skip; a lifecycle phase not yet reached contributes no parameter at all. `PFSMGRAPH_REQUIRE_BACKENDS` escalates skips to failures for CI. See ADR 0003.
 - **Build backends are per-package, not family-wide.** meson-python for compiled members (`align`, the Baum-Welch core of `hmm`); hatchling for pure-Python members. meson-python editable installs need `ninja` present for rebuild-on-import. *(Currently `align`/`hmm` are on hatchling too, pending their first `.pyx` — see "Current state".)*
 - **"GPU" means two unrelated things.** `numba-cuda` for the DP packages, `torch` for `dl`. Do not unify these into one `[gpu]` extra.
+- **The ADRs outrank the imported implementations.** The `dataseq` merge takes the `dl`
+  (MelodyHPO) version as its *base* because it is the most mature of the three, but base
+  means starting point, not authority. Where any of the three disagrees with an Accepted
+  ADR, the ADR wins and the implementation is changed, unless that ADR says otherwise in
+  its own text. The imports are evidence about what has been tried; they are not a source
+  of decisions that have already been made. This bites hardest on the reserved block:
+  every one of the three uses a different offset for user symbols — `dl` starts them at 3,
+  the Lush original at 2, the proof-of-concept at 4 — and none of them has a `GAP` code at
+  all. [ADR 0011](../design/adr/0011-fixed-reserved-symbol-block-and-strict-encoding.md)
+  settles this: `PAD`=0 … `MSK`=5, user symbols from 6, and the renumbering lands **as part
+  of** the merge rather than after it. So a merge note reading "the base must be overridden
+  here" is about the points the ADRs leave open, never about reopening the ones they close.
 
 ## Workspace footgun
 
