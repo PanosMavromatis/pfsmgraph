@@ -1,6 +1,6 @@
 # feat/dataseq-merge
 
-**Status**: active
+**Status**: merged — PR #2 — 2026-09-01
 **Created**: 2026-08-31
 **Subgoal**: revision `01-dataseq-v0.1.0`, subgoals 1 (merge the three implementations)
 and 2 (settle the encoder API and promote ADR 0010)
