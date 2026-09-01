@@ -67,3 +67,14 @@ migration, which is why `DEFERRED.md` requires it to land inside revision
   `test_needleman_wunsch.py` is tracked so the fix is reviewable. Baseline was 62 passing and
   it is 62 again. No grep for `gap`/`GAP`/`== <int>` matches `symbols[idx - 4]` -- running the
   suite is what found it.
+- 2026-09-01: index audit complete. All 14 `.py`/`.pyx` files under `src/`, `tests/`,
+  `benchmarks/` and `setup.py` swept for integer literals in index positions rather than for
+  names -- the inversion the previous entry's miss argued for. No further assumptions:
+  `setup.py`, `_backends.py`, `_registry.py` and `conftest.py` have no integer literals at
+  all, and the benchmark script samples `alphabet.symbols` by name.
+- 2026-09-01: the renumbering *created* one coincidence worth recording. The traceback
+  `Direction` enum spans 0-5, exactly the range the reserved block now occupies; the overlap
+  became total only when the block widened from four slots to six. Unrelated namespaces --
+  one indexes `T[i][j]`, the other the alphabet -- documented on the enum.
+- 2026-09-01: `decode` filed to `DEFERRED.md` under a new trigger, "the `align` migration",
+  with the open part named: what the reserved codes decode *to*.

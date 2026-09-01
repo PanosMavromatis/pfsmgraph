@@ -13,7 +13,17 @@ from ..._types import Alphabet, AlignmentResult, ScoringMatrix
 
 
 class Direction(IntEnum):
-    """Traceback direction values, matching the formalization's enum."""
+    """Traceback direction values, matching the formalization's enum.
+
+    **These are not symbol codes.** They happen to span 0-5, which is exactly the
+    range the ADR 0011 reserved block has occupied since 2026-09-01 -- but the two
+    namespaces are unrelated: these index the traceback matrix ``T[i][j]``, while
+    ``PAD``/``UNK``/``BOS``/``EOS``/``GAP``/``MSK`` index the alphabet. The overlap
+    is a coincidence of both being small dense enums, and it became total only when
+    the reserved block widened from four slots to six. Nothing confuses them today;
+    the note exists because a reader meeting a ``4`` in a traceback matrix should
+    not reach for ``GAP``.
+    """
 
     NIL = 0
     DIAG = 1

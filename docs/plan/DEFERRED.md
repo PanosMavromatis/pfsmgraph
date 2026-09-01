@@ -204,6 +204,22 @@ and several of these must land *as part of* the merge rather than after it.
   paid by readers who cannot tell. If a second repo-hygiene item appears before then, this
   is better promoted to its own revision via `/open-revision` than left waiting.
 
+## Trigger: the `align` migration
+
+- **Make `tokalign`'s `decode` total.** It raises `KeyError` on every reserved code,
+  because `_idx_to_sym` is built from the gap index up and never populates `PAD`, `UNK`,
+  `BOS`, `EOS` or `MSK`. `dataseq` decodes *totally* over `range(size)` for a specific
+  reason — a padded batch is the array most likely to be decoded — so the two halves of
+  the family currently disagree at exactly the seam `align` sits on. Recorded as a defect
+  rather than a divergence in `.scratch/align-poc/COMPARISON.md` §3 and in
+  `docs/agents/codex.md`.
+
+  Deliberately out of scope of `refactor/reserved-block-renumber` (2026-09-01): making
+  `decode` total is a behaviour change, not a renumbering, and it needs a decision the
+  renumbering did not — what the reserved codes decode *to*. `dataseq` answers that with
+  `RESERVED_SYMBOLS`; whether `tokalign` should mirror those strings or use its own is
+  the open part.
+
 ## Trigger: `align` acquiring a backend-selection API
 
 - **Write the runtime backend-selection ADR** (next free number). What the public API

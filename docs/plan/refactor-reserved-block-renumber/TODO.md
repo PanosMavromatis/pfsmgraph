@@ -66,10 +66,31 @@
   > `test_needleman_wunsch.py` is now tracked so the fix is reviewable.
   > **Why goal 1's grep missed it:** a sweep for `gap`, `GAP` and `== <int>` cannot
   > match `symbols[idx - 4]` or `[4, 6, 5]`. Executing the suite is what found it.
-- [ ] Audit every hard-coded index assumption the renumbering exposes
-  - [ ] Sweep for bare integer literals standing in for reserved codes
-  - [ ] Check the scoring-matrix construction, which is sized from the alphabet and is
+- [x] Audit every hard-coded index assumption the renumbering exposes
+  > **Q:** The traceback-direction enum now shares the range 0-5 with the reserved block.
+  > Where should that be recorded?
+  > **A:** A comment on the `Direction` enum in `_python.py`, which is tracked and is where
+  > a reader would actually meet the numbers.
+  > **Q:** `decode` is still partial in `tokalign`. Where should that land?
+  > **A:** A new `DEFERRED.md` trigger section, "the `align` migration". `codex.md` already
+  > tells a reviewer to report it, but nothing scheduled the fix.
+  - [x] Sweep for bare integer literals standing in for reserved codes
+  - [x] Check the scoring-matrix construction, which is sized from the alphabet and is
         the seam `pfsmgraph-align` will read across
+  > **Done:** Swept all 14 `.py`/`.pyx` files under `src/`, `tests/`, `benchmarks/` and
+  > `setup.py` -- tracked and untracked alike -- for integer literals in index positions,
+  > rather than for names. `setup.py`, `_backends.py`, `_registry.py` and `conftest.py`
+  > have none at all; `benchmarks/run_benchmark.py` samples `alphabet.symbols` by name and
+  > its integers are reps, seeds and figure sizes. The scoring-matrix seam was the one real
+  > site and was fixed in the previous commit (`range(USER_BASE)`).
+  > **New finding, created by the renumbering rather than exposed by it:** the traceback
+  > `Direction` enum spans 0-5, exactly the range the reserved block now occupies. The
+  > namespaces are unrelated -- one indexes `T[i][j]`, the other the alphabet -- and the
+  > overlap became total only when the block widened from four slots to six. Nothing
+  > confuses them today; documented on the enum so nothing starts to.
+  > **Out of scope, now scheduled:** `decode` stays partial. Filed to `DEFERRED.md` under a
+  > new trigger, "the `align` migration", with the open part named -- what the reserved
+  > codes should decode *to*.
 - [ ] Record the outcome
   - [ ] Update the `DEFERRED.md` entry -- the `dl` half is already satisfied by PR #2
   - [ ] Close the master-plan subgoal with a `> **Done:**` note

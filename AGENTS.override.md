@@ -250,7 +250,8 @@ field is gone and the block is module-level `Final` constants, so there is nothi
 pass. A finding against it now is stale. **The second still stands** — `decode` remains
 partial in `tokalign`, deliberately left out of the renumbering's scope because making it
 total is a behaviour change rather than a renumbering, and it is inherited by the `align`
-migration. It is still worth a finding.
+migration. It is now filed in `docs/plan/DEFERRED.md` under the trigger "the `align`
+migration", so a finding against it should point there rather than restate it.
 
 **Lower-priority targets.** Claude Code handles these reliably; do not spend review budget
 on them unless something looks actively wrong: prose style and structure in `docs/`, ADR
