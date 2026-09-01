@@ -35,9 +35,15 @@ version control anywhere else. What is re-scoped per package is not the contents
 **`.gitignore` policies**: each import's rules surface the files relevant to the package
 being migrated, so the tracked set follows the work. `.scratch/align-poc/.gitignore` is the
 only phased policy of the four — `dataseq` done, `hmm` **active since 2026-09-01** and empty
-by design, `align` written but commented — and advancing it is an uncomment rather than a
-re-derivation. That advance added no files, which is recorded as the finding rather than left
-looking like an oversight: nothing in tokalign is HMM-related. The other three state their
+by design, `align` inert but for a single file advanced early — and advancing it is an
+uncomment rather than a re-derivation. That advance added no files, which is recorded as the
+finding rather than left looking like an oversight: nothing in tokalign is HMM-related. The
+`align` phase took its one exception on 2026-09-01: `_python.py` is tracked ahead of that
+migration because the reserved-block renumbering had to show that the alignment code
+hard-codes no gap index, and a negative finding needs a signature to be checkable.
+`_cython.pyx` stays untracked so `DEFERRED.md`'s "the first `.pyx` lands" trigger keeps one
+meaning — a `.pyx` under `.scratch/` belongs to no distribution and must not appear to fire
+it. The other three state their
 forward judgement in their own headers — `hmm-lush` is already scoped to the whole live HMM
 library and needs no widening when the `hmm` branch opens, while `dl` and `py-rudimentary`
 are spent imports whose tracked sets are final.

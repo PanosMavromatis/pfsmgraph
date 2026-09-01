@@ -128,16 +128,50 @@
 # =============================================================================
 # Phase 3 -- align  (inert -- uncomment when align migration begins)
 # =============================================================================
+#
+# ONE EXCEPTION, ADVANCED EARLY ON 2026-09-01. The reserved-block renumbering
+# (`refactor/reserved-block-renumber`) had to audit every hard-coded index
+# assumption in the alignment code, and the finding was a negative one: there is
+# none. `_python.py` takes `gap_index: int` as a parameter and the caller feeds it
+# `alphabet.gap_index`, so the algorithms are index-agnostic and the renumbering
+# is confined to `_types.py` under Phase 1.
+#
+# A negative finding needs a signature to be checkable, which is the same reason
+# `.scratch/py-rudimentary/.gitignore` tracks one file from `SegAlign-Draft`. So
+# `_python.py` is tracked now and the rest of the phase stays inert.
+#
+# `_cython.pyx` deliberately stays untracked: `docs/plan/DEFERRED.md` keys the
+# meson-python switch to "the first `.pyx` lands", and a `.pyx` under `.scratch/`
+# belongs to no distribution and must not appear to fire it.
+#
+# The two `__init__.py` files are not tracked either, so this is evidence rather
+# than an importable package. Both are 0 bytes; add them when Phase 3 advances.
+#
+# The three rules below are what let git descend: `/tokalign/src/tokalign/*` in
+# Phase 1 already excluded `algorithms/`, and git does not look inside an excluded
+# directory, so a lone negation on the file would match nothing at all.
+
+!/tokalign/src/tokalign/algorithms/
+/tokalign/src/tokalign/algorithms/*
+!/tokalign/src/tokalign/algorithms/needleman_wunsch/
+/tokalign/src/tokalign/algorithms/needleman_wunsch/*
+!/tokalign/src/tokalign/algorithms/needleman_wunsch/_python.py
+
 # This is the bulk of the library and the reason the import was kept. Everything
 # below is deliberate, not a leftover:
 #
-#   scoring.py            substitution/affine-gap scoring built on ScoringMatrix
+#   scoring.py            EMPTY (0 bytes). This entry previously described
+#                         "substitution/affine-gap scoring built on ScoringMatrix";
+#                         `ScoringMatrix` is in `_types.py`, tracked under Phase 1.
+#                         Corrected 2026-09-01 by measurement.
 #   algorithms/_registry.py
-#                         algorithm + backend dispatch; with _backends.py this is
-#                         the concrete form of ADR 0003's parameterized suite and
-#                         ADR 0004's optional-extra split
+#                         five lines mapping one algorithm name to one module path.
+#                         The backend dispatch ADR 0003 and ADR 0004 describe is in
+#                         `_backends.py` (Phase 1, tracked), not here. Corrected
+#                         2026-09-01.
 #   algorithms/needleman_wunsch/_python.py
-#                         the pure-Python phase-1 implementation
+#                         the pure-Python phase-1 implementation. TRACKED -- see the
+#                         exception above.
 #   algorithms/needleman_wunsch/_cython.pyx
 #                         the phase-2 kernel. ADR 0002 calls this "explicitly the
 #                         reference template for future kernels and wavefront
@@ -145,7 +179,9 @@
 #                         here, and the first `.pyx` in this repo triggers the
 #                         meson-python switch in DEFERRED.md
 #
-# !/tokalign/src/tokalign/scoring.py
+# Uncommenting the block below is idempotent: `algorithms/`, `needleman_wunsch/`
+# and `_python.py` are already live above, and a repeated negation changes nothing.
+# !/tokalign/src/tokalign/scoring.py       # 0 bytes -- see the inventory above
 # !/tokalign/src/tokalign/algorithms/
 # /tokalign/src/tokalign/algorithms/*
 # !/tokalign/src/tokalign/algorithms/*.py
@@ -156,7 +192,7 @@
 # !/tokalign/tests/algorithms/
 # /tokalign/tests/algorithms/*
 # !/tokalign/tests/algorithms/*.py
-# !/tokalign/tests/test_scoring.py
+# !/tokalign/tests/test_scoring.py       # 0 bytes -- see the inventory above
 # !/tokalign/setup.py      # the Cython build_ext invocation ADR 0008 replaces
 # !/tokalign/benchmarks/   # 4 files; evidence for the phase-2 speedup claim
 

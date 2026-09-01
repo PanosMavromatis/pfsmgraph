@@ -43,3 +43,15 @@ migration, which is why `DEFERRED.md` requires it to land inside revision
 
 - 2026-09-01: branch created from `main` at `4c2aff6`. `docs/git/` did not exist and was
   recreated here -- PR #2's branch doc was deleted at merge, as designed.
+- 2026-09-01: audit surface settled. The alignment algorithms hard-code no gap index --
+  `_python.py:148` and `_cython.pyx:79` both take `gap_index: int` as a parameter fed from
+  `alphabet.gap_index` -- so the renumbering is confined to `_types.py`. Phase 3 of
+  `.scratch/align-poc/.gitignore` was advanced by exactly one file, `_python.py`, as the
+  signature that makes that negative finding checkable; `_cython.pyx` stays untracked to keep
+  `DEFERRED.md`'s first-`.pyx` trigger unambiguous.
+- 2026-09-01: that phase's header inventory was wrong and is corrected. `scoring.py`,
+  `tests/test_scoring.py` and `algorithms/__init__.py` are 0 bytes, and `_registry.py` is a
+  five-line name-to-module dict -- not the backend dispatch it claimed, which is in
+  `_backends.py`. `ScoringMatrix` is in `_types.py`, already tracked under Phase 1.
+- 2026-09-01: `_types.py:136` ("zero out reserved indices and gap row/column") is the real
+  target of the index audit, and it sits inside the file the renumbering already had to touch.

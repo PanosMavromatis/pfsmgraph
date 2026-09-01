@@ -103,7 +103,10 @@ tree is retained and each import's `.gitignore` is re-scoped as the migration ta
 block is complete and the `hmm` phase is active as of 2026-09-01, empty by design because
 nothing in tokalign is HMM-related. So a file that is present on disk but untracked there is
 scoped out of the current phase, not overlooked — and an *empty* phase is a recorded finding,
-not an unfinished one.
+not an unfinished one. The `align` phase has one file tracked ahead of it —
+`tokalign/src/tokalign/algorithms/needleman_wunsch/_python.py`, admitted 2026-09-01 as the
+evidence that the alignment algorithms take `gap_index` as a parameter rather than hard-coding
+it. It is tracked in order to be *cited*, not reviewed; the default above still applies.
 Review the merged result under `packages/pfsmgraph-dataseq/`, never the inputs. The directory
 states its own lifetime in `.scratch/README.md`.
 
@@ -152,10 +155,11 @@ lost this to a missing `ClassVar`). Each has a test; a change that weakens eithe
 Note also that **each import carries its own deny-by-default `.gitignore`**, and each admits a
 small fraction of what is on disk: `.scratch/dl/` tracks 34 files out of 2.2 GB,
 `.scratch/hmm-lush/` 143 out of 929 MB, `.scratch/py-rudimentary/` 73 out of 1.7 GB, and
-`.scratch/align-poc/` 9 out of 194 MB, plus two documents of our own at the `.scratch/` root
+`.scratch/align-poc/` 10 out of 194 MB, plus two documents of our own at the `.scratch/` root
 (`README.md` and `RESERVED-BLOCK.md`). The per-import counts include our own written analysis,
 which lives alongside the source it describes. *(Counts measured 2026-08-31; the previous
-figures for the first two were each high by one.)* If something in an imported tree looks conspicuously absent, that is the
+figures for the first two were each high by one. `align-poc` went from 9 to 10 on
+2026-09-01.)* If something in an imported tree looks conspicuously absent, that is the
 intended behaviour and not a finding — the exclusions carry their reasons inline in each of those
 files, and what they turn away is overwhelmingly not source: virtualenvs and tool caches in the
 first, saved model checkpoints from 2008–2011 training runs in the second.
