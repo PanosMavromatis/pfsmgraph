@@ -60,6 +60,7 @@ edit becomes a data migration.
   > symbol→code mapping public because `align` reads it across a distribution boundary.
   > ADR 0010 accepted 2026-09-01 and its index row updated — PR #2
 - [ ] Renumber the proof-of-concept alignment code to the reserved block (user symbols from 6, new gap index), auditing every hard-coded index assumption. Lands here, not after.
+  > **Branch:** refactor/reserved-block-renumber
 - [x] Fix `dataseq`'s third-party runtime dependencies — `dependencies = []` is a placeholder — and confirm its build backend stays hatchling ([ADR 0008](../design/adr/0008-per-package-build-backends.md)).
   > **Done:** `dependencies = ["numpy>=1.24"]`, replacing the `[]` placeholder;
   > `build-backend = "hatchling.build"` confirmed and recorded in ADR 0010 §Resolved,
