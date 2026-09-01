@@ -331,6 +331,22 @@ names reconciling its `Alphabet` as part of this merge while its own title still
   - [ ] Status changed `Proposed` → `Accepted` with the date
   - [ ] Row updated in `docs/design/adr/README.md`
 
+- [ ] Write the API documentation for `dataseq`
+  - [ ] Location settled: repo-level `docs/api/`, one subdirectory per distribution (`docs/api/dataseq/`), with an index at `docs/api/README.md` naming all five members and marking the four not yet implemented
+  - [ ] Tooling decided — hand-written Markdown, or generated from docstrings (Sphinx/MkDocs) — and recorded as an ADR if the choice binds the other four members, which it does the moment a second package documents anything
+  - [ ] The public surface documented is exactly `pfsmgraph.dataseq.__all__` (15 names); anything underscore-prefixed is named as private and out of contract
+  - [ ] The invariants a caller can rely on are stated, not just the signatures: reserved block fixed and not configurable per ADR 0011, `encode` strict with `UNK` explicit opt-in, `decode` **total** over every code including reserved ones, records carrying true lengths and never padding, `pad_collate` as the single place padding is introduced and always returned with its mask
+  - [ ] The two boundaries a user will otherwise trip on are documented: `isinstance(ds, torch.utils.data.Dataset)` is `False` by design and a stock `DataLoader` still works, and `default_collate` raises `TypeError` on ragged items — which is why `pad_collate` ships
+  - [ ] Every code example in the docs is executed and its output checked, rather than transcribed from memory
+  > **Placement:** after the encoder goal and the ADR promotion, deliberately. `SymbolTable`
+  > is provisional until the encoder API is settled — `docs/agents/core.md` says so — and
+  > documenting a surface that is flagged as unsettled would publish a contract this branch
+  > has not yet made. ADR 0010 is also the record the prose should agree with, so it wants
+  > to be `Accepted` first.
+  > **Scope:** this goal documents `dataseq` only. The `docs/api/` layout and the tooling
+  > choice are family-wide and are settled here because this is the first member to need
+  > them; the other four get their own subdirectory when they get code.
+
 - [ ] Clean up once the merge is completed
   - [ ] All migration decisions are recorded in [ADR 0010](../../design/adr/0010-dataseq-composition-merging-three-implementations.md), which is the merge's record; anything the encoder API decision does not cover gets a new ADR with the next free number and a row in `docs/design/adr/README.md`
   - [ ] Narrow `.scratch/*/.gitignore` to what the *next* migration needs, rather than deleting anything — `.scratch/` now survives this branch (see the note below), so cleanup here means re-scoping the four policies, not removing the tree

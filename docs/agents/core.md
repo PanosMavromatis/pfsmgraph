@@ -47,7 +47,7 @@ pytest` still collects zero items with those files present; and the directory si
 including why an imported repository's `.git` must be renamed before its contents can be
 committed here.
 
-Still to do, in PRD order (§11): finish `dataseq` by settling the encoder API, which also promotes ADR 0010 from `Proposed` to `Accepted`; then `hmm` (Lush translation); then `align`, then `hseg`. The container half of the merge (three existing implementations, `dl` version as base — §3.5) has landed.
+Still to do, in PRD order (§11): finish `dataseq` by settling the encoder API, which also promotes ADR 0010 from `Proposed` to `Accepted`, and then documenting it under a repo-level `docs/api/` (one subdirectory per distribution, layout and tooling settled once for all five members because `dataseq` is the first to need them); then `hmm` (Lush translation); then `align`, then `hseg`. The container half of the merge (three existing implementations, `dl` version as base — §3.5) has landed.
 
 ## Commands
 

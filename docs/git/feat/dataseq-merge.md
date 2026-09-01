@@ -29,6 +29,9 @@ survives. Splitting them would mean landing an encoder and immediately rewriting
   and how `align` consumes the mapping at its boundary — and implement encoder/decoder
   against the fixed reserved block.
 - Promote ADR 0010 `Proposed` → `Accepted` and update its row in `docs/design/adr/README.md`.
+- Write `dataseq`'s API documentation under a repo-level `docs/api/`, and settle the layout
+  and tooling that the other four members will inherit — added to the plan on 2026-08-31,
+  after the plan was found to have no documentation goal at all.
 
 **Not in scope**, though they belong to the same revision and get their own branches:
 renumbering the proof-of-concept alignment code to the reserved block; the ADR 0003 test
