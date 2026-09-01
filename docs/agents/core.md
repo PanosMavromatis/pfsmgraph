@@ -35,9 +35,15 @@ version control anywhere else. What is re-scoped per package is not the contents
 **`.gitignore` policies**: each import's rules surface the files relevant to the package
 being migrated, so the tracked set follows the work. `.scratch/align-poc/.gitignore` is the
 only phased policy of the four — `dataseq` done, `hmm` **active since 2026-09-01** and empty
-by design, `align` written but commented — and advancing it is an uncomment rather than a
-re-derivation. That advance added no files, which is recorded as the finding rather than left
-looking like an oversight: nothing in tokalign is HMM-related. The other three state their
+by design, `align` inert but for a single file advanced early — and advancing it is an
+uncomment rather than a re-derivation. That advance added no files, which is recorded as the
+finding rather than left looking like an oversight: nothing in tokalign is HMM-related. The
+`align` phase took its one exception on 2026-09-01: `_python.py` is tracked ahead of that
+migration because the reserved-block renumbering had to show that the alignment code
+hard-codes no gap index, and a negative finding needs a signature to be checkable.
+`_cython.pyx` stays untracked so `DEFERRED.md`'s "the first `.pyx` lands" trigger keeps one
+meaning — a `.pyx` under `.scratch/` belongs to no distribution and must not appear to fire
+it. The other three state their
 forward judgement in their own headers — `hmm-lush` is already scoped to the whole live HMM
 library and needs no widening when the `hmm` branch opens, while `dl` and `py-rudimentary`
 are spent imports whose tracked sets are final.
@@ -144,9 +150,15 @@ These constrain any code written here. They are inherited from the proof-of-conc
   `.scratch/RESERVED-BLOCK.md` §2, which is authoritative for this table. The earlier wording
   counted the proof-of-concept as one of the three containers and denied it a `GAP` code;
   both were written from recollection before `segalign` and `tokalign` had been read.)*
+  *(As-imported offsets. `tokalign` was renumbered onto the block on 2026-09-01 and now
+  puts `GAP` at 4 with user symbols from 6; the other three are unchanged, `dl`'s having
+  been settled inside the merge. The offsets above stay written as they are because this
+  paragraph is about what the four sources disagreed on, which is the evidence ADR 0011
+  was decided against.)*
   [ADR 0011](../design/adr/0011-fixed-reserved-symbol-block-and-strict-encoding.md)
   settles this: `PAD`=0 … `MSK`=5, user symbols from 6, and the renumbering lands **as part
-  of** the merge rather than after it. So a merge note reading "the base must be overridden
+  of** the merge rather than after it -- which it did, on 2026-09-01, closing that
+  `DEFERRED.md` entry. So a merge note reading "the base must be overridden
   here" is about the points the ADRs leave open, never about reopening the ones they close.
 
 ## Workspace footgun
@@ -168,5 +180,5 @@ The `.dev0` suffix stays until that release commit. `uv build` stamps whatever `
 ## Design docs
 
 - `docs/design/PRD.md` — packaging, naming, and distribution architecture; the source for the initial ADR set (§9).
-- `docs/plan/DEFERRED.md` — decided-but-not-yet-actionable work, indexed by the trigger that unblocks it (the `dataseq` merge, the first `.pyx`, CI existing, the first real release). Check it when starting any of those; several items must land *as part of* their trigger rather than after it.
+- `docs/plan/DEFERRED.md` — decided-but-not-yet-actionable work, indexed by the trigger that unblocks it (the `dataseq` merge, the first `.pyx`, CI existing, the `align` migration, the first real release — an illustrative list, not the full set; the file's `## Trigger:` headings are). Check it when starting any of those; several items must land *as part of* their trigger rather than after it.
 - `docs/design/adr/` — fourteen records: the twelve initial ADRs from the PRD plus 0013 and 0014, authoritative for the decisions they cover; [`adr/README.md`](docs/design/adr/README.md) indexes them. Add new records with the next unused number and a row in that index; numbers are never reused.

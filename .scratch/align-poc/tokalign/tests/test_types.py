@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from tokalign._types import Alphabet, AlignmentResult, ScoringMatrix
+from tokalign._types import USER_BASE, Alphabet, AlignmentResult, ScoringMatrix
 
 
 # ---------------------------------------------------------------------------
@@ -37,19 +37,19 @@ class TestAlphabet:
             Alphabet(symbols=("A", ".", "C"))
 
     def test_size_includes_reserved_gap_and_symbols(self, dna_alpha):
-        # 3 reserved + 1 gap + 4 user symbols = 8
-        assert dna_alpha.size == 8
+        # 6 reserved (GAP among them) + 4 user symbols = 10
+        assert dna_alpha.size == 10
 
-    def test_gap_index_is_reserved_count(self, dna_alpha):
-        assert dna_alpha.gap_index == 3
+    def test_gap_index_is_inside_the_reserved_block(self, dna_alpha):
+        assert dna_alpha.gap_index == 4
 
-    def test_user_symbols_start_after_gap(self, dna_alpha):
-        assert dna_alpha._sym_to_idx["A"] == 4
-        assert dna_alpha._sym_to_idx["T"] == 7
+    def test_user_symbols_start_after_the_reserved_block(self, dna_alpha):
+        assert dna_alpha._sym_to_idx["A"] == USER_BASE
+        assert dna_alpha._sym_to_idx["T"] == USER_BASE + 3
 
     def test_encode_values(self, dna_alpha):
         result = dna_alpha.encode(["A", "G", "T"])
-        np.testing.assert_array_equal(result, [4, 6, 7])
+        np.testing.assert_array_equal(result, [6, 8, 9])
         assert result.dtype == np.int32
 
     def test_encode_unknown_symbol_raises(self, dna_alpha):
@@ -73,8 +73,8 @@ class TestAlphabet:
 
     def test_encode_pair(self, dna_alpha):
         enc_a, enc_b = dna_alpha.encode_pair(["A", "C"], ["G", "T"])
-        np.testing.assert_array_equal(enc_a, [4, 5])
-        np.testing.assert_array_equal(enc_b, [6, 7])
+        np.testing.assert_array_equal(enc_a, [6, 7])
+        np.testing.assert_array_equal(enc_b, [8, 9])
 
     def test_multi_character_symbols(self, multi_char_alpha):
         encoded = multi_char_alpha.encode(["REST", "V7", "dim"])
@@ -109,8 +109,8 @@ class TestScoringMatrix:
 
     def test_identity_reserved_and_gap_zeroed(self, dna_alpha):
         sm = ScoringMatrix.identity(dna_alpha, match=5.0, mismatch=-3.0)
-        # Indices 0–3 (reserved + gap) should all be zero
-        for idx in range(dna_alpha.RESERVED_INDICES + 1):
+        # Indices 0–5 — the whole reserved block, GAP included — should all be zero
+        for idx in range(USER_BASE):
             for j in range(dna_alpha.size):
                 assert sm.score(idx, j) == 0.0
                 assert sm.score(j, idx) == 0.0

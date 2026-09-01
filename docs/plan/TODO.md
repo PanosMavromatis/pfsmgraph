@@ -59,7 +59,15 @@ edit becomes a data migration.
   > per-call opt-in, decoding total over every code including the reserved ones, and the
   > symbol→code mapping public because `align` reads it across a distribution boundary.
   > ADR 0010 accepted 2026-09-01 and its index row updated — PR #2
-- [ ] Renumber the proof-of-concept alignment code to the reserved block (user symbols from 6, new gap index), auditing every hard-coded index assumption. Lands here, not after.
+- [x] Renumber the proof-of-concept alignment code to the reserved block (user symbols from 6, new gap index), auditing every hard-coded index assumption. Lands here, not after.
+  > **Branch:** refactor/reserved-block-renumber
+  > **Done:** `tokalign` renumbered onto the block -- `GAP` 3 -> 4, user symbols 4 -> 6,
+  > and `RESERVED_INDICES` replaced by module-level `Final` constants, so the block can no
+  > longer be passed to the constructor. The audit's one real find was
+  > `ScoringMatrix.identity` zeroing `range(RESERVED_INDICES + 1)`, which after the move
+  > would have silently blanked the first user symbol's scores. 62 `tokalign` tests pass,
+  > matching the pre-change baseline exactly. Making `decode` total was carved out to
+  > `DEFERRED.md` under the `align` migration — PR #5
 - [x] Fix `dataseq`'s third-party runtime dependencies — `dependencies = []` is a placeholder — and confirm its build backend stays hatchling ([ADR 0008](../design/adr/0008-per-package-build-backends.md)).
   > **Done:** `dependencies = ["numpy>=1.24"]`, replacing the `[]` placeholder;
   > `build-backend = "hatchling.build"` confirmed and recorded in ADR 0010 §Resolved,

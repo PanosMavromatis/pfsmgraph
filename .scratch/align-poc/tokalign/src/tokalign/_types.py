@@ -2,8 +2,30 @@
 
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Sequence
+from typing import Final, Sequence
 import numpy as np
+
+
+# --- the ADR 0011 reserved block ---------------------------------------------
+# Renumbered 2026-09-01 (branch `refactor/reserved-block-renumber`). This tree is
+# standalone, so the constants are mirrored from
+# `packages/pfsmgraph-dataseq/src/pfsmgraph/dataseq/_reserved.py` rather than
+# imported -- nothing outside `.scratch/` may import from it and nothing inside it
+# may depend on the workspace.
+#
+# Module constants, not dataclass fields. The original spelled the block as
+# `RESERVED_INDICES: int = 3`, which the dataclass machinery turned into a
+# constructor parameter, so a "fixed" block was overridable per instance. There is
+# nothing here to pass, override, or subclass.
+PAD: Final[int] = 0
+UNK: Final[int] = 1
+BOS: Final[int] = 2
+EOS: Final[int] = 3
+GAP: Final[int] = 4
+MSK: Final[int] = 5
+
+#: The first code available to a user symbol. Everything below is reserved.
+USER_BASE: Final[int] = 6
 
 
 @dataclass(frozen=True)
@@ -14,15 +36,12 @@ class Alphabet:
     problem. Symbols can be any hashable string — single characters, words,
     multi-character tokens, etc.
 
-    The gap symbol is always included and occupies a reserved index.
+    The gap symbol is always included and occupies GAP, one of the six reserved
+    indices -- not a slot adjacent to them.
     """
 
     symbols: tuple[str, ...]
     gap_symbol: str = "."
-
-    # Indices 0–2 are reserved for interop with external libraries:
-    #   0 = padding, 1 = beginning-of-sequence, 2 = end-of-sequence
-    RESERVED_INDICES: int = 3
 
     # Derived mappings (built in __post_init__)
     _sym_to_idx: dict[str, int] = field(init=False, repr=False)
@@ -35,12 +54,11 @@ class Alphabet:
                 f"It is added automatically."
             )
 
-        # Indices 0–2 reserved; gap gets index 3; user symbols start at 4
-        offset = self.RESERVED_INDICES
-        sym_to_idx = {self.gap_symbol: offset}
-        idx_to_sym = {offset: self.gap_symbol}
+        # PAD/UNK/BOS/EOS/GAP/MSK occupy 0-5; the gap symbol is GAP; users from 6.
+        sym_to_idx = {self.gap_symbol: GAP}
+        idx_to_sym = {GAP: self.gap_symbol}
         for i, s in enumerate(self.symbols):
-            idx = offset + 1 + i
+            idx = USER_BASE + i
             sym_to_idx[s] = idx
             idx_to_sym[idx] = s
         object.__setattr__(self, "_sym_to_idx", sym_to_idx)
@@ -48,12 +66,12 @@ class Alphabet:
 
     @property
     def size(self) -> int:
-        """Total number of indices including reserved slots and the gap."""
-        return self.RESERVED_INDICES + 1 + len(self.symbols)
+        """Total number of indices: the six reserved ones, then the user symbols."""
+        return USER_BASE + len(self.symbols)
 
     @property
     def gap_index(self) -> int:
-        return self.RESERVED_INDICES
+        return GAP
 
     def encode(self, sequence: Sequence[str]) -> np.ndarray:
         """Convert a sequence of string symbols to an integer array.
@@ -132,9 +150,12 @@ class ScoringMatrix:
         n = alphabet.size
         matrix = np.full((n, n), mismatch, dtype=np.float64)
         np.fill_diagonal(matrix, match)
-        # Gap row/column gets zeros — actual gap penalties are handled separately
-        # Zero out reserved indices and gap row/column
-        for idx in range(alphabet.RESERVED_INDICES + 1):
+        # Zero every reserved row/column, GAP included -- actual gap penalties are
+        # handled separately via gap_open/gap_extend. This was
+        # `range(RESERVED_INDICES + 1)`, whose `+ 1` meant "the reserved slots plus
+        # the gap just past them". GAP is now inside the block, so the old
+        # expression would zero one row too many and blank the first user symbol.
+        for idx in range(USER_BASE):
             matrix[idx, :] = 0.0
             matrix[:, idx] = 0.0
         return cls(alphabet=alphabet, _matrix=matrix, gap_open=gap_open, gap_extend=gap_extend)

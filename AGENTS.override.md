@@ -56,9 +56,11 @@ cheapest to fix and most expensive to leave:
   `>=0.1` against `0.0.0` placeholders. Local green proves nothing here — read the bounds as
   literal claims about PyPI.
 - **`docs/plan/DEFERRED.md` trigger integrity.** Several entries must land *as part of* their
-  trigger, not after (the reserved-block renumbering with the `dataseq` merge; the `_cython.pyx`
-  comma-form indexing fix before the file is copied). A change that fires a trigger without
-  discharging its entries is a finding.
+  trigger, not after. A change that fires a trigger without discharging its entries is a
+  finding. The example this rule was written from -- the reserved-block renumbering with the
+  `dataseq` merge -- was discharged on 2026-09-01 and its entry is now closed, so do not
+  report it; the live one is the `_cython.pyx` comma-form indexing fix, which must land
+  before that file is copied into `pfsmgraph-align`.
 
 **As implementation lands, these become the targets** — in the order the phases arrive:
 
@@ -106,7 +108,10 @@ tree is retained and each import's `.gitignore` is re-scoped as the migration ta
 block is complete and the `hmm` phase is active as of 2026-09-01, empty by design because
 nothing in tokalign is HMM-related. So a file that is present on disk but untracked there is
 scoped out of the current phase, not overlooked — and an *empty* phase is a recorded finding,
-not an unfinished one.
+not an unfinished one. The `align` phase has one file tracked ahead of it —
+`tokalign/src/tokalign/algorithms/needleman_wunsch/_python.py`, admitted 2026-09-01 as the
+evidence that the alignment algorithms take `gap_index` as a parameter rather than hard-coding
+it. It is tracked in order to be *cited*, not reviewed; the default above still applies.
 Review the merged result under `packages/pfsmgraph-dataseq/`, never the inputs. The directory
 states its own lifetime in `.scratch/README.md`.
 
@@ -155,10 +160,12 @@ lost this to a missing `ClassVar`). Each has a test; a change that weakens eithe
 Note also that **each import carries its own deny-by-default `.gitignore`**, and each admits a
 small fraction of what is on disk: `.scratch/dl/` tracks 34 files out of 2.2 GB,
 `.scratch/hmm-lush/` 143 out of 929 MB, `.scratch/py-rudimentary/` 73 out of 1.7 GB, and
-`.scratch/align-poc/` 9 out of 194 MB, plus two documents of our own at the `.scratch/` root
+`.scratch/align-poc/` 11 out of 194 MB, plus two documents of our own at the `.scratch/` root
 (`README.md` and `RESERVED-BLOCK.md`). The per-import counts include our own written analysis,
 which lives alongside the source it describes. *(Counts measured 2026-08-31; the previous
-figures for the first two were each high by one.)* If something in an imported tree looks conspicuously absent, that is the
+figures for the first two were each high by one. `align-poc` went 9 -> 10 -> 11 on
+2026-09-01, as the reserved-block renumbering tracked first `_python.py` and then
+`test_needleman_wunsch.py`.)* If something in an imported tree looks conspicuously absent, that is the
 intended behaviour and not a finding — the exclusions carry their reasons inline in each of those
 files, and what they turn away is overwhelmingly not source: virtualenvs and tool caches in the
 first, saved model checkpoints from 2008–2011 training runs in the second.
@@ -233,12 +240,20 @@ Reporting it as the most deviant of the four inverts the actual picture.
 
 That caveat protects deliberate divergences, **not** everything in the file. Goal 4 found two
 real defects there, and both are worth confirming rather than dismissing: `RESERVED_INDICES`
-is annotated as a dataclass field rather than a `ClassVar`, so the reserved block ADR 0011
-fixes is a positional constructor argument; and `decode` raises `KeyError` on every reserved
+was annotated as a dataclass field rather than a `ClassVar`, so the reserved block ADR 0011
+fixes was a positional constructor argument; and `decode` raises `KeyError` on every reserved
 code, because `_idx_to_sym` is built from the gap index up. Neither is a decision — one is an
 annotation slip, the other an unfinished table — which is exactly what distinguishes them
 from the divergences the caveat covers. Both are recorded in
 `.scratch/align-poc/COMPARISON.md` §3.
+
+**The first of those two is fixed as of 2026-09-01**, by the reserved-block renumbering: the
+field is gone and the block is module-level `Final` constants, so there is nothing left to
+pass. A finding against it now is stale. **The second still stands** — `decode` remains
+partial in `tokalign`, deliberately left out of the renumbering's scope because making it
+total is a behaviour change rather than a renumbering, and it is inherited by the `align`
+migration. It is now filed in `docs/plan/DEFERRED.md` under the trigger "the `align`
+migration", so a finding against it should point there rather than restate it.
 
 **Lower-priority targets.** Claude Code handles these reliably; do not spend review budget
 on them unless something looks actively wrong: prose style and structure in `docs/`, ADR
