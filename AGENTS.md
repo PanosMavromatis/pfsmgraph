@@ -37,8 +37,13 @@ imports are the migration source for `hmm` and `align` 0.1.0, and `hmm-lush` is 
 version control anywhere else. What is re-scoped per package is not the contents but the
 **`.gitignore` policies**: each import's rules surface the files relevant to the package
 being migrated, so the tracked set follows the work. `.scratch/align-poc/.gitignore` is the
-first written in explicit phases (`dataseq` done, `hmm` empty by design, `align` written but
-commented), and advancing it is an uncomment rather than a re-derivation.
+only phased policy of the four — `dataseq` done, `hmm` **active since 2026-09-01** and empty
+by design, `align` written but commented — and advancing it is an uncomment rather than a
+re-derivation. That advance added no files, which is recorded as the finding rather than left
+looking like an oversight: nothing in tokalign is HMM-related. The other three state their
+forward judgement in their own headers — `hmm-lush` is already scoped to the whole live HMM
+library and needs no widening when the `hmm` branch opens, while `dl` and `py-rudimentary`
+are spent imports whose tracked sets are final.
 
 **The tracked set can only widen, never narrow.** `.gitignore` is consulted only for files
 git does not already track, so an ignore rule added over a tracked path is silently inert —

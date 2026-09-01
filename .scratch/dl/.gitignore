@@ -11,6 +11,14 @@
 # package, and a policy that lives beside what it governs can be narrowed without
 # touching the other three.)
 #
+# NOT PHASED: this import is spent. It was the merge base for `dataseq`
+# ([ADR 0010](../../docs/design/adr/0010-dataseq-composition-merging-three-implementations.md))
+# and contributes nothing to `hmm` or `align` -- MelodyHPO has no HMM code and no
+# alignment code. When those phases open, widen `.scratch/hmm-lush/` and
+# `.scratch/align-poc/` respectively, not this one. The tracked set below is final,
+# and in any case can only be added to: see
+# `docs/design/adr/0014-scratch-retention-and-per-package-scoping.md`.
+#
 # The repo-root `.gitignore` still applies underneath these rules, and is what
 # keeps `.env`, `.DS_Store`, `__pycache__/`, `.venv*`, and the mypy/ruff/pytest
 # caches out even inside the re-included directories. Do not restate those here;

@@ -525,3 +525,36 @@ under `.scratch/` without a negation does not error, it simply never appears in
 The measurement that justifies the whole policy: **261 files, 1.6 MB tracked out of
 4.8 GB on disk** — 0.03%. The excluded remainder is virtualenvs, tool caches, 2008–2011
 model checkpoints and engraved score images.
+
+### 2026-09-01 — goal 9, part 2: the phase pointer advances, and adds nothing
+
+The remaining two subgoals asked for the four `.gitignore` policies to be "narrowed" to
+what the `hmm` migration needs. Both were completed as written, but not as intended, and
+the gap is the useful part: **git does not offer narrowing.** `.gitignore` is consulted
+only for files not already in the index, so a rule added over a tracked path is silently
+inert; actually untracking would take a `git rm --cached`, which is a deletion commit
+with the squash-merge hazard back in play. The plan was written on 2026-08-31 reasoning
+about `.gitignore` as though it governed the repository rather than the untracked part of
+it.
+
+So the work was documentary, and each policy now states its own forward judgement:
+
+| Import | Judgement | Files added |
+|---|---|---|
+| `align-poc` | Phase 1 (`dataseq`) done → Phase 2 (`hmm`) active | **0** |
+| `hmm-lush` | not phased; already the whole `hmm` scope | 0 |
+| `dl` | spent — no HMM, no alignment code | 0 |
+| `py-rudimentary` | spent — gained the `hmm` half of its judgement | 0 |
+
+`align-poc`'s Phase 2 was written empty by design, so advancing into it is a pointer
+move. That is recorded as the finding rather than left looking like an oversight — without
+the note, the next reader finds a phase that adds nothing and cannot tell a deliberate
+result from an unfinished job.
+
+Verified after the edits: `git ls-files .scratch/` still returns **261**, `uv run pytest`
+still reports **74 passed** with zero collected from `.scratch/`, and all five new
+relative links resolve. Two claims went stale from this diff and were repaired in the same
+commit — `core.md` and `codex.md` both described `align-poc` as having "only its `dataseq`
+block active". Both are the *state* class of documentation rot filed under
+`DEFERRED.md`'s "the first real release" trigger, and both were caught by grepping for the
+claim deliberately rather than by any mechanism.

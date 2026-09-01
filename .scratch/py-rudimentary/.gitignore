@@ -160,7 +160,9 @@
 # now for a better reason than impermanence -- `.scratch/align-poc/` holds
 # `tokalign`, which is the actual ancestor of `pfsmgraph-align` and supersedes
 # this tree's alignment code as a migration source. When the `align` phase opens,
-# widen `align-poc`'s policy, not this one.
+# widen `align-poc`'s policy, not this one. Nothing here is HMM-related either, so
+# the `hmm` phase widens `.scratch/hmm-lush/`, not this one. With both settled,
+# this import is spent and its tracked set is final.
 #
 #   SegAlign-Draft/SegAlign.env/   927 MB virtualenv.
 #   segalign/.venv/                460 MB.

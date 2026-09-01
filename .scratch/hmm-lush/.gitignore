@@ -14,6 +14,16 @@
 # keeps the 42 `.DS_Store` files out even inside the re-included directories. Do
 # not restate those here; a negation added below could re-admit them by accident.
 #
+# NOT PHASED, and deliberately. `hmm` is the next migration in PRD 11 order, and
+# the tracked set below is already exactly its scope: the whole live library that
+# `load-hmm.lsh` loads (`Code/HMMlib/`, `Code/SeqData/`, `Code/Utility/`), the four
+# `hmm-train-*` drivers, both `.sds` specimens, and our own `translation/`. There
+# is nothing to widen when the `hmm` branch opens -- the `dataseq` merge and the
+# `hmm` translation want the same files here, because the container is only
+# legible against the trainer that reads it, and that trainer is the next
+# translation target. `align` will want nothing from this tree; see
+# `.scratch/align-poc/`, whose Phase 3 covers it.
+#
 # Unlike the MelodyHPO import, this tree carries no `.git` and no nested
 # `CLAUDE.md`/`AGENTS.md`, so neither of the two renames recorded in
 # `.scratch/README.md` was needed. It does carry CVS control directories under

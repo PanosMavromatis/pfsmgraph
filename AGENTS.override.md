@@ -102,9 +102,11 @@ anything that ships. Nothing in `.scratch/` is part of any
 distribution and nothing outside it may import from it. **It is no longer deleted when this
 branch merges** (changed 2026-08-31): the same imports seed `hmm` and `align` 0.1.0, so the
 tree is retained and each import's `.gitignore` is re-scoped as the migration target changes.
-`.scratch/align-poc/.gitignore` is written in explicit phases for that reason, with only its
-`dataseq` block active — so a file that is present on disk but untracked there is scoped out
-of the current phase, not overlooked.
+`.scratch/align-poc/.gitignore` is written in explicit phases for that reason; its `dataseq`
+block is complete and the `hmm` phase is active as of 2026-09-01, empty by design because
+nothing in tokalign is HMM-related. So a file that is present on disk but untracked there is
+scoped out of the current phase, not overlooked — and an *empty* phase is a recorded finding,
+not an unfinished one.
 Review the merged result under `packages/pfsmgraph-dataseq/`, never the inputs. The directory
 states its own lifetime in `.scratch/README.md`.
 

@@ -22,13 +22,25 @@
 # The phases below are ordered by PRD 11 implementation order. Exactly one is
 # active; switching means uncommenting the next block, not re-deriving it.
 #
-#   Phase 1  dataseq   ACTIVE   -- the `Alphabet` encoder only
-#   Phase 2  hmm       inert    -- nothing here; `hmm` is seeded from hmm-lush
+#   Phase 1  dataseq   DONE     -- the `Alphabet` encoder only; rules retained
+#   Phase 2  hmm       ACTIVE   -- nothing here; `hmm` is seeded from hmm-lush
 #   Phase 3  align     inert    -- the algorithms, the .pyx, the backend registry
 #
 # Keeping the inert rules written but commented is the point: the reasoning for
 # what `align` will need was worked out while the tree was in front of us, and
 # re-deriving it in three months' time would cost more than the comments do.
+#
+# Advancing to Phase 2 on 2026-09-01 added no files, and that is the finding
+# rather than an oversight: nothing in tokalign is HMM-related, so Phase 2 was
+# written empty by design and advancing into it is a pointer move.
+#
+# Phase 1's rules are *retained* rather than removed, and not merely out of
+# tidiness. The tracked set can only widen. `.gitignore` is consulted only for
+# files git does not already track, so re-commenting Phase 1 would change nothing
+# about what is in the index; actually untracking those five files would take a
+# `git rm --cached`, which is a deletion commit and re-opens the squash-merge
+# hazard that retention stands down. See
+# `docs/design/adr/0014-scratch-retention-and-per-package-scoping.md`.
 #
 # --- EIGHT RENAMES WERE NEEDED ON IMPORT --------------------------------------
 # The most of any import so far; `hmm-lush` needed none. Three nested
@@ -80,7 +92,7 @@
 /tokalign/tests/*
 
 # =============================================================================
-# Phase 1 -- dataseq  (ACTIVE)
+# Phase 1 -- dataseq  (DONE -- rules retained; see the header)
 # =============================================================================
 # Only the encoder. `Alphabet` is a bidirectional string <-> integer mapping over
 # multi-character symbols, and [ADR 0010](../../docs/design/adr/0010-dataseq-composition-merging-three-implementations.md)
@@ -105,11 +117,13 @@
 !/tokalign/tests/test_types.py
 
 # =============================================================================
-# Phase 2 -- hmm  (inert; nothing to add)
+# Phase 2 -- hmm  (ACTIVE -- inert by design; nothing to add)
 # =============================================================================
 # `hmm` 0.1.0 is seeded from `.scratch/hmm-lush/`, not from here. This section
 # exists so its emptiness is a recorded finding rather than an oversight: nothing
-# in tokalign is HMM-related.
+# in tokalign is HMM-related. It was made active on 2026-09-01 and added nothing;
+# `.scratch/hmm-lush/` is where the `hmm` migration reads from, and its policy is
+# already scoped to the whole live library, so it needs no widening either.
 
 # =============================================================================
 # Phase 3 -- align  (inert -- uncomment when align migration begins)

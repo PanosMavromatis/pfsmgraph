@@ -8,6 +8,17 @@ migrations need it. What changes per package is not the *contents* but the
 **`.gitignore` policies** — each import's rules are re-scoped to surface the files
 relevant to the package being migrated, so the tracked set follows the work.
 
+[**ADR 0014**](../docs/design/adr/0014-scratch-retention-and-per-package-scoping.md)
+is authoritative for that decision and for the deletion recipe below. It lives in the
+ADR set rather than only here for a reason worth stating: this file dies with the
+directory it describes, and the recipe is the one thing that has to outlive it.
+
+**The tracked set can only widen, never narrow.** `.gitignore` is consulted only for
+files git does not already track, so an ignore rule added over a tracked path is
+silently inert — narrowing a policy would take a `git rm --cached`, which is a
+deletion commit and re-opens the squash-merge hazard below. Track deliberately: the
+cheap direction is available only once, at import.
+
 The four imported implementations are read side by side before anything is merged
 into `packages/pfsmgraph-dataseq/`. Nothing in this directory is part of any
 distribution, and nothing outside it may import from it.
@@ -240,15 +251,24 @@ policy one level down, its `!/*.md` rule ("our writing") also matched tokalign's
 though they were ours.
 
 **The policy is phased**, which is new and follows from the retention change above.
-Phase 1 (`dataseq`, active) admits only the `Alphabet` encoder and what makes its test
-run; Phase 2 (`hmm`) is empty by design; Phase 3 (`align`) is written out but
-commented, covering `scoring.py`, the algorithm/backend registry, the pure-Python
-kernel and the `.pyx`. Advancing a phase is an uncomment, not a re-derivation — the
-reasoning was done while the tree was in front of us.
+Phase 1 (`dataseq`, **done**) admits only the `Alphabet` encoder and what makes its
+test run; Phase 2 (`hmm`, **active since 2026-09-01**) is empty by design; Phase 3
+(`align`) is written out but commented, covering `scoring.py`, the algorithm/backend
+registry, the pure-Python kernel and the `.pyx`. Advancing a phase is an uncomment,
+not a re-derivation — the reasoning was done while the tree was in front of us.
+
+Advancing to Phase 2 added no files, which is the recorded finding rather than an
+oversight: nothing in tokalign is HMM-related. Phase 1's rules stay in place, per the
+widen-only property above. This is the only phased policy of the four — `hmm-lush` is
+already scoped to the whole live HMM library and so needs no widening when the `hmm`
+branch opens, while `dl` and `py-rudimentary` are spent imports whose tracked sets are
+final. Each of the four states its own forward judgement in its header.
 
 ## If this directory is ever deleted
 
-Not planned any more, but the hazard does not disappear, so the reasoning is kept. A
-squash merge collapses the commit that adds this code and the commit that deletes it
-into nothing, losing it from `main` entirely. Retention would need a merge commit, a
-tag on the pre-deletion SHA, or a branch left unmerged.
+Not planned any more, but the hazard does not disappear, so the reasoning is kept —
+and is recorded in
+[ADR 0014](../docs/design/adr/0014-scratch-retention-and-per-package-scoping.md), which
+survives this file. A squash merge collapses the commit that adds this code and the
+commit that deletes it into nothing, losing it from `main` entirely. Retention would
+need a merge commit, a tag on the pre-deletion SHA, or a branch left unmerged.
