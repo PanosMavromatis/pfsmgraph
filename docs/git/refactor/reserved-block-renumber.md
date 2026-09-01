@@ -55,3 +55,15 @@ migration, which is why `DEFERRED.md` requires it to land inside revision
   `_backends.py`. `ScoringMatrix` is in `_types.py`, already tracked under Phase 1.
 - 2026-09-01: `_types.py:136` ("zero out reserved indices and gap row/column") is the real
   target of the index audit, and it sits inside the file the renumbering already had to touch.
+- 2026-09-01: renumbering applied. Seven hunks in `_types.py`; the `RESERVED_INDICES` field
+  is gone, so the block can no longer be passed to the constructor -- which fixes one of the
+  two defects `COMPARISON.md` §3 records. `decode` is deliberately still partial; making it
+  total over `range(size)` is a behaviour change, not a renumbering, and is inherited by the
+  `align` migration.
+- 2026-09-01: **correction to the goal-1 finding.** The algorithm *sources* are index-agnostic,
+  but the algorithm *tests* were not: `_idx_to_sym` read `alphabet.symbols[idx - 4]` and 46
+  call-site lists wrote user symbols as codes from 4. With GAP now at 4 the gap branch
+  swallowed the first user symbol, and 30 of 36 tests failed. Rebased onto 0-based ordinals;
+  `test_needleman_wunsch.py` is tracked so the fix is reviewable. Baseline was 62 passing and
+  it is 62 again. No grep for `gap`/`GAP`/`== <int>` matches `symbols[idx - 4]` -- running the
+  suite is what found it.

@@ -147,6 +147,19 @@
 # The two `__init__.py` files are not tracked either, so this is evidence rather
 # than an importable package. Both are 0 bytes; add them when Phase 3 advances.
 #
+# A SECOND FILE FOLLOWED, LATER THE SAME DAY. `test_needleman_wunsch.py` is tracked
+# because the renumbering broke it and the fix had to be reviewable. Its helper read
+# `alphabet.symbols[idx - 4]` and its 46 call sites wrote user symbols as codes from
+# 4 -- a convention that collided head-on with ADR 0011 putting GAP at 4, so
+# `_idx_to_sym(4)` returned the gap symbol instead of the first user symbol and 30 of
+# 36 algorithm tests failed. The fix rebases the convention onto 0-based ordinals over
+# `alphabet.symbols`, so these tests no longer encode where user codes begin and
+# survive any future change to the block.
+#
+# Worth recording: the sources really are index-agnostic, but their *tests* were not,
+# and no grep for `gap`/`GAP`/`== <int>` finds `symbols[idx - 4]`. Running the suite
+# is what surfaced it. Baseline before the change was 62 passing; it is 62 again.
+#
 # The three rules below are what let git descend: `/tokalign/src/tokalign/*` in
 # Phase 1 already excluded `algorithms/`, and git does not look inside an excluded
 # directory, so a lone negation on the file would match nothing at all.
@@ -156,6 +169,10 @@
 !/tokalign/src/tokalign/algorithms/needleman_wunsch/
 /tokalign/src/tokalign/algorithms/needleman_wunsch/*
 !/tokalign/src/tokalign/algorithms/needleman_wunsch/_python.py
+
+!/tokalign/tests/algorithms/
+/tokalign/tests/algorithms/*
+!/tokalign/tests/algorithms/test_needleman_wunsch.py
 
 # This is the bulk of the library and the reason the import was kept. Everything
 # below is deliberate, not a leftover:

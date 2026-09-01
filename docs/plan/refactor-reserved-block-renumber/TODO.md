@@ -32,10 +32,40 @@
   > `git status`, and `git check-ignore -v` shows the `.pyx` still matched by a deny rule.
   > The policy header's inventory was corrected in the same edit -- three files it
   > described are 0 bytes and `_registry.py` is a five-line stub.
-- [ ] Renumber the `tokalign` encoder to the ADR 0011 block
-  - [ ] `_types.py`: user symbols 4 -> 6, gap 3 -> 4, and the reserved names ADR 0011
+- [x] Renumber the `tokalign` encoder to the ADR 0011 block
+  > **Q:** Should `Alphabet` gain the reserved *names* ADR 0011 defines, or only the new
+  > offsets?
+  > **A:** Module-level `Final` constants mirroring `dataseq/_reserved.py` -- not imported
+  > from it, since `.scratch/` is a standalone tree. The `RESERVED_INDICES` field is removed
+  > entirely.
+  > **Why it matters beyond style:** the field is not a `ClassVar`, so it is a constructor
+  > parameter today -- `Alphabet(symbols=..., RESERVED_INDICES=99)` is legal, which ADR 0011
+  > forbids. `_reserved.py` cites this exact mistake in its own docstring. Moving the block to
+  > module scope removes the parameter structurally rather than by comment.
+  > **The audit's one real finding:** `ScoringMatrix.identity` zeroes
+  > `range(alphabet.RESERVED_INDICES + 1)`. That `+ 1` encodes the old structure -- gap sitting
+  > just past the reserved block. ADR 0011 moves `GAP` inside the block, so the expression
+  > would zero rows 0-6 and silently blank the first *user* symbol's scores. It does not raise
+  > and no gap-count assertion catches it.
+  - [x] `_types.py`: user symbols 4 -> 6, gap 3 -> 4, and the reserved names ADR 0011
         requires that `tokalign` does not currently have
-  - [ ] Confirm `tokalign`'s own tests still pass, or record why they cannot run
+  - [x] Confirm `tokalign`'s own tests still pass, or record why they cannot run
+  > **Done:** Seven hunks in `_types.py`. The block is now module-level `Final`
+  > constants mirroring `_reserved.py`, and the `RESERVED_INDICES` field is gone, so it
+  > can no longer be passed to the constructor. `ScoringMatrix.identity` zeroes
+  > `range(USER_BASE)` rather than `range(RESERVED_INDICES + 1)`.
+  > **Tests:** 62 passing, matching the pre-change baseline exactly (measured by
+  > restoring `HEAD` and re-running). Run with
+  > `PYTHONPATH=.scratch/align-poc/tokalign/src uv run pytest .scratch/align-poc/tokalign/tests/`.
+  > Our own suite is unaffected: 74 passed.
+  > **Correction to goal 1's finding:** the algorithm *sources* are index-agnostic, but
+  > the algorithm *tests* were not. `_idx_to_sym` read `alphabet.symbols[idx - 4]` and
+  > 46 call-site lists wrote user symbols as codes from 4 -- which collided with GAP at
+  > 4, so `_idx_to_sym(4)` returned the gap symbol and 30 of 36 tests failed. Rebased
+  > onto 0-based ordinals, so the tests no longer encode where user codes begin.
+  > `test_needleman_wunsch.py` is now tracked so the fix is reviewable.
+  > **Why goal 1's grep missed it:** a sweep for `gap`, `GAP` and `== <int>` cannot
+  > match `symbols[idx - 4]` or `[4, 6, 5]`. Executing the suite is what found it.
 - [ ] Audit every hard-coded index assumption the renumbering exposes
   - [ ] Sweep for bare integer literals standing in for reserved codes
   - [ ] Check the scoring-matrix construction, which is sized from the alphabet and is

@@ -155,11 +155,12 @@ lost this to a missing `ClassVar`). Each has a test; a change that weakens eithe
 Note also that **each import carries its own deny-by-default `.gitignore`**, and each admits a
 small fraction of what is on disk: `.scratch/dl/` tracks 34 files out of 2.2 GB,
 `.scratch/hmm-lush/` 143 out of 929 MB, `.scratch/py-rudimentary/` 73 out of 1.7 GB, and
-`.scratch/align-poc/` 10 out of 194 MB, plus two documents of our own at the `.scratch/` root
+`.scratch/align-poc/` 11 out of 194 MB, plus two documents of our own at the `.scratch/` root
 (`README.md` and `RESERVED-BLOCK.md`). The per-import counts include our own written analysis,
 which lives alongside the source it describes. *(Counts measured 2026-08-31; the previous
-figures for the first two were each high by one. `align-poc` went from 9 to 10 on
-2026-09-01.)* If something in an imported tree looks conspicuously absent, that is the
+figures for the first two were each high by one. `align-poc` went 9 -> 10 -> 11 on
+2026-09-01, as the reserved-block renumbering tracked first `_python.py` and then
+`test_needleman_wunsch.py`.)* If something in an imported tree looks conspicuously absent, that is the
 intended behaviour and not a finding — the exclusions carry their reasons inline in each of those
 files, and what they turn away is overwhelmingly not source: virtualenvs and tool caches in the
 first, saved model checkpoints from 2008–2011 training runs in the second.
@@ -234,12 +235,19 @@ Reporting it as the most deviant of the four inverts the actual picture.
 
 That caveat protects deliberate divergences, **not** everything in the file. Goal 4 found two
 real defects there, and both are worth confirming rather than dismissing: `RESERVED_INDICES`
-is annotated as a dataclass field rather than a `ClassVar`, so the reserved block ADR 0011
-fixes is a positional constructor argument; and `decode` raises `KeyError` on every reserved
+was annotated as a dataclass field rather than a `ClassVar`, so the reserved block ADR 0011
+fixes was a positional constructor argument; and `decode` raises `KeyError` on every reserved
 code, because `_idx_to_sym` is built from the gap index up. Neither is a decision — one is an
 annotation slip, the other an unfinished table — which is exactly what distinguishes them
 from the divergences the caveat covers. Both are recorded in
 `.scratch/align-poc/COMPARISON.md` §3.
+
+**The first of those two is fixed as of 2026-09-01**, by the reserved-block renumbering: the
+field is gone and the block is module-level `Final` constants, so there is nothing left to
+pass. A finding against it now is stale. **The second still stands** — `decode` remains
+partial in `tokalign`, deliberately left out of the renumbering's scope because making it
+total is a behaviour change rather than a renumbering, and it is inherited by the `align`
+migration. It is still worth a finding.
 
 **Lower-priority targets.** Claude Code handles these reliably; do not spend review budget
 on them unless something looks actively wrong: prose style and structure in `docs/`, ADR

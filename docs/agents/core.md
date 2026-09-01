@@ -150,6 +150,11 @@ These constrain any code written here. They are inherited from the proof-of-conc
   `.scratch/RESERVED-BLOCK.md` §2, which is authoritative for this table. The earlier wording
   counted the proof-of-concept as one of the three containers and denied it a `GAP` code;
   both were written from recollection before `segalign` and `tokalign` had been read.)*
+  *(As-imported offsets. `tokalign` was renumbered onto the block on 2026-09-01 and now
+  puts `GAP` at 4 with user symbols from 6; the other three are unchanged, `dl`'s having
+  been settled inside the merge. The offsets above stay written as they are because this
+  paragraph is about what the four sources disagreed on, which is the evidence ADR 0011
+  was decided against.)*
   [ADR 0011](../design/adr/0011-fixed-reserved-symbol-block-and-strict-encoding.md)
   settles this: `PAD`=0 … `MSK`=5, user symbols from 6, and the renumbering lands **as part
   of** the merge rather than after it. So a merge note reading "the base must be overridden
