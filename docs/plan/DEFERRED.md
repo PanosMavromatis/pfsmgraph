@@ -22,6 +22,14 @@ and several of these must land *as part of* the merge rather than after it.
   reconciliation is unresolved: the constructor signature, the spelling of the
   strictness switch, and how `align` consumes the mapping at its boundary. Settle those
   during the merge, then update the ADR and the index row.
+  **Settled (2026-09-01), and the entry is closed.** All three were settled and
+  implemented: `SymbolTable(symbols)` with `from_sequences`; per-call
+  `encode(..., on_unknown="raise" | "unk")`; and `code()` plus a `sym_to_code` read-only
+  mapping published as cross-distribution API. The Q&A is recorded under goal 6 in
+  `docs/plan/feat-dataseq-merge/TODO.md`. What remains is the clerical half — writing the
+  settled API is now written into the ADR's decision section, its `## Open` section has
+  become `## Resolved`, and the index row and its footnote in `docs/design/adr/README.md`
+  read `Accepted`.
 - **Renumber the proof-of-concept alignment code to the reserved block.** The
   proof-of-concept allocates user symbols from 4, with a different gap index;
   [ADR 0011](../design/adr/0011-fixed-reserved-symbol-block-and-strict-encoding.md)
@@ -150,6 +158,36 @@ and several of these must land *as part of* the merge rather than after it.
   taken a house position on the general shape of the question — strictness, on the
   grounds that silently absorbing a problem produces work that merely looks fine — but
   it has not been applied here.
+
+## Trigger: a vocabulary outliving the process that built it
+
+- **Vocabulary persistence (`save`/`load`).** A `SymbolTable` is built from a corpus and
+  is immutable thereafter, so today it is rebuilt wherever it is needed. That holds only
+  while every consumer sees the same corpus: an expressible train/test split, or `align`
+  scoring sequences encoded in another process, needs the *same* table rather than an
+  equivalent one — and first-appearance ordering makes "equivalent" depend on iteration
+  order, so rebuilding is not a safe substitute.
+
+  Deferred rather than dropped because it carries an undecided sub-question that would
+  otherwise have been settled as a side effect of the encoder API: **the escaping rule**.
+  Symbols here are multi-character and arbitrary, so any line- or delimiter-oriented
+  format has to say what happens to a symbol containing the delimiter — the problem
+  `.scratch/hmm-lush/COMPARISON.md` §2.3 records the Lush original solving by fiat. JSON
+  sidesteps escaping but commits the format; that trade is the decision, and it deserves
+  to be made deliberately.
+
+## Trigger: a corpus large enough for code locality to matter
+
+- **`SymbolTable.from_frequencies()`, offered but never default.** Frequency ordering
+  puts common symbols at low codes, which is what the rudimentary `segalign` did
+  (`.scratch/py-rudimentary/COMPARISON.md` §2.3) and what makes truncated vocabularies and
+  cache locality work. It is deliberately *not* the default and must never become one:
+  it makes every code a function of the whole corpus, so adding one file renumbers the
+  alphabet and silently invalidates every previously encoded sequence. First-appearance
+  ordering is stable under corpus growth, which is why it is the constructor's rule.
+
+  This wants to arrive as a separate classmethod alongside `from_sequences`, so that
+  choosing it is visible at the call site rather than being a flag on the ordinary path.
 
 ## Trigger: `hseg` design settling
 

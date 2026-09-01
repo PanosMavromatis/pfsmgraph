@@ -43,8 +43,10 @@ cheapest to fix and most expensive to leave:
 - **`docs/design/adr/` vs. `docs/design/PRD.md` vs. `docs/agents/core.md`.** Three documents
   describe one design. Claim drift between them is the live risk — the ADRs are authoritative
   where they overlap the PRD, and `core.md` must not contradict either. Check specifically that
-  ADR statuses (`Proposed` vs. `Accepted`) still match reality; ADR 0010 is `Proposed` pending
-  the `dataseq` encoder API.
+  ADR statuses (`Proposed` vs. `Accepted`) still match reality. As of 2026-09-01 the only
+  non-`Accepted` record is **0012**, `Accepted (temporary)` until the first `.pyx`; 0010 was
+  promoted when the encoder API landed. A document still describing 0010 as `Proposed`, or
+  `SymbolTable` as provisional, is stale and worth a finding.
 - **`packages/*/pyproject.toml` dependency bounds.** ADR 0006's workspace footgun: a
   `{ workspace = true }` source satisfies *any* constraint, so a wrong `>=` bound cannot fail
   locally and only breaks a pip user post-publish. Every intra-family bound currently reads

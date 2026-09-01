@@ -1,9 +1,18 @@
 """SymbolTable: strict encoding, total decoding, first-appearance order."""
 
+import inspect
+
 import numpy as np
 import pytest
 
-from pfsmgraph.dataseq import CODE_DTYPE, SymbolTable, USER_BASE, Vocabulary
+from pfsmgraph.dataseq import (
+    CODE_DTYPE,
+    RESERVED_SYMBOLS,
+    SymbolTable,
+    UNK,
+    USER_BASE,
+    Vocabulary,
+)
 
 
 @pytest.fixture
@@ -97,3 +106,80 @@ def test_no_method_adds_a_symbol(table):
     """A table cannot drift after sequences have been encoded against it."""
     with pytest.raises(AttributeError):
         table.add("NEW")
+
+
+# --- the strictness switch (ADR 0011) -----------------------------------
+
+
+def test_encode_is_strict_by_default(table):
+    with pytest.raises(KeyError, match="Encoding is strict"):
+        table.encode(["D3", "ZZ"])
+
+
+def test_the_strict_error_names_the_position_and_the_way_out(table):
+    with pytest.raises(KeyError) as excinfo:
+        table.encode(["D3", "F3", "ZZ"])
+    # args[0], not str(): KeyError.__str__ is repr(args[0]), which re-escapes
+    # the quotes the message itself contains.
+    message = excinfo.value.args[0]
+    assert "'ZZ'" in message
+    assert "position 2" in message
+    assert 'on_unknown="unk"' in message
+
+
+def test_unk_opt_in_maps_unseen_symbols(table):
+    assert list(table.encode(["D3", "ZZ"], on_unknown="unk")) == [6, UNK]
+
+
+def test_unk_opt_in_still_decodes(table):
+    """The fallback is a real code, not a hole -- decode stays total over it."""
+    codes = table.encode(["ZZ", "D3"], on_unknown="unk")
+    assert table.decode(codes) == ["UNK", "D3"]
+
+
+def test_unk_is_never_the_default(table):
+    """ADR 0011 fixes the direction of the switch: leniency is opt-in only."""
+    signature = inspect.signature(table.encode)
+    assert signature.parameters["on_unknown"].default == "raise"
+
+
+def test_a_bad_policy_raises_even_on_empty_input(table):
+    """Validated before the loop, not at the first unknown symbol.
+
+    Lazy validation would let a misspelled policy behave as "raise" for as
+    long as every symbol happened to be known, then change behaviour in
+    production on the first unseen one.
+    """
+    with pytest.raises(ValueError, match="on_unknown must be"):
+        table.encode([], on_unknown="UNK")
+
+
+def test_a_bad_policy_raises_before_any_symbol_is_looked_up(table):
+    with pytest.raises(ValueError, match="on_unknown must be"):
+        table.encode(["D3", "F3"], on_unknown="ignore")
+
+
+# --- the cross-distribution accessor ------------------------------------
+
+
+def test_sym_to_code_publishes_the_mapping(table):
+    assert dict(table.sym_to_code) == {"D3": 6, "F3": 7, "G3": 8}
+
+
+def test_sym_to_code_is_read_only(table):
+    """`align` is a consumer in another distribution; it must not be able to
+    corrupt the table it is reading."""
+    with pytest.raises(TypeError):
+        table.sym_to_code["ZZ"] = 99
+
+
+def test_sym_to_code_excludes_the_reserved_block(table):
+    """It maps *user* symbols. Reserved names are not encodable, so publishing
+    them here would offer a round trip that `encode` refuses to make."""
+    assert not set(RESERVED_SYMBOLS) & set(table.sym_to_code)
+
+
+def test_sym_to_code_agrees_with_code_and_encode(table):
+    for symbol, expected in table.sym_to_code.items():
+        assert table.code(symbol) == expected
+        assert table.encode([symbol])[0] == expected

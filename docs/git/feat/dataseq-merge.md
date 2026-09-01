@@ -395,3 +395,41 @@ belonging to `dataseq`; `tokalign`'s Cython is `align`'s migration) and the runt
 (`numpy` only) are both closed. The ADR 0003 test-suite entry is **not** closed and was
 re-keyed: `dataseq` has no DP algorithm and therefore no backends, so the `pytest_report_header`
 backend matrix has nothing to report and its real trigger is the first `.pyx`.
+
+### 2026-09-01 — goals 6 and 7: the encoder API settled, and ADR 0010 accepted
+
+The four decisions ADR 0010 was held open for, each taken against the alternative it
+displaced rather than in isolation. `SymbolTable(symbols)` keeps its name because
+`Alphabet` implies single characters and this family's symbols are words. Strictness is a
+per-call `encode(symbols, on_unknown="raise" | "unk")` rather than a constructor policy,
+because one mapping is legitimately wanted with two behaviours — strict over curated
+training data, `UNK`-tolerant at inference — and expressing that with two tables would make
+them two different vocabularies, which is the failure ADR 0010 exists to prevent. The
+symbol→code mapping is published as `code()` plus a `sym_to_code` `MappingProxyType`, and
+both went onto the `Vocabulary` **protocol**, not just the concrete class: the consumer is
+in another distribution, so a substitute vocabulary that omitted them would fail inside
+`align` rather than here.
+
+`on_unknown` is validated before the encode loop, not at the first unknown symbol. Lazily
+validated, `on_unknown="UNK"` — wrong case — behaves exactly as the default for as long as
+every symbol happens to be known, which means it passes on clean test data and changes
+behaviour in production. A test pins this by passing a bad policy with an *empty* sequence,
+where there is nothing to look up and the error can only come from the up-front check.
+
+One test failed first, and again the test was wrong rather than the code: `str(KeyError)` is
+`repr(args[0])`, so a message genuinely containing `'ZZ'` renders it as `\'ZZ\'`. It reads
+`excinfo.value.args[0]` now. 63 tests to 74.
+
+Persistence and a frequency reordering were deliberately left out and logged to
+`DEFERRED.md` with their own triggers. Persistence carries an undecided escaping rule for
+symbols containing a delimiter, and folding it in here would have settled a serialisation
+format as a side effect of an encoder decision.
+
+ADR 0010 is `Accepted` (2026-09-01), with the settled API written into its Decision section
+and `## Open` rewritten as `## Resolved` rather than deleted — an ADR whose open questions
+vanish silently reads as though none were ever asked. The promotion falsified four claims
+stored outside the ADR directory: `PRD.md` §9 counted *two* non-`Accepted` records,
+`core.md` still listed the promotion as outstanding, the `DEFERRED.md` entry closed, and
+`codex.md` — the one with teeth — told a Codex reviewer that 0010 is `Proposed`, which would
+have taught the reviewer to file the correct state as drift. The index footnote was rewritten
+from a promise ("at which point 0010 is promoted") into a record of when it happened.

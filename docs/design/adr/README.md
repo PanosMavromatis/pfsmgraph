@@ -21,13 +21,14 @@ Numbers are permanent and never reused. To add one, copy
 | [0007](0007-dl-as-a-single-distribution.md) | `dl` is a single distribution; there is no third namespace tier | Accepted | 2026-06-29 | §7 |
 | [0008](0008-per-package-build-backends.md) | Build backends are per-package; meson-python for compiled members | Accepted † | 2026-06-29 | §6, §6.1 |
 | [0009](0009-dataseq-as-the-base-layer.md) | `dataseq` is the dependency-graph base layer | Accepted | 2026-08-21 | §3.4 |
-| [0010](0010-dataseq-composition-merging-three-implementations.md) | `dataseq` is a merge of three existing implementations, with `dl` as the base | **Proposed** ‡ | 2026-08-21 | §1.5, §3.5, §8 |
+| [0010](0010-dataseq-composition-merging-three-implementations.md) | `dataseq` is a merge of three existing implementations, with `dl` as the base | Accepted ‡ | 2026-08-21 | §1.5, §3.5, §8 |
 | [0011](0011-fixed-reserved-symbol-block-and-strict-encoding.md) | Fixed reserved symbol block; encoding is strict by default | Accepted | 2026-08-21 | §3.6 |
 | [0012](0012-align-and-hmm-temporarily-on-hatchling.md) | `align` and `hmm` are temporarily on hatchling, not meson-python | Accepted (temporary) | 2026-08 | — |
 
 † Qualified in practice by 0012 until the first Cython kernel lands.
-‡ The composition is decided; the encoder API reconciliation is resolved during the
-`dataseq` merge, at which point 0010 is promoted to Accepted.
+‡ Held at Proposed until 2026-09-01. The composition was decided when the record was
+authored, but PRD §9 required the encoder API reconciliation to be resolved during the
+merge itself; it was, and 0010 records the settled API.
 
 ## Reading order
 

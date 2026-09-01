@@ -1,25 +1,36 @@
-"""The symbol-to-code mapping: a protocol, and a minimal implementation of it.
+"""The symbol-to-code mapping: a protocol, and the implementation of it.
 
 The container programs against :class:`Vocabulary`, a structural protocol, so
-that settling the concrete encoder API does not touch the container. That
-separation is the whole point: the encoder API -- the real constructor
-signature, the spelling of the strictness switch, and how ``align`` consumes
-the mapping at its boundary -- is settled by a later goal and recorded in
-[ADR 0010].
+that a different encoder can be substituted without touching the container.
+:class:`SymbolTable` is the implementation this distribution ships.
 
-:class:`SymbolTable` is the minimal conforming implementation that lets the
-container be exercised end-to-end and tested. It is **provisional**. It is
-strict with no fallback at all, which means the later opt-in ``UNK`` fallback
-is something added to it rather than a default reversed in it.
+The API here is settled, and three parts of it are contracts rather than
+choices:
+
+* **Encoding is strict by default.** ``encode`` raises on an unseen symbol;
+  ``on_unknown="unk"`` is the explicit opt-in that maps it to ``UNK``. The
+  semantics are fixed by ADR 0011 and are not renegotiable; only the spelling
+  was open, and it is settled here.
+* **Decoding is total** over ``range(size)``, reserved codes included --
+  because the array most likely to be decoded is a padded batch, which is full
+  of reserved codes by construction.
+* **The symbol-to-code mapping is public.** ``code`` and ``sym_to_code`` are
+  cross-distribution API: ``align`` builds an ``(size, size)`` scoring matrix
+  from the whole mapping at construction time, and must not have to reach into
+  a private attribute to do it.
+
+The reserved block itself lives in :mod:`._reserved` as module constants, with
+no constructor parameter anywhere that could relocate it.
 """
 
 from __future__ import annotations
 
-from typing import Iterable, Protocol, Sequence, runtime_checkable
+from types import MappingProxyType
+from typing import Iterable, Literal, Mapping, Protocol, Sequence, runtime_checkable
 
 import numpy as np
 
-from ._reserved import RESERVED_SYMBOLS, USER_BASE
+from ._reserved import RESERVED_SYMBOLS, UNK, USER_BASE
 
 #: The dtype every code array uses. int32 is what the alignment proof-of-concept
 #: settled on and what a Cython or CUDA buffer wants; codes never approach its
@@ -39,8 +50,31 @@ class Vocabulary(Protocol):
         """Total number of codes, reserved block included."""
         ...
 
-    def encode(self, symbols: Sequence[str]) -> np.ndarray:
-        """Map symbols to a 1-D ``int32`` array. Unseen symbols must raise."""
+    @property
+    def sym_to_code(self) -> Mapping[str, int]:
+        """The user symbol to code mapping, read-only.
+
+        Part of the protocol because it is consumed across a distribution
+        boundary: ``pfsmgraph-align`` reads the whole mapping once to build a
+        scoring matrix. An implementation must not return something a consumer
+        can mutate.
+        """
+        ...
+
+    def code(self, symbol: str) -> int:
+        """The code for one symbol. Must raise if the symbol is unseen."""
+        ...
+
+    def encode(
+        self,
+        symbols: Sequence[str],
+        on_unknown: Literal["raise", "unk"] = "raise",
+    ) -> np.ndarray:
+        """Map symbols to a 1-D ``int32`` array.
+
+        Strict by default: an unseen symbol raises. ``on_unknown="unk"`` is the
+        only alternative, and maps it to ``UNK``.
+        """
         ...
 
     def decode(self, codes: Sequence[int]) -> list[str]:
@@ -54,7 +88,7 @@ class Vocabulary(Protocol):
 
 
 class SymbolTable:
-    """A frozen, first-appearance-ordered symbol table. Provisional -- see module docstring.
+    """A frozen, first-appearance-ordered symbol table.
 
     Immutable by construction: the symbols are held as a tuple and the two
     lookup maps are built once. There is no method that adds a symbol, so a
@@ -115,6 +149,18 @@ class SymbolTable:
     def size(self) -> int:
         return USER_BASE + len(self._symbols)
 
+    @property
+    def sym_to_code(self) -> Mapping[str, int]:
+        """The user symbol to code mapping, as a read-only view.
+
+        A view rather than a copy: ``align`` reads this once per scoring
+        matrix, and a fresh ``dict`` per access is O(size) work that turns
+        quadratic the moment a consumer calls it inside a loop. The proxy is
+        live, so it cannot go stale -- and since a table has no method that
+        adds a symbol, "live" and "immutable" are the same thing here.
+        """
+        return MappingProxyType(self._sym_to_code)
+
     def code(self, symbol: str) -> int:
         """The code for one symbol. Raises :class:`KeyError` if unseen."""
         try:
@@ -125,17 +171,43 @@ class SymbolTable:
                 f"({len(self._symbols)} user symbols). Encoding is strict."
             ) from None
 
-    def encode(self, symbols: Sequence[str]) -> np.ndarray:
-        """Encode strictly: any unseen symbol raises rather than falling back."""
+    def encode(
+        self,
+        symbols: Sequence[str],
+        on_unknown: Literal["raise", "unk"] = "raise",
+    ) -> np.ndarray:
+        """Encode strictly, unless the caller opts out.
+
+        ``on_unknown="raise"`` (the default) raises :class:`KeyError` naming the
+        offending symbol and its position. ``on_unknown="unk"`` maps it to
+        ``UNK`` instead. There is no third policy, and no way to make leniency
+        the default -- ADR 0011 fixes the direction of this switch.
+
+        The value is validated *before* the loop rather than at the first
+        unknown symbol. A misspelled policy is a bug in the caller either way,
+        but validating lazily would let ``on_unknown="UNK"`` behave as
+        ``"raise"`` for as long as every symbol happened to be known, and
+        surface only on the first unseen one -- which, for an encoder whose
+        whole job is handling unseen symbols, is precisely the wrong time.
+        """
+        if on_unknown not in ("raise", "unk"):
+            raise ValueError(
+                f"on_unknown must be 'raise' or 'unk', not {on_unknown!r}"
+            )
+
         table = self._sym_to_code
         codes = np.empty(len(symbols), dtype=CODE_DTYPE)
         for i, symbol in enumerate(symbols):
             try:
                 codes[i] = table[symbol]
             except KeyError:
+                if on_unknown == "unk":
+                    codes[i] = UNK
+                    continue
                 raise KeyError(
                     f"{symbol!r} at position {i} is not in this vocabulary "
-                    f"({len(self._symbols)} user symbols). Encoding is strict."
+                    f"({len(self._symbols)} user symbols). Encoding is strict; "
+                    f'pass on_unknown="unk" to map unseen symbols to UNK.'
                 ) from None
         return codes
 
