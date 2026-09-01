@@ -1,6 +1,6 @@
 # feat/backend-matrix-header
 
-**Status**: active
+**Status**: merged — PR #6 — 2026-09-01
 **Created**: 2026-09-01
 **Subgoal**: Write the first test suite to the ADR 0003 standard, including the `pytest_report_header` hook that prints the backend matrix and names every excluded backend with its reason (revision `01-dataseq-v0.1.0`)
 

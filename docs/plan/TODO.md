@@ -82,7 +82,7 @@ edit becomes a data migration.
   > **Done:** the hook landed too, so the `[~]` closes. Root `conftest.py` over
   > `_backends.py`, 13 tests, suite 74 -> 87; the matrix is empty by design and says so
   > rather than printing nothing. Sited at the rootdir by measurement, not taste -- a
-  > nested conftest's `pytest_report_header` is discarded silently.
+  > nested conftest's `pytest_report_header` is discarded silently — PR #6
 - [ ] Release `pfsmgraph-dataseq` 0.1.0, replacing the `0.0.0` placeholder, and set honest lower bounds on the intra-family dependencies that name it.
 
 ## Closed revisions
