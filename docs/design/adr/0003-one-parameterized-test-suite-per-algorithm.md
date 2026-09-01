@@ -74,6 +74,17 @@ reports it identically:
 - **`pytest_report_header`** prints the matrix once at session start —
   `backends: python ✓ · cython ✓ · cuda ✗ (no CUDA device detected)`. One line, before
   anything runs. Per-test skip messages would give N identical lines and be ignored.
+- **An empty matrix still prints.** Until a DP kernel reaches phase 1 of
+  [ADR 0002](0002-three-phase-algorithm-lifecycle.md) there is no backend to name, and
+  the header says so in as many words —
+  `backends: none registered — no DP kernel has reached ADR 0002 phase 1`. Printing
+  nothing instead would be this policy's own failure committed one level up: a missing
+  line is indistinguishable from a hook that is absent, misplaced, or that raised and
+  was swallowed, so the mechanism could not be trusted the first time it carried real
+  content. Note that `dataseq` contributes no backend at any maturity — ADR 0002 scopes
+  the phases to wherever dynamic programming appears, and `dataseq` has none — so an
+  empty matrix is the correct steady state until `align` or `hmm` lands a recurrence,
+  not a placeholder awaiting the next commit. *(Added 2026-09-01.)*
 - **`addopts = "-ra"`** in the root configuration, so skip reasons reach the summary.
   Pytest's default prints a bare `s` and swallows the reason, which is exactly the
   silence this policy exists to prevent.
@@ -122,11 +133,6 @@ reports it identically:
 
 ## Open
 
-- **No tests exist yet** — `uv run pytest` currently collects nothing. This ADR is
-  therefore a standard the first implementation work must meet rather than a description
-  of what is there. It binds `dataseq` first
-  ([ADR 0010](0010-dataseq-composition-merging-three-implementations.md)) and every DP
-  kernel thereafter.
 - **Runtime backend selection is undecided and deliberately out of scope.** What the
   public API does when a caller explicitly requests an unavailable backend — raise, or
   fall back to the next-fastest — is a user-facing question with different obligations
@@ -137,7 +143,27 @@ reports it identically:
   grounds that silently absorbing a problem produces work that merely looks fine —
   and "silently ran on the CPU path" is that same failure in another guise. Settle this
   when `align` acquires a backend-selection API; it warrants its own record.
-- **Whether tests ship in the sdist or wheel is undecided.** If they do, distro
-  packagers and anyone running `pytest --pyargs` post-install inherit this policy, and it
-  becomes weakly user-visible. That would not change the policy, but it would change who
-  is affected by it.
+- **Tests ship in the sdist and not the wheel, and the policy does not travel with
+  them.** Measured 2026-09-01 against `pfsmgraph-dataseq`: the wheel packages only
+  `src/pfsmgraph`, so it contains no test at all and `pytest --pyargs` has nothing to
+  collect; the sdist *does* carry `tests/`, but the `pyproject.toml` beside them is the
+  member's own, whose sole `[tool.*]` table is `hatch.build.targets.wheel`. Neither half
+  of *Mechanism* is present — `addopts = "-ra"` lives in the workspace-root
+  `pyproject.toml` and `pytest_report_header` in the root `conftest.py`, and no sdist
+  contains either. A distro packager running pytest from an sdist therefore gets a bare
+  `s` for every skip and no header: precisely the silence this policy forbids, in the one
+  context this record originally guessed would inherit it. What stays open is the remedy —
+  ship the policy inside each member (duplicating it five ways), stop shipping tests in
+  the sdist, or accept that the policy is repo-local and say so in the record. Settle it
+  before the first sdist reaches PyPI, which is when it becomes user-visible.
+
+## Resolved
+
+- **No tests existed when this record was written** — `uv run pytest` collected nothing,
+  which made the ADR a standard for work not yet done rather than a description of it.
+  It bound `dataseq` first
+  ([ADR 0010](0010-dataseq-composition-merging-three-implementations.md)) and binds every
+  DP kernel thereafter. **Settled 2026-08-31**: the `dataseq` merge landed 74 tests, the
+  first in the repository, in `packages/pfsmgraph-dataseq/tests/`. The two halves of
+  *Mechanism* followed separately — `addopts = "-ra"` with those tests, and
+  `pytest_report_header` on 2026-09-01.

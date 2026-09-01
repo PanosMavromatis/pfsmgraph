@@ -34,5 +34,7 @@ dev = [
 # unavailable-backend policy of ADR 0003: a CUDA backend skipped for absent
 # hardware must say so in the run's own output, never silently. The companion
 # mechanism -- a pytest_report_header hook printing the backend matrix once at
-# session start -- lands with the first test suite.
+# session start -- landed 2026-09-01 in the root conftest.py, over _backends.py
+# beside it. Both must stay at the rootdir: pytest_report_header is a startup
+# hook, so a conftest under packages/*/tests/ has its hook discarded silently.
 addopts = "-ra"

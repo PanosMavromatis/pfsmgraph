@@ -78,6 +78,12 @@ cheapest to fix and most expensive to leave:
   fixture parameter. Findings to look for: a test that quietly exercises only one backend,
   an equivalence assertion with a hand-written expected value rather than the Python oracle,
   and any backend that is implemented-but-unimportable being *skipped* rather than failing.
+  The mechanism itself landed 2026-09-01 at the repo root: `conftest.py` (the hook alone)
+  over `_backends.py` (registry, probe, `PFSMGRAPH_REQUIRE_BACKENDS`). **A change that moves
+  `conftest.py` under `packages/` is a finding even though the suite still passes** —
+  `pytest_report_header` is a startup hook, and a conftest loaded during collection has its
+  hook discarded with no warning. `tests/test_backends.py` pins the placement for that
+  reason; treat a change that deletes those wiring tests as the same finding.
 - **`meson.build` / editable-install interaction** when `align` and `hmm` return to
   meson-python (ADR 0012). meson-python's import hook claims the whole `pfsmgraph` PEP 420
   namespace and shadows its siblings. Any change here must be verified by actually importing
