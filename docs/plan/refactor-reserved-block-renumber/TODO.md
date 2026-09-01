@@ -91,6 +91,14 @@
   > **Out of scope, now scheduled:** `decode` stays partial. Filed to `DEFERRED.md` under a
   > new trigger, "the `align` migration", with the open part named -- what the reserved
   > codes should decode *to*.
-- [ ] Record the outcome
-  - [ ] Update the `DEFERRED.md` entry -- the `dl` half is already satisfied by PR #2
-  - [ ] Close the master-plan subgoal with a `> **Done:**` note
+- [x] Record the outcome
+  - [x] Update the `DEFERRED.md` entry -- the `dl` half is already satisfied by PR #2
+  - [x] Close the master-plan subgoal with a `> **Done:**` note
+  > **Done:** The `DEFERRED.md` entry is closed by appending, not deleting: the original
+  > text is what makes "renumbered onto the block" mean anything a year from now, since it
+  > records what it was renumbered *from*. The closing paragraph also states what the
+  > trigger still leaves live -- Lush's user-symbols-from-2 is a real third offset, but it
+  > belongs to the `hmm` translation, not here.
+  > **Note for `/smart-merge`:** its step 7 closes the master-plan subgoal itself. That is
+  > already done, so it should find the item `[x]` with a `> **Done:**` note and add only
+  > the PR number rather than a second note.

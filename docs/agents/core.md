@@ -157,7 +157,8 @@ These constrain any code written here. They are inherited from the proof-of-conc
   was decided against.)*
   [ADR 0011](../design/adr/0011-fixed-reserved-symbol-block-and-strict-encoding.md)
   settles this: `PAD`=0 … `MSK`=5, user symbols from 6, and the renumbering lands **as part
-  of** the merge rather than after it. So a merge note reading "the base must be overridden
+  of** the merge rather than after it -- which it did, on 2026-09-01, closing that
+  `DEFERRED.md` entry. So a merge note reading "the base must be overridden
   here" is about the points the ADRs leave open, never about reopening the ones they close.
 
 ## Workspace footgun

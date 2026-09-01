@@ -53,9 +53,11 @@ cheapest to fix and most expensive to leave:
   `>=0.1` against `0.0.0` placeholders. Local green proves nothing here — read the bounds as
   literal claims about PyPI.
 - **`docs/plan/DEFERRED.md` trigger integrity.** Several entries must land *as part of* their
-  trigger, not after (the reserved-block renumbering with the `dataseq` merge; the `_cython.pyx`
-  comma-form indexing fix before the file is copied). A change that fires a trigger without
-  discharging its entries is a finding.
+  trigger, not after. A change that fires a trigger without discharging its entries is a
+  finding. The example this rule was written from -- the reserved-block renumbering with the
+  `dataseq` merge -- was discharged on 2026-09-01 and its entry is now closed, so do not
+  report it; the live one is the `_cython.pyx` comma-form indexing fix, which must land
+  before that file is copied into `pfsmgraph-align`.
 
 **As implementation lands, these become the targets** — in the order the phases arrive:
 

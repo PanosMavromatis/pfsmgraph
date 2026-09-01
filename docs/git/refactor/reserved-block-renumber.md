@@ -78,3 +78,9 @@ migration, which is why `DEFERRED.md` requires it to land inside revision
   one indexes `T[i][j]`, the other the alphabet -- documented on the enum.
 - 2026-09-01: `decode` filed to `DEFERRED.md` under a new trigger, "the `align` migration",
   with the open part named: what the reserved codes decode *to*.
+- 2026-09-01: outcome recorded, and the branch's work is complete. The `DEFERRED.md`
+  renumbering entry is closed by *appending* a settlement paragraph rather than deleting the
+  original -- the original is what makes the closure legible later, since it records what the
+  code was renumbered from. The master-plan subgoal at `docs/plan/TODO.md` is `[x]` with its
+  own `> **Done:**`, which means `/smart-merge` step 7 will find it already closed and should
+  add only the PR number.

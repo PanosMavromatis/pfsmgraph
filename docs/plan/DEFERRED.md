@@ -43,6 +43,22 @@ and several of these must land *as part of* the merge rather than after it.
   and the Lush one may add a third. Its padding is also written as the literal `[0]`, never
   as `PAD`, so it agrees with ADR 0011 only by coincidence. See
   `.scratch/dl/ANALYSIS.md` §3.1 and §2.3.
+  **Settled (2026-09-01), and the entry is closed.** It took two branches, and the
+  note above is why. The `dl` half was satisfied inside the merge itself: the container
+  that landed in `packages/pfsmgraph-dataseq/` hard-codes the block in `_reserved.py` as
+  module constants, so the base's user-symbols-from-3 offset never reached `main`
+  (PR #2). The proof-of-concept half is `refactor/reserved-block-renumber` --
+  `tokalign`'s `Alphabet` now puts `GAP` at 4 with user symbols from 6, and its
+  `RESERVED_INDICES` field is *gone* rather than renumbered, because it was a plain
+  dataclass field and therefore a constructor parameter, which ADR 0011 forbids. The
+  audit found one real defect: `ScoringMatrix.identity` zeroed
+  `range(RESERVED_INDICES + 1)`, an expression encoding gap-sitting-just-past-the-block,
+  which after the move would have blanked the first *user* symbol's scores in silence.
+  The "the Lush one may add a third" guess was right -- Lush allocates user symbols from
+  2 -- but nothing here fixes it: that tree is unmigrated `.scratch/` source, and its
+  renumbering happens inside the `hmm` translation, not before it. One piece was carved
+  out rather than done: making `tokalign`'s `decode` total, filed below under the `align`
+  migration.
 - **Confirm `dataseq`'s build backend.** Its `pyproject.toml` presumes pure-Python
   (hatchling) on the strength of the `dl`-derived base; switch to meson-python only if a
   compiled inner loop is found ([ADR 0008](../design/adr/0008-per-package-build-backends.md)).
