@@ -99,9 +99,17 @@ These constrain any code written here. They are inherited from the proof-of-conc
   ADR, the ADR wins and the implementation is changed, unless that ADR says otherwise in
   its own text. The imports are evidence about what has been tried; they are not a source
   of decisions that have already been made. This bites hardest on the reserved block:
-  every one of the three uses a different offset for user symbols — `dl` starts them at 3,
-  the Lush original at 2, the proof-of-concept at 4 — and none of them has a `GAP` code at
-  all. [ADR 0011](../design/adr/0011-fixed-reserved-symbol-block-and-strict-encoding.md)
+  four sources use three different offsets for user symbols — `dl` at 3, the Lush original
+  at 2, the rudimentary `segalign` at 2 (with `PAD` at **1**), the proof-of-concept
+  `tokalign` at 4. The two that collide are both containers, and they mean different things
+  by the same integers: `0` is `begin` in Lush and `:EOS` in `segalign`. **None of the three
+  containers has a `GAP` code**; `tokalign` does, at index 3, which is why its user symbols
+  start at 4 — the one source with a gap code being the one written to align sequences.
+  *(Corrected 2026-08-31 by the goal-4 measurement in
+  `.scratch/RESERVED-BLOCK.md` §2, which is authoritative for this table. The earlier wording
+  counted the proof-of-concept as one of the three containers and denied it a `GAP` code;
+  both were written from recollection before `segalign` and `tokalign` had been read.)*
+  [ADR 0011](../design/adr/0011-fixed-reserved-symbol-block-and-strict-encoding.md)
   settles this: `PAD`=0 … `MSK`=5, user symbols from 6, and the renumbering lands **as part
   of** the merge rather than after it. So a merge note reading "the base must be overridden
   here" is about the points the ADRs leave open, never about reopening the ones they close.

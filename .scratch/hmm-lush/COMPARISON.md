@@ -166,6 +166,19 @@ There was never a majority to defer to: ADR 0011 supplies something all three la
 than breaking a tie between them. `GAP` is the symbol `align` exists to produce, and no
 single-purpose implementation had any reason to invent it.
 
+> **Superseded on both counts (2026-08-31, goal 4) — see `../RESERVED-BLOCK.md` §2.** The
+> proof-of-concept row above was filled in from `DEFERRED.md`'s recollection, before
+> `tokalign` had been read. Measurement corrected two things. The **trio is miscounted**: it
+> names two containers and the proof-of-concept, which is the fourth source rather than the
+> third container, and the actual third container (`segalign`) starts users at **2** — so the
+> three containers are 3, 2, 2 and *collide*, with three distinct offsets appearing only
+> across all four sources. And **`tokalign` does have a `GAP` code**, at index 3, which is
+> exactly why its user symbols start at 4.
+>
+> The sentence that survives is the last one, strengthened: no *container* invented a gap
+> code, and the one source that did is the one written to align sequences. Left standing
+> rather than edited, because what it got wrong is the record of what was knowable in goal 3.
+
 Lush's `0 = begin` is the sharpest case, because it collides with ADR 0011 destructively
 rather than merely differing. `load` allocates a zero-filled `size × seq_size_max` matrix
 and writes only each row's real cells, so **every short row's tail holds `begin` — a real

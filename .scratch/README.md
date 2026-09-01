@@ -35,6 +35,25 @@ a `pyproject.toml`. And `.scratch` is not a name `.gitignore` already swallows
 | `py-rudimentary/` | The rudimentary third implementation, plus the predecessor it was refactored from | Python |
 | `align-poc/` | The proof-of-concept alignment library (`tokalign`) that PRD §1.2 describes and ADRs 0001–0004 derive from | Python + Cython |
 
+### Our own writing about the imports
+
+Analysis documents, one per import plus one that spans them. All are ours, not imported.
+
+| Document | Goal | Covers |
+|---|---|---|
+| `dl/ANALYSIS.md` | 2 | The merge base: what carries, what doesn't, what's missing |
+| `hmm-lush/ACCOUNT.md` | 3 | A semantic account of the Lush original |
+| `hmm-lush/COMPARISON.md` | 3 | Lush against the `dl` base |
+| `py-rudimentary/COMPARISON.md` | 4 | `segalign` against the `dl` base — the **container** half |
+| `align-poc/COMPARISON.md` | 4 | `tokalign`'s `Alphabet` against the merged encoder — the **encoder** half |
+| `RESERVED-BLOCK.md` | 4 | The reserved block across all four sources and ADR 0011 |
+
+`RESERVED-BLOCK.md` sits at this level rather than inside an import because it is the one
+document that belongs to no single source; filing it under any one of them would misplace it.
+The goal-4 pair is deliberately **two documents, not one** — `segalign` bears on the container
+and `tokalign` on the encoder, and merging the accounts would obscure which implementation
+supports which claim.
+
 **"`dl`" is a slot in this repository's package family, not the name of the source
 project.** The merge base comes from **MelodyHPO**, a standalone and now defunct
 project that built dataset handling and DL models together without packaging them;

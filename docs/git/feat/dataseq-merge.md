@@ -299,3 +299,54 @@ Running log — decisions made, things tried, things deferred.
   0011 moves them to 6: a renumbering, not a repair. Without that in the criteria, goal 4
   would file the most ADR-conformant of the four as the most deviant. Same failure mode as
   the ADR-precedence rule in goal 3 — `/hitl-step` binds on subgoals, not on notes.
+
+### 2026-08-31 — goal 4 complete: the four-way picture, and two documents it falsified
+
+Goal 4 executed and closed. Three documents: `.scratch/py-rudimentary/COMPARISON.md` (the
+container half, `segalign` against the `dl` base), `.scratch/align-poc/COMPARISON.md` (the
+encoder half, `tokalign`'s `Alphabet` against the merged encoder), and
+`.scratch/RESERVED-BLOCK.md` (all four sources against ADR 0011). Two documents rather than
+one because `segalign` bears on the container and `tokalign` on the encoder; merging the
+accounts would have obscured which implementation supports which claim. Per the goal's second
+Q&A, the `Alphabet` reconciliation is **tabulated and proposed, not decided** — goal 6 owns
+the encoder API, goal 7 the ADR 0010 promotion.
+
+**The reserved-block table falsified two standing claims**, in `docs/agents/core.md`'s
+invariant and in `hmm-lush/COMPARISON.md` §3.1 that it derives from. Both read "every one of
+the three uses a different offset — `dl` at 3, the Lush original at 2, the proof-of-concept at
+4 — and none of them has a `GAP` code at all". The trio was miscounted: it named two
+containers and the proof-of-concept, which is the *fourth source* rather than the third
+container. The actual third container is `segalign`, which starts users at **2** and collides
+with Lush — so the containers are 3, 2, 2, and three distinct offsets appear only across all
+four sources. And `tokalign` **does** have a `GAP` code, at index 3, which is precisely why
+its user symbols start at 4: the offset the claim cited and the gap it denied are the same
+fact.
+
+Neither was careless, and the distinction matters for how they were repaired. Both were
+written before `segalign` and `tokalign` had been read, with the proof-of-concept row filled
+in from `DEFERRED.md`'s recollection — which predicted the offset correctly and the gap
+wrongly. `core.md` is live guidance, so it was **corrected**, with a dated parenthetical
+naming `RESERVED-BLOCK.md` §2 as authoritative for that table. `hmm-lush/COMPARISON.md` is a
+goal-3 artefact, so it was **superseded in place** by a dated note and its table left
+standing: what it got wrong is the record of what was knowable in goal 3. Same append-only
+discipline as the plan's `> **Done:**` notes.
+
+Worth recording that the first draft of `RESERVED-BLOCK.md` tried to *defend* the `core.md`
+sentence rather than correct it, and that the first correction to `core.md` introduced a fresh
+false claim ("no two sources agree on where user symbols start", when Lush and `segalign`
+agree on 2). Both were caught by re-reading the edit against the table. The measurement was
+never in doubt; the prose about it was wrong twice.
+
+**Two real defects in `tokalign`**, both surviving the "it is a source of the ADRs" caveat
+because neither is a decision. `RESERVED_INDICES: int = 3` is annotated as a dataclass field
+rather than a `ClassVar`, so the block ADR 0011 requires to be *fixed* is a positional
+constructor argument — `Alphabet(("D3","F3"), ".", 7)` constructs and relocates everything,
+and the two alphabets compare unequal while both stay hashable. And `decode` raises
+`KeyError: 0` on any reserved code, so the zero-padded batch that `PAD`=0 exists to make
+meaningful is the one array shape that cannot be decoded. Both were verified by running the
+code rather than reading it; no test decodes a reserved index, which is how the second
+survived. `docs/agents/codex.md`'s counting caveat was widened accordingly, since as written
+it would have had a reviewer dismiss both.
+
+Also corrected there: the tracked-file counts for `dl` and `hmm-lush` were each high by one,
+and `align-poc` was missing from the list.

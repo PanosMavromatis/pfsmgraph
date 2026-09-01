@@ -179,7 +179,7 @@ names reconciling its `Alphabet` as part of this merge while its own title still
   > argued from first principles — the strongest available answer to "is the zero-fill
   > argument really load-bearing, or just tidy?"
 
-- [ ] Tabulate the two remaining implementations against the merged base
+- [x] Tabulate the two remaining implementations against the merged base
   > **Reworded (2026-08-31).** This goal read "Import the last implementation (rudimentary,
   > in Python) and tabulate its divergence with the merged implementation so far", which is
   > wrong on three counts now that both are in hand. There are **two** implementations left,
@@ -194,16 +194,77 @@ names reconciling its `Alphabet` as part of this merge while its own title still
   > constraint at the top of this file is unchanged — but "tokalign does X and the merge does
   > not" needs checking against the record that was written *from* it before it counts as a
   > finding.
+  > **Q:** Where should this goal's writing land, given that goals 2-3 set a one-document-per-import
+  > precedent but the reserved-block table spans all four sources?
+  > **A:** Two per-import documents plus a shared table: `.scratch/py-rudimentary/COMPARISON.md`
+  > (container), `.scratch/align-poc/COMPARISON.md` (encoder), and `.scratch/RESERVED-BLOCK.md`
+  > for the four-way tabulation against ADR 0011. The table belongs to no single import, so
+  > burying it under one would misfile it.
+  > **Q:** Subgoal 4 requires `Alphabet` "reconciled with the merged encoder" as part of this
+  > merge, but goal 6 is "Settle and implement the encoder API". How far does this goal go?
+  > **A:** Tabulate and propose, do not decide. Name every point where the two express the same
+  > mapping differently and recommend a shape with reasoning; goal 6 owns the decision and the
+  > implementation, goal 7 the ADR 0010 promotion. Goal 4 stays an analysis goal, as its title says.
   - [x] Both remaining implementations are readable in the scratch location with their provenance recorded
     > **Done (2026-08-31):** `.scratch/py-rudimentary/` holds `segalign` (`ca97809`) and its
     > predecessor `SegAlign-Draft` (`9dc37b9`); `.scratch/align-poc/` holds `tokalign`
     > (`6d27936`, branch `feat/docker-vertex-ai`) with two nested repositories of its own.
     > All revisions are in `.scratch/README.md`, captured before each `.git` was disabled.
     > Note `segalign`'s working copy is dirty at `ca97809` in `glob/needleman_wunsch.py`.
-  - [ ] A written comparison of container semantics, encoder shape and vocabulary handling for **both**, kept separable — `segalign` bears on the container, `tokalign` on the encoder, and merging the two accounts would obscure which implementation supports which claim
-  - [ ] The reserved block tabulated across all four implementations and ADR 0011, since this is the first point at which the full picture exists: `dl` from 3, Lush from 2, `segalign` from 2 with `PAD` at **1**, `tokalign` from 4 with a real gap index at 3 — and only `tokalign` strict by default with a working `decode`
-  - [ ] `tokalign`'s `Alphabet` reconciled with the merged encoder, which [ADR 0010](../../design/adr/0010-dataseq-composition-merging-three-implementations.md) requires as **part of** this merge rather than a later question, since the two express the same symbol ↔ code mapping
-  - [ ] Every point where the `dl`/`hmm` merged base must be overridden by either implementation is named, with why — **among the points the ADRs leave open**, on the same terms as goal 3
+  - [x] A written comparison of container semantics, encoder shape and vocabulary handling for **both**, kept separable — `segalign` bears on the container, `tokalign` on the encoder, and merging the two accounts would obscure which implementation supports which claim
+    > **Done (2026-08-31):** `.scratch/py-rudimentary/COMPARISON.md` (container, 184 lines) and
+    > `.scratch/align-poc/COMPARISON.md` (encoder, 172 lines), both following the section shape
+    > `hmm-lush/COMPARISON.md` established. Central container finding: `Dataset` has `__len__`
+    > and **no `__getitem__`**, so it is not `Dataset`-compatible even under the duck-typed bar
+    > `ANALYSIS.md` §2.1 sets — it is a corpus loader with whole-collection derived views, a
+    > stage earlier than the other two. Central encoder finding: `Alphabet` already answers four
+    > gaps the containers leave open (it *is* a vocabulary object, frozen by construction,
+    > decodes, and is strict), so the reconciliation is a merge into the merged encoder rather
+    > than a rewrite of it.
+  - [x] The reserved block tabulated across all four implementations and ADR 0011, since this is the first point at which the full picture exists: `dl` from 3, Lush from 2, `segalign` from 2 with `PAD` at **1**, `tokalign` from 4 with a real gap index at 3 — and only `tokalign` strict by default with a working `decode`
+    > **Done (2026-08-31):** `.scratch/RESERVED-BLOCK.md`. Every value in the subgoal's own
+    > prediction verified against source and cited by line. Two findings the prediction did not
+    > contain. **Four sources, three offsets, because two collide:** Lush and `segalign` both
+    > start users at 2, but `0` means `begin` in one and `:EOS` in the other, so the same two
+    > integers carry different meanings — a collision, not a fourth offset, which leaves
+    > `core.md`'s "every one of the three uses a different offset" exactly true. And **`segalign`
+    > supplies the sharpest evidence for `GAP` by deleting it**: its corpus uses `'.'` as a
+    > no-pitch sentinel, stripped from both the sequences and the vocabulary, while `tokalign`'s
+    > `gap_symbol` defaults to the *same character* with a reserved index. One implementation
+    > destroys what the other reserves a code for.
+    > Also recorded: `segalign`'s unknown → `:PAD` collapse is **deliberate and pinned by a
+    > test**, unlike `dl`'s silent `NaN` — the only one of the four that chose the failure ADR
+    > 0011's separate `UNK` prevents. And no source persists a vocabulary, so the renumbering has
+    > no migration path to write, which is why it can land inside the merge.
+  - [x] `tokalign`'s `Alphabet` reconciled with the merged encoder, which [ADR 0010](../../design/adr/0010-dataseq-composition-merging-three-implementations.md) requires as **part of** this merge rather than a later question, since the two express the same symbol ↔ code mapping
+    > **Done (2026-08-31):** tabulated and proposed, not decided — per this goal's second Q&A,
+    > goal 6 owns the API. `align-poc/COMPARISON.md` §5 is the six-point proposed reconciliation.
+    > §2 confirms the ADR 0011 move is a **renumbering, not a repair**, with one substantive
+    > addition: `Alphabet` has no `UNK` slot at all, so its strictness is *total*, and ADR 0011's
+    > strict-by-default-with-opt-in is strictly more than it offers.
+    > **Two genuine defects found, both surviving the "source of the ADRs" caveat** because
+    > neither is a decision. `RESERVED_INDICES: int = 3` is annotated as a field rather than a
+    > `ClassVar`, so the "fixed" block is a positional constructor argument —
+    > `Alphabet(("D3","F3"), ".", 7)` constructs and relocates everything, and the two alphabets
+    > compare unequal while both remaining hashable. Verified by running it, not by reading it.
+    > And `decode` raises `KeyError: 0` on any reserved code, because `_idx_to_sym` is built from
+    > the gap index up — so the zero-padded batch that `PAD`=0 exists to make meaningful is the
+    > one array shape that cannot be decoded. No test decodes a reserved index, which is how it
+    > survived.
+  - [x] Every point where the `dl`/`hmm` merged base must be overridden by either implementation is named, with why — **among the points the ADRs leave open**, on the same terms as goal 3
+    > **Done (2026-08-31):** `py-rudimentary/COMPARISON.md` §2 (four points) and
+    > `align-poc/COMPARISON.md` §3 (two defects) and §4 (two contributions), each with a
+    > `## What this hands forward` table routing it to goal 5, 6, 7 or the later `align`
+    > migration. The two strongest: **the loader must not be a constructor** — `segalign`'s
+    > `from_directories` and `dl`'s `MiniCorpus` independently fused corpus layout, file format,
+    > vocabulary construction and container construction, which is the second time two
+    > implementations made the same structural error separately; and **the private mapping is
+    > already public API** — `ScoringMatrix` reaches into `alphabet._sym_to_idx`, which inside
+    > the family becomes one distribution reaching into another, so goal 6 must publish that
+    > accessor deliberately rather than inherit a private name.
+    > Divergences explicitly recorded as **not** candidates: the reserved block and strictness
+    > (settled by ADR 0011), the parallel `toks`/`toks_enc` attributes, and the documented-but-
+    > absent decode direction.
 
 - [ ] Land the merged container in `packages/pfsmgraph-dataseq/`
   - [ ] `dl` version is the base; divergences resolved per the comparisons above, and **per the ADRs wherever the two disagree**

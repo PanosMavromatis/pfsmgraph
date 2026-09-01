@@ -114,9 +114,12 @@ that standard produces findings against code that ships nowhere. Anchor both tar
 `packages/`, and treat any path under `.scratch/` as out of scope by default.
 
 Note also that **each import carries its own deny-by-default `.gitignore`**, and each admits a
-small fraction of what is on disk: `.scratch/dl/` tracks 35 files out of 2.2 GB, `.scratch/hmm-lush/`
-144 out of 929 MB, and `.scratch/py-rudimentary/` 72 out of 1.7 GB (the counts include our own
-written analysis, which lives alongside). If something in an imported tree looks conspicuously absent, that is the
+small fraction of what is on disk: `.scratch/dl/` tracks 34 files out of 2.2 GB,
+`.scratch/hmm-lush/` 143 out of 929 MB, `.scratch/py-rudimentary/` 73 out of 1.7 GB, and
+`.scratch/align-poc/` 9 out of 194 MB, plus two documents of our own at the `.scratch/` root
+(`README.md` and `RESERVED-BLOCK.md`). The per-import counts include our own written analysis,
+which lives alongside the source it describes. *(Counts measured 2026-08-31; the previous
+figures for the first two were each high by one.)* If something in an imported tree looks conspicuously absent, that is the
 intended behaviour and not a finding — the exclusions carry their reasons inline in each of those
 files, and what they turn away is overwhelmingly not source: virtualenvs and tool caches in the
 first, saved model checkpoints from 2008–2011 training runs in the second.
@@ -185,9 +188,18 @@ alignment library contributing the *encoder* half, which is why ADR 0010 is titl
 "merging-three-implementations" while its text separately requires reconciling `Alphabet`.
 A document saying "three implementations" is therefore correct, not stale. Second, the
 precedence rule reads backwards for `tokalign` specifically — ADRs 0001–0004 were written
-*from* it, so its divergences are later decisions rather than defects, and it is the only
-source that already satisfies ADR 0011 on strictness, `gap_index` and `decode`. Reporting it
-as the most deviant of the four inverts the actual picture.
+*from* it, so its divergences are overwhelmingly later decisions rather than defects, and it
+is the only source with a real `gap_index`, strict-by-default encoding and a `decode` at all.
+Reporting it as the most deviant of the four inverts the actual picture.
+
+That caveat protects deliberate divergences, **not** everything in the file. Goal 4 found two
+real defects there, and both are worth confirming rather than dismissing: `RESERVED_INDICES`
+is annotated as a dataclass field rather than a `ClassVar`, so the reserved block ADR 0011
+fixes is a positional constructor argument; and `decode` raises `KeyError` on every reserved
+code, because `_idx_to_sym` is built from the gap index up. Neither is a decision — one is an
+annotation slip, the other an unfinished table — which is exactly what distinguishes them
+from the divergences the caveat covers. Both are recorded in
+`.scratch/align-poc/COMPARISON.md` §3.
 
 **Lower-priority targets.** Claude Code handles these reliably; do not spend review budget
 on them unless something looks actively wrong: prose style and structure in `docs/`, ADR
