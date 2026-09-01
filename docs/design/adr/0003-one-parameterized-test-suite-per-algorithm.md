@@ -74,6 +74,17 @@ reports it identically:
 - **`pytest_report_header`** prints the matrix once at session start —
   `backends: python ✓ · cython ✓ · cuda ✗ (no CUDA device detected)`. One line, before
   anything runs. Per-test skip messages would give N identical lines and be ignored.
+- **An empty matrix still prints.** Until a DP kernel reaches phase 1 of
+  [ADR 0002](0002-three-phase-algorithm-lifecycle.md) there is no backend to name, and
+  the header says so in as many words —
+  `backends: none registered — no DP kernel has reached ADR 0002 phase 1`. Printing
+  nothing instead would be this policy's own failure committed one level up: a missing
+  line is indistinguishable from a hook that is absent, misplaced, or that raised and
+  was swallowed, so the mechanism could not be trusted the first time it carried real
+  content. Note that `dataseq` contributes no backend at any maturity — ADR 0002 scopes
+  the phases to wherever dynamic programming appears, and `dataseq` has none — so an
+  empty matrix is the correct steady state until `align` or `hmm` lands a recurrence,
+  not a placeholder awaiting the next commit. *(Added 2026-09-01.)*
 - **`addopts = "-ra"`** in the root configuration, so skip reasons reach the summary.
   Pytest's default prints a bare `s` and swallows the reason, which is exactly the
   silence this policy exists to prevent.
@@ -122,11 +133,6 @@ reports it identically:
 
 ## Open
 
-- **No tests exist yet** — `uv run pytest` currently collects nothing. This ADR is
-  therefore a standard the first implementation work must meet rather than a description
-  of what is there. It binds `dataseq` first
-  ([ADR 0010](0010-dataseq-composition-merging-three-implementations.md)) and every DP
-  kernel thereafter.
 - **Runtime backend selection is undecided and deliberately out of scope.** What the
   public API does when a caller explicitly requests an unavailable backend — raise, or
   fall back to the next-fastest — is a user-facing question with different obligations
@@ -141,3 +147,14 @@ reports it identically:
   packagers and anyone running `pytest --pyargs` post-install inherit this policy, and it
   becomes weakly user-visible. That would not change the policy, but it would change who
   is affected by it.
+
+## Resolved
+
+- **No tests existed when this record was written** — `uv run pytest` collected nothing,
+  which made the ADR a standard for work not yet done rather than a description of it.
+  It bound `dataseq` first
+  ([ADR 0010](0010-dataseq-composition-merging-three-implementations.md)) and binds every
+  DP kernel thereafter. **Settled 2026-08-31**: the `dataseq` merge landed 74 tests, the
+  first in the repository, in `packages/pfsmgraph-dataseq/tests/`. The two halves of
+  *Mechanism* followed separately — `addopts = "-ra"` with those tests, and
+  `pytest_report_header` on 2026-09-01.
