@@ -7,7 +7,7 @@ Shared project knowledge for any coding agent working in this repository.
 
 ## Current state
 
-**`dataseq` is implemented and tested; the other four members are still empty scaffolding.** In place: the uv workspace root `pyproject.toml` (virtual — no `[project]` table), `uv.lock`, all five `packages/*` members with their own `pyproject.toml`, the (currently dormant) `meson.build` files for `align` and `hmm`, and an empty `pfsmgraph/<pkg>/__init__.py` for the four members that have no code yet (plus `dl/rnn/` and `dl/transformer/`). The ADRs in `docs/design/adr/` are authoritative for the decisions they cover — the twelve initial records from the PRD, plus 0013 (added 2026-09-01) on how this family documents its public surfaces; the PRD remains the narrative design document.
+**`dataseq` is implemented and tested; the other four members are still empty scaffolding.** In place: the uv workspace root `pyproject.toml` (virtual — no `[project]` table), `uv.lock`, all five `packages/*` members with their own `pyproject.toml`, the (currently dormant) `meson.build` files for `align` and `hmm`, and an empty `pfsmgraph/<pkg>/__init__.py` for the four members that have no code yet (plus `dl/rnn/` and `dl/transformer/`). The ADRs in `docs/design/adr/` are authoritative for the decisions they cover — the twelve initial records from the PRD, plus 0013 (how this family documents its public surfaces) and 0014 (how imported migration source is retained), both added 2026-09-01; the PRD remains the narrative design document.
 
 **What `dataseq` now contains.** Six modules under `packages/pfsmgraph-dataseq/src/pfsmgraph/dataseq/` (the container landed 2026-08-31, the encoder API 2026-09-01) and 74 tests — the first tests in this repository. `_reserved.py` hard-codes the ADR 0011 block as module constants, with no class or parameter that could relocate it; `_vocabulary.py` holds the `Vocabulary` protocol and `SymbolTable`, a frozen first-appearance-ordered implementation that encodes strictly and decodes *totally*, reserved codes included; `_record.py` and `_dataset.py` are the ragged container, whose records carry true lengths and never padding; `_collate.py` is `pad_collate`, where padding is introduced and always returned with its mask. The container imports neither torch nor pandas — verified in a subprocess — and its one runtime dependency is `numpy`.
 
@@ -29,14 +29,25 @@ belonging to other projects, and now also Python of our own — a runnable trans
 the Lush original under `.scratch/hmm-lush/translation/`, written as a reading aid for the
 merge.
 
-**It is retained across branches, and that changed on 2026-08-31.** It was created as a
-temporary `dataseq` working area to be deleted by the last goal of the `feat/dataseq-merge`
-plan; it is not, because the same imports are the migration source for `hmm` and `align`
-0.1.0. What is re-scoped per package is not the contents but the **`.gitignore` policies**:
-each import's rules surface the files relevant to the package being migrated, so the tracked
-set follows the work. `.scratch/align-poc/.gitignore` is the first written in explicit
-phases (`dataseq` active, `hmm` empty by design, `align` written but commented), and
-advancing it is an uncomment rather than a re-derivation.
+**It is retained across branches, and that changed on 2026-08-31.**
+[ADR 0014](../design/adr/0014-scratch-retention-and-per-package-scoping.md) is
+authoritative for this. `.scratch/` was created as a temporary `dataseq` working area to be
+deleted by the last goal of the `feat/dataseq-merge` plan; it is not, because the same
+imports are the migration source for `hmm` and `align` 0.1.0, and `hmm-lush` is under no
+version control anywhere else. What is re-scoped per package is not the contents but the
+**`.gitignore` policies**: each import's rules surface the files relevant to the package
+being migrated, so the tracked set follows the work. `.scratch/align-poc/.gitignore` is the
+first written in explicit phases (`dataseq` done, `hmm` empty by design, `align` written but
+commented), and advancing it is an uncomment rather than a re-derivation.
+
+**The tracked set can only widen, never narrow.** `.gitignore` is consulted only for files
+git does not already track, so an ignore rule added over a tracked path is silently inert —
+narrowing a policy would take a `git rm --cached`, which is a deletion commit and re-opens
+the squash-merge hazard that retention stands down. Track deliberately: the cheap direction
+is available only once, at import. The matching failure is that a file written under
+`.scratch/` *without* a negation is invisible to `git status` rather than an error, so the
+work looks committed and is not; every policy carries a `!/*.md` negation for our own
+writing because of it. `git check-ignore -v <path>` names the rule that matched.
 
 **Four imported directories, six source trees**: `.scratch/py-rudimentary/` holds two
 repositories — `segalign/` (the implementation) and `SegAlign-Draft/` (the predecessor it was
@@ -141,4 +152,4 @@ The `.dev0` suffix stays until that release commit. `uv build` stamps whatever `
 
 - `docs/design/PRD.md` — packaging, naming, and distribution architecture; the source for the initial ADR set (§9).
 - `docs/plan/DEFERRED.md` — decided-but-not-yet-actionable work, indexed by the trigger that unblocks it (the `dataseq` merge, the first `.pyx`, CI existing, the first real release). Check it when starting any of those; several items must land *as part of* their trigger rather than after it.
-- `docs/design/adr/` — thirteen records: the twelve initial ADRs from the PRD plus 0013, authoritative for the decisions they cover; [`adr/README.md`](docs/design/adr/README.md) indexes them. Add new records with the next unused number and a row in that index; numbers are never reused.
+- `docs/design/adr/` — fourteen records: the twelve initial ADRs from the PRD plus 0013 and 0014, authoritative for the decisions they cover; [`adr/README.md`](docs/design/adr/README.md) indexes them. Add new records with the next unused number and a row in that index; numbers are never reused.

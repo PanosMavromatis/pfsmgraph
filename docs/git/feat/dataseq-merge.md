@@ -498,3 +498,30 @@ ADRs", a count that 0013 falsified.
 Two pre-existing defects in `DEFERRED.md` were repaired in passing: a garbled half-edited
 sentence in the ADR 0010 entry, and a stale "63 tests" left from before the encoder tests
 landed.
+
+### 2026-09-01 — goal 9, part 1: the retention policy gets an ADR
+
+Auditing the merge's decisions against the ADR set found no gap in the *technical*
+record — 0010 covers the base, the encoder API and the `Alphabet` reconciliation, 0011
+the reserved block, 0012 meson-python's namespace shadowing, 0013 the documentation
+layout, and both items that held 0010 at `Proposed` are marked resolved in place with
+dates. One decision was recorded nowhere authoritative: that `.scratch/` is **retained**
+rather than deleted, changed 2026-08-31. It lived in `core.md`, in `.scratch/README.md`,
+in four `.gitignore` headers, and in a `> **Superseded:**` note in this branch's plan —
+which is the branch about to become history. [ADR
+0014](../../design/adr/0014-scratch-retention-and-per-package-scoping.md) now holds it.
+
+**A structural finding changed what the remaining two subgoals mean.** They ask for the
+four `.gitignore` policies to be "narrowed" to what the next migration needs. That is not
+an operation git offers: `.gitignore` is consulted only for files not already in the
+index, so an ignore rule added over a tracked path is silently inert. Narrowing would
+require `git rm --cached` — a deletion commit, with the squash-merge hazard that
+retention exists to stand down back in play. **The tracked set can only widen.** The
+subgoals were written before that was noticed; 0014 states the property explicitly, and
+`core.md` gained a paragraph on it beside the matching silent failure (a file written
+under `.scratch/` without a negation does not error, it simply never appears in
+`git status` — it has now caught out three of the four imports).
+
+The measurement that justifies the whole policy: **261 files, 1.6 MB tracked out of
+4.8 GB on disk** — 0.03%. The excluded remainder is virtualenvs, tool caches, 2008–2011
+model checkpoints and engraved score images.

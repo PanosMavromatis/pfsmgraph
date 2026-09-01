@@ -25,6 +25,7 @@ Numbers are permanent and never reused. To add one, copy
 | [0011](0011-fixed-reserved-symbol-block-and-strict-encoding.md) | Fixed reserved symbol block; encoding is strict by default | Accepted | 2026-08-21 | §3.6 |
 | [0012](0012-align-and-hmm-temporarily-on-hatchling.md) | `align` and `hmm` are temporarily on hatchling, not meson-python | Accepted (temporary) | 2026-08 | — |
 | [0013](0013-api-documentation-layout-and-tooling.md) | API documentation: repo-level `docs/api/`, hand-written, examples executed | Accepted | 2026-09-01 | — |
+| [0014](0014-scratch-retention-and-per-package-scoping.md) | Imported migration source is retained in `.scratch/`, scoped per package | Accepted | 2026-09-01 | — |
 
 † Qualified in practice by 0012 until the first Cython kernel lands.
 ‡ Held at Proposed until 2026-09-01. The composition was decided when the record was
@@ -39,12 +40,15 @@ merge itself; it was, and 0010 records the settled API.
 - **0005–0011** are the packaging, namespace, and base-layer decisions, in the order the
   PRD settled them.
 - **0012** records where the repository currently deviates from 0008, and why.
-- **0013** is the first record added after the initial set. It postdates the PRD and
-  settles how this family documents its public surfaces.
+- **0013–0014** were added after the initial set, both postdating the PRD. 0013 settles
+  how this family documents its public surfaces; 0014 settles how source imported *for a
+  migration* is held, and supersedes the delete-at-merge intent the repository started
+  with.
 
 ## Coverage of the PRD decision table
 
 Every decision D1–D11 in PRD §2 is covered: D1–D2 and D3–D4 by 0005, D5 by 0006, D6 by
 0007, D7–D8 by 0008, D9 by 0009, D10 by 0010, D11 by 0011. The inherited §1.2 decisions
-are covered by 0001–0004. 0012 and 0013 have no PRD counterpart — both postdate the
-document; 0012 qualifies §6.1, and 0013 settles a question §9 never raised.
+are covered by 0001–0004. 0012, 0013 and 0014 have no PRD counterpart — all three
+postdate the document; 0012 qualifies §6.1, 0013 settles a question §9 never raised, and
+0014 covers a working-area policy the PRD does not describe at all.

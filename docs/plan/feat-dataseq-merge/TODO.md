@@ -413,8 +413,8 @@ collate_fn=pad_collate)` yields correctly padded batches, and `tests/test_torch_
     > **Two pre-existing defects repaired in passing:** `DEFERRED.md` carried a garbled
     > half-edited sentence in the ADR 0010 entry and a stale "63 tests".
 
-- [ ] Clean up once the merge is completed
-  - [ ] All migration decisions are recorded in [ADR 0010](../../design/adr/0010-dataseq-composition-merging-three-implementations.md), which is the merge's record; anything the encoder API decision does not cover gets a new ADR with the next free number and a row in `docs/design/adr/README.md`
+- [~] Clean up once the merge is completed
+  - [x] All migration decisions are recorded in [ADR 0010](../../design/adr/0010-dataseq-composition-merging-three-implementations.md), which is the merge's record; anything the encoder API decision does not cover gets a new ADR with the next free number and a row in `docs/design/adr/README.md`
   - [ ] Narrow `.scratch/*/.gitignore` to what the _next_ migration needs, rather than deleting anything — `.scratch/` now survives this branch (see the note below), so cleanup here means re-scoping the four policies, not removing the tree
   - [ ] `.scratch/align-poc/.gitignore` advanced from its Phase 1 (`dataseq`) block to Phase 2/3 as appropriate, and the equivalent judgement recorded for the other three imports
     > **Superseded (2026-08-31):** this goal originally read "decide how the scratch code is
@@ -427,3 +427,19 @@ collate_fn=pad_collate)` yields correctly padded batches, and `tests/test_torch_
     > is deleted. It returns only if `.scratch/` is ever removed for real, at which point the
     > original reasoning still applies: retention needs a merge commit, a tag on the
     > pre-deletion SHA, or a branch left unmerged.
+
+  > **Q:** The audit found every technical decision of the merge already covered --
+  > 0010 (base, encoder API, `Alphabet` reconciliation, hatchling), 0011 (reserved
+  > block), 0012 (meson-python's namespace shadowing), 0013 (documentation layout).
+  > The one decision with no authoritative record is that `.scratch/` is *retained*
+  > rather than deleted. It lives in `core.md`, `.scratch/README.md`, four
+  > `.gitignore` headers, and the superseded note above -- which is on the branch
+  > about to become history. Should it get ADR 0014?
+  > **A:** Yes -- write ADR 0014.
+  > **Q:** `.gitignore` has no effect on an already-tracked file, so "narrowing" a
+  > policy is inert unless paired with `git rm --cached`, which is a deletion and
+  > re-opens the hazard the note above stands down. The tracked set can therefore
+  > only widen. Given that, advancing `align-poc` to Phase 2 (`hmm`) adds no files,
+  > because Phase 2 is inert by design. Advance the pointer anyway, leave it for the
+  > `hmm` branch to advance, or skip to Phase 3?
+  > **A:** Advance to Phase 2 now, recording that the advance added nothing.
