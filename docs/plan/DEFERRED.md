@@ -196,14 +196,23 @@ and several of these must land *as part of* the merge rather than after it.
   of on the tests. The obligation to revisit is re-filed under the `align` migration,
   because `align` is the first member whose matrix will have a row in it. The Q&A is
   recorded under goal 1 in `docs/plan/chore-release-dataseq-0.1.0/TODO.md`.
-- **Set honest version lower bounds.** Every intra-family dependency currently reads
-  `>=0.1`, against distributions whose only published version is a `0.0.0` placeholder.
+- **Set honest version lower bounds.** Every intra-family dependency naming
+  `pfsmgraph-dataseq` reads `>=0.1.0` as of 2026-09-01 (reviewed on
+  `chore/release-dataseq-0.1.0`); the three naming `pfsmgraph-align` still read `>=0.1`
+  and are unreviewed, which is what the divergent spelling records. Both are declared
+  against distributions whose only published version is a `0.0.0` placeholder.
   This is the workspace footgun of
   [ADR 0006](../design/adr/0006-single-repository-as-a-uv-workspace.md): a
   `{ workspace = true }` source satisfies *any* constraint, so a wrong bound never fails
   locally and only breaks a pip user after publish. Set real bounds when `dataseq` and
   `align` first publish, and **revisit on every breaking change** — this one recurs
   forever rather than clearing.
+  **`uv.lock` cannot catch it either**, measured 2026-09-01: changing all four declared
+  bounds left the lockfile byte-identical, because a workspace member's `requires-dist`
+  entry records `{ name = "pfsmgraph-dataseq", editable = "packages/pfsmgraph-dataseq" }`
+  with no version specifier at all. So the committed artifact that normally makes
+  dependency drift reviewable is structurally blind here, and review is the only
+  mechanism there is.
 - **Replace the `0.0.0` placeholders within a reasonable window.** PEP 541 treats
   content-free projects as somewhat more reclaimable, and the account email must stay
   reachable. Release order is forced by the dependency graph: `dataseq` → `align` →

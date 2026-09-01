@@ -20,7 +20,7 @@ classifiers = [
 dependencies = [
     # Published lower bound -- keep honest; a workspace source satisfies any
     # constraint locally, so this only bites pip users after publish (PRD §5.6).
-    "pfsmgraph-dataseq>=0.1",
+    "pfsmgraph-dataseq>=0.1.0",
     "numpy>=2.1",
 ]
 

@@ -184,7 +184,7 @@ During development a `{ workspace = true }` path source satisfies *any* version 
 
 The `0.0.0` placeholder releases already on PyPI are intentionally dependency-free; do not add dependency declarations to them.
 
-A live instance of the footgun, worth recognising: all five members declare `0.1.0.dev0`, and `0.1.0.dev0` does **not** satisfy `>=0.1` under PEP 440 — a `.devN` release sorts strictly before the final, and is excluded even with `prereleases=True`. So `align`'s declared `pfsmgraph-dataseq>=0.1` is satisfiable by nothing that exists today: PyPI has only `0.0.0`, and local is `0.1.0.dev0`. It never fails because the workspace source satisfies any constraint. This resolves itself when a real `0.1.0` publishes.
+A live instance of the footgun, worth recognising: all five members declare `0.1.0.dev0`, and `0.1.0.dev0` does **not** satisfy `>=0.1` under PEP 440 — a `.devN` release sorts strictly before the final, and is excluded even with `prereleases=True`. So `align`'s declared `pfsmgraph-dataseq>=0.1.0` (reviewed and spelled in full on 2026-09-01; the `pfsmgraph-align>=0.1` bounds are deliberately left unreviewed, and the divergent spelling is what records that) is satisfiable by nothing that exists today: PyPI has only `0.0.0`, and local is `0.1.0.dev0`. It never fails because the workspace source satisfies any constraint, and **`uv.lock` cannot catch it either** — a workspace member's `requires-dist` entry records no version specifier at all, so changing all four declared bounds left the lockfile byte-identical (measured 2026-09-01). Review is the only mechanism there is. This resolves itself when a real `0.1.0` publishes.
 
 ## Versioning
 

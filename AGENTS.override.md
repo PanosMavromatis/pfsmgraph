@@ -54,9 +54,15 @@ targets, which is where errors are cheapest to fix and most expensive to leave:
   `SymbolTable` as provisional, is stale and worth a finding.
 - **`packages/*/pyproject.toml` dependency bounds.** ADR 0006's workspace footgun: a
   `{ workspace = true }` source satisfies *any* constraint, so a wrong `>=` bound cannot fail
-  locally and only breaks a pip user post-publish. Every intra-family bound currently reads
-  `>=0.1` against `0.0.0` placeholders. Local green proves nothing here — read the bounds as
-  literal claims about PyPI.
+  locally and only breaks a pip user post-publish. The four bounds naming
+  `pfsmgraph-dataseq` read `>=0.1.0` and were reviewed on 2026-09-01; the three naming
+  `pfsmgraph-align` still read `>=0.1` and were not, and that divergent spelling is the
+  record of which is which -- do not "fix" it into uniformity, which would destroy the
+  distinction at no gain. Both are declared against `0.0.0` placeholders. Local green proves
+  nothing here — read the bounds as literal claims about PyPI. **Nor does `uv.lock`**:
+  measured 2026-09-01, changing all four bounds left it byte-identical, because a workspace
+  member's `requires-dist` entry carries no version specifier at all. A clean lockfile diff
+  is not evidence that a bound is right.
 - **`docs/plan/DEFERRED.md` trigger integrity.** Several entries must land *as part of* their
   trigger, not after. A change that fires a trigger without discharging its entries is a
   finding. The example this rule was written from -- the reserved-block renumbering with the

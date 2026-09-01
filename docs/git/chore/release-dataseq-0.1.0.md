@@ -48,3 +48,14 @@ yanking does not free the number.
   LICENSE file**, though `license = "MIT"` is declared as metadata. The PyPI page would be
   blank on first publish, and `0.1.0` cannot be re-cut to fix it. Added as a subgoal to
   the branch plan's release goal.
+- **2026-09-01 — the intra-family bounds on `pfsmgraph-dataseq` reviewed and spelled
+  `>=0.1.0`** in all four dependents. Not a behaviour change — `>=0.1` and `>=0.1.0` are
+  indistinguishable to a resolver — but a record that the bound has been checked against a
+  version that will exist. The `pfsmgraph-align>=0.1` bounds were left alone on purpose, so
+  the divergent spelling marks reviewed from unreviewed. Two measurements back it:
+  `uv pip compile` on `pfsmgraph-dataseq>=0.1` outside the workspace is *unsatisfiable*
+  against real PyPI, and `>=0.1` excludes the local `0.1.0.dev0` even with
+  `prereleases=True`, since a `.devN` sorts below the final on ordering rather than on
+  pre-release policy. **The lockfile is blind to all of it**: `uv.lock` came out
+  byte-identical, because a workspace member's `requires-dist` entry carries no version
+  specifier at all. Recorded in `DEFERRED.md` as the reason that entry recurs forever.

@@ -18,7 +18,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "pfsmgraph-dataseq>=0.1",
+    "pfsmgraph-dataseq>=0.1.0",
     "pfsmgraph-align>=0.1",
     # dl's "GPU" mechanism is torch itself -- distinct from the numba-cuda extra
     # on align/hmm (PRD §6). torch is a hard runtime dependency here.

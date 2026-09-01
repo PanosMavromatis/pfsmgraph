@@ -77,10 +77,45 @@ Markers: `[ ]` not started · `[~]` in progress · `[x]` complete · `[!]` block
   > Suite 87 -> 91; the counts in `README.md` and `core.md` that this falsified were
   > updated in the same change.
 
-- [ ] Set honest version lower bounds
-  - [ ] List every intra-family dependency naming `pfsmgraph-dataseq` and what it currently declares
-  - [ ] Decide the bound `0.1.0` actually earns, and write it
-  - [ ] Confirm the workspace source is not what makes it resolve
+- [x] Set honest version lower bounds
+  > **Q:** All four dependents declare `pfsmgraph-dataseq>=0.1`, which today is satisfiable
+  > by nothing that exists. What bound should they carry once `0.1.0` is published?
+  > **A:** `>=0.1.0`, no upper cap -- the floor spelled in full, naming the first version
+  > that has an API. No cap, because a cap deadlocks downstream resolution and the four
+  > dependents currently use nothing from `dataseq`, so it would assert a compatibility
+  > limit nobody has tested.
+  - [x] List every intra-family dependency naming `pfsmgraph-dataseq` and what it currently declares
+  > **Four, all identical:** `align`, `hmm`, `hseg` and `dl` each declare
+  > `pfsmgraph-dataseq>=0.1`, and each carries a `{ workspace = true }` source for it.
+  > `align`'s is the only one with a comment, and it already names the footgun.
+  - [x] Decide the bound `0.1.0` actually earns, and write it
+  > **Written:** `>=0.1` -> `>=0.1.0` in all four. The two spellings are indistinguishable
+  > to a resolver, so this is not a behaviour change; it is a record that the bound has
+  > been reviewed against a version that will exist. `pfsmgraph-align>=0.1` was left
+  > untouched in `hmm`, `hseg` and `dl` deliberately -- the divergent spelling now marks
+  > which bounds have been reviewed and which have not, and `align`'s is decided at
+  > `align`'s own release with evidence this branch does not have.
+  > **Not changed:** `dataseq`'s own `numpy>=1.24`. Its entire numpy surface is `ndarray`,
+  > `zeros`, `full`, `empty`, `asarray`, `array`, `array_equal` and `np.int*` -- ancient
+  > API, so 1.24 is conservative rather than earned. Left as is: too low breaks users,
+  > too high only excludes them, and 1.24 is the first numpy supporting Python 3.11
+  > against a `requires-python = ">=3.10"`.
+  - [x] Confirm the workspace source is not what makes it resolve
+  > **Measured, not inferred.** Outside the workspace against real PyPI,
+  > `uv pip compile` on `pfsmgraph-dataseq>=0.1` fails: *"Because only
+  > pfsmgraph-dataseq==0.0.0 is available and you require pfsmgraph-dataseq>=0.1, we can
+  > conclude that your requirements are unsatisfiable."* Unbounded, it resolves to the
+  > `0.0.0` placeholder. PEP 440 confirms the local half: `>=0.1` excludes `0.1.0.dev0`
+  > **even with `prereleases=True`**, because a `.devN` sorts strictly below the final --
+  > an ordering fact, which no pre-release flag can override. So the declared bound is
+  > satisfiable by nothing anywhere, and `uv sync` succeeds only because the workspace
+  > source short-circuits version resolution entirely. ADR 0006's footgun, caught live.
+  > **And the lockfile cannot catch it.** `uv.lock` is byte-identical across this change:
+  > a workspace member's `requires-dist` entry records `{ name = "pfsmgraph-dataseq",
+  > editable = "packages/pfsmgraph-dataseq" }` with **no version specifier at all**. The
+  > one committed artifact that normally catches dependency drift is structurally blind to
+  > this class of error, which is why the `DEFERRED.md` entry recurs forever rather than
+  > clearing.
 
 - [ ] Release: bump, build, publish, tag
   - [ ] Drop `.dev0` from `pfsmgraph-dataseq` alone, leaving the other four untouched

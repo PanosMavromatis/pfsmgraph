@@ -17,7 +17,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "pfsmgraph-dataseq>=0.1",
+    "pfsmgraph-dataseq>=0.1.0",
     "pfsmgraph-align>=0.1",
 ]
 
