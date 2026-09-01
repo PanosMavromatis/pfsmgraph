@@ -266,11 +266,58 @@ names reconciling its `Alphabet` as part of this merge while its own title still
     > (settled by ADR 0011), the parallel `toks`/`toks_enc` attributes, and the documented-but-
     > absent decode direction.
 
-- [ ] Land the merged container in `packages/pfsmgraph-dataseq/`
-  - [ ] `dl` version is the base; divergences resolved per the comparisons above, and **per the ADRs wherever the two disagree**
-  - [ ] Conforms to `torch.utils.data.Dataset`; a stock `DataLoader` works without subclassing
-  - [ ] No `pfsmgraph/__init__.py` introduced anywhere; PEP 420 namespace intact
-  - [ ] `uv sync && uv run python -c "import pfsmgraph.dataseq"` succeeds, and the other four still import
+- [x] Land the merged container in `packages/pfsmgraph-dataseq/`
+  > **Q:** What does `__getitem__` return, and how is "a stock `DataLoader` works" satisfied for
+  > ragged sequences? The criterion is not automatic — `default_collate` stacks items, so ragged
+  > sequences raise at `batch_size > 1`, and `dl` only avoids that by storing padding as data.
+  > **A:** Ragged item plus a shipped `pad_collate`. One item is one variable-length record
+  > (codes, true length, label); `dataseq` ships the collate callable users pass as `collate_fn`.
+  > No subclassing and no padding in the container, so padding becomes an explicit batching
+  > decision that emits a mask — closing `ANALYSIS.md` §3.6 rather than inheriting it.
+  > **Q:** What type carries the integer codes? This decides `dependencies`, currently the
+  > placeholder `[]`.
+  > **A:** `numpy` int32 arrays, so `dependencies = ["numpy>=1.24"]`. `tokalign` already returns
+  > int32 arrays, and `align`/`hmm` index dense matrices by these codes in DP inner loops where
+  > a buffer is needed rather than a list. This settles `DEFERRED.md`'s "numpy may earn its way
+  > in" in the affirmative, and its provisional "neither" for torch and pandas stands.
+  > **Q:** The container must encode, but goal 6 owns the encoder API. How does goal 5 depend on
+  > it without pre-empting it?
+  > **A:** Program against a structural `Vocabulary` protocol, with a minimal concrete
+  > implementation so the container can be exercised end-to-end and tested. Goal 6 settles the
+  > real constructor, the strictness spelling and the `align` boundary without touching the
+  > container.
+  - [x] `dl` version is the base; divergences resolved per the comparisons above, and **per the ADRs wherever the two disagree**
+    > **Done (2026-08-31):** six modules under `src/pfsmgraph/dataseq/`. What carried from the
+    > base is its shape — a dense vocabulary index, BOS/EOS as reserved codes, integer codes
+    > throughout. What was overridden, each traceable to a comparison: the loader is **gone**
+    > (`py-rudimentary` §2.4 — two implementations independently made it a constructor and
+    > neither could reuse the other's), the training objective is gone with `DatasetSW`/
+    > `DatasetDoc`, padding no longer lives in the container, the reserved block is renumbered
+    > to ADR 0011, encoding is strict, decoding is total, and the vocabulary is a frozen object
+    > with first-appearance ordering (`hmm-lush` §2.1, §2.3, §2.4, §2.5).
+  - [x] Conforms to `torch.utils.data.Dataset`; a stock `DataLoader` works without subclassing
+    > **Done (2026-08-31), with one distinction worth keeping.** A stock `DataLoader` works and
+    > is **verified by execution**, not asserted: `DataLoader(ds, batch_size=2,
+    > collate_fn=pad_collate)` yields correctly padded batches, and `tests/test_torch_interop.py`
+    > runs it. But `isinstance(ds, torch.utils.data.Dataset)` is **False**, and deliberately so:
+    > that class is a plain class rather than a protocol or ABC, so satisfying `isinstance` means
+    > inheriting from it, which means importing torch in the base layer. `DataLoader` never makes
+    > that check for map-style datasets — `__len__` and `__getitem__` are the whole contract.
+    > Conformance here is behavioural, and the `isinstance` result is pinned by its own test so
+    > it is not later filed as a defect.
+    > Also verified: without a `collate_fn`, `default_collate` raises `TypeError` on ragged
+    > items, which is the reason `pad_collate` is shipped rather than left to each caller.
+  - [x] No `pfsmgraph/__init__.py` introduced anywhere; PEP 420 namespace intact
+    > **Done (2026-08-31):** `find packages -path '*/src/pfsmgraph/__init__.py'` returns nothing,
+    > and `pfsmgraph.__file__` is `None` at runtime, which is what actually distinguishes an
+    > implicit namespace from a regular package.
+  - [x] `uv sync && uv run python -c "import pfsmgraph.dataseq"` succeeds, and the other four still import
+    > **Done (2026-08-31):** all five import in one interpreter after `uv sync`. **63 tests pass**
+    > (`uv run pytest`), the first tests this repository has had. Two of them failed first for
+    > reasons that were the tests' own fault and are worth recording: one asserted the reserved
+    > block had no callable surface but was reading `typing.Final` off the module's imports, and
+    > one checked `"torch" not in sys.modules` in a process where another test had imported it —
+    > now a subprocess check, which is the only way that claim means anything.
 
 - [ ] Settle and implement the encoder API
   - [ ] Constructor signature decided and recorded inline as Q&A

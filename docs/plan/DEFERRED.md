@@ -39,21 +39,33 @@ and several of these must land *as part of* the merge rather than after it.
 - **Confirm `dataseq`'s build backend.** Its `pyproject.toml` presumes pure-Python
   (hatchling) on the strength of the `dl`-derived base; switch to meson-python only if a
   compiled inner loop is found ([ADR 0008](../design/adr/0008-per-package-build-backends.md)).
-  Provisionally holds (2026-08-31): the `dl` base is pure Python over pandas and torch,
-  with no compiled inner loop. Re-check after the Lush and rudimentary imports.
+  **Settled (2026-08-31): hatchling holds, and the entry is closed.** All four sources were
+  read; none has a compiled inner loop that belongs to `dataseq`. The landed container is
+  pure Python over numpy. `tokalign` does carry Cython, but in its alignment algorithms —
+  that is `align`'s migration and `align`'s build backend, not this one's.
 - **Fix `dataseq`'s third-party runtime dependencies.** `dependencies = []` is a
   placeholder — whether `numpy`, `torch`, or neither belongs there is determined by what
   the merge base actually needs.
-  Provisionally **neither** (2026-08-31). `torch` leaves with the dataset views and
-  `pandas` with ingestion, neither of which belongs in the base layer; and
-  `torch.utils.data.Dataset` is duck-typed, so a stock `DataLoader` works against a
-  container that never imports torch. `numpy` may earn its way in for the code arrays, but
-  nothing in the base requires it. Recorded because "no change needed" is otherwise
-  indistinguishable from "not yet looked at". See `.scratch/dl/ANALYSIS.md` §4.
+  **Settled (2026-08-31): `numpy` only, and the entry is closed.** `dependencies =
+  ["numpy>=1.24"]`. The provisional "neither" holds for `torch` and `pandas` — torch left
+  with the dataset views and pandas with ingestion, and a stock `DataLoader` is verified to
+  work against a container that never imports torch. `numpy` earned its way in as predicted:
+  codes are `int32` arrays, which is what `align` and `hmm` index dense matrices with in DP
+  inner loops and what a Cython or CUDA buffer wants. See `.scratch/dl/ANALYSIS.md` §4 and
+  the goal-5 Q&A in `docs/plan/feat-dataseq-merge/TODO.md`.
 - **Write the first test suite to the ADR 0003 standard,** including the
   `pytest_report_header` hook that prints the backend matrix. `addopts = "-ra"` is
   already configured in the root `pyproject.toml`; the header hook is the half that
   still has nowhere to live.
+  **Partly done, and the remainder re-triggered (2026-08-31).** `dataseq` now has 63 tests,
+  the first in this repository. The backend-matrix half is **not** done and should not be:
+  ADR 0003 parameterises over backends for dynamic programming, and `dataseq` is a container
+  with no DP algorithm and so no backends — under that ADR a lifecycle phase not yet reached
+  contributes no parameter at all, so there is nothing for a header to report. The hook still
+  has nowhere to live, and its real trigger is **the first `.pyx`**, where a second backend
+  first exists. One narrow skip does exist here, in `tests/test_torch_interop.py`: torch is
+  not a dependency, so the `DataLoader` integration skips when it is absent. It covers the
+  integration only, never the container's own behaviour.
 
 ## Trigger: the first `.pyx`
 

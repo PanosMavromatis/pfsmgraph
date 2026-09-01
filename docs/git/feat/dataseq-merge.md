@@ -350,3 +350,45 @@ it would have had a reviewer dismiss both.
 
 Also corrected there: the tracked-file counts for `dl` and `hmm-lush` were each high by one,
 and `align-poc` was missing from the list.
+
+### 2026-08-31 — goal 5 complete: the container lands, and the repository gets its first tests
+
+`packages/pfsmgraph-dataseq/` now holds six modules and 63 passing tests — the first code and
+the first tests in this repository. `uv sync` is clean and all five members import together.
+
+Three decisions were taken by Q&A before any code was written, and each changed the shape of
+the result. **Ragged items plus a shipped `pad_collate`**, rather than pre-padded fixed-width
+items: the subgoal's "a stock `DataLoader` works without subclassing" is satisfiable by storing
+padding in the container, which is what the `dl` base does, and that would have inherited
+`ANALYSIS.md` §3.6's unmasked-padding gap instead of closing it. **numpy int32 arrays**, which
+settles `DEFERRED.md`'s "numpy may earn its way in" in the affirmative while leaving its "not
+torch, not pandas" standing. And **a `Vocabulary` protocol** rather than a concrete encoder, so
+goal 6 can settle the encoder API without touching the container.
+
+**The `DataLoader` criterion turned out to have two readings that disagree.** A stock
+`DataLoader` does work, verified by running it rather than asserting it. But
+`isinstance(ds, torch.utils.data.Dataset)` is `False`, because that class is a plain class rather
+than a protocol or ABC — satisfying `isinstance` would mean inheriting from it, and so importing
+torch into the base layer. `DataLoader` never makes that check for map-style datasets. Recorded
+as a passing test asserting the `False`, so a later reader meets it as a decision rather than a
+defect. Also verified: without a `collate_fn`, `default_collate` raises `TypeError` on ragged
+items, which is the concrete case for shipping `pad_collate` rather than leaving batching to
+every caller.
+
+Goal 4's two `tokalign` defects became tests rather than inheritances. `decode` is total over
+the whole code range, so `vocabulary.decode(batch["codes"][2])` returns `['D3', 'PAD', 'PAD']`
+where the proof-of-concept raised `KeyError: 0` — and the reserved block is module constants
+with no class or parameter to relocate it, asserted by a test that checks the module defines
+nothing callable at all.
+
+Two tests failed first and both were the tests' own fault, worth recording because both were
+testing something other than what they named. One asserted the reserved-block module had no
+callable surface, but was reading `typing.Final` off its imports. The other asserted
+`"torch" not in sys.modules` in a process where a sibling test had imported torch — a claim
+that means nothing except in a fresh interpreter, so it now runs as a subprocess check.
+
+`DEFERRED.md`: the build backend (hatchling holds — no source has a compiled inner loop
+belonging to `dataseq`; `tokalign`'s Cython is `align`'s migration) and the runtime dependencies
+(`numpy` only) are both closed. The ADR 0003 test-suite entry is **not** closed and was
+re-keyed: `dataseq` has no DP algorithm and therefore no backends, so the `pytest_report_header`
+backend matrix has nothing to report and its real trigger is the first `.pyx`.

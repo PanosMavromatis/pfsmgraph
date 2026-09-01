@@ -116,6 +116,31 @@ and its `tests/` is not a backend-parameterized suite under ADR 0003, so measuri
 that standard produces findings against code that ships nowhere. Anchor both targets on
 `packages/`, and treat any path under `.scratch/` as out of scope by default.
 
+**`packages/pfsmgraph-dataseq/` is the first real review target (2026-08-31)** — six modules and
+63 tests, where before there was nothing to review. Three things there will look like findings
+and are not.
+
+- **Its tests are not backend-parameterized, and must not be.** ADR 0003 parameterizes over
+  backends for dynamic programming; `dataseq` is a container with no DP algorithm, so it has no
+  backends, and under that ADR a lifecycle phase not yet reached contributes no parameter at all.
+  The `pytest_report_header` backend matrix is triggered by the first `.pyx`, not by this suite.
+  One skip is deliberate and narrow: `test_torch_interop.py` verifies the `DataLoader`
+  integration and skips when torch is absent, since torch is a dependency of no member.
+- **`isinstance(dataset, torch.utils.data.Dataset)` is `False` on purpose**, and is pinned by a
+  test saying so. That class is a plain class rather than a protocol or ABC, so satisfying
+  `isinstance` means inheriting from it, which means importing torch into the base layer.
+  `DataLoader` never makes that check for map-style datasets.
+- **`SymbolTable` is provisional by design.** Its constructor signature, the spelling of its
+  strictness switch, and how `align` reaches the mapping across a distribution boundary are the
+  encoder-API decisions, settled separately and recorded in ADR 0010. Reporting them as
+  unfinished API restates a known open question rather than finding one.
+
+Two invariants there *are* worth findings against, because both were defects in an imported
+source and are now load-bearing: `decode` must stay **total** over the whole code range including
+reserved codes (a partial one cannot render a padded batch), and the reserved block must stay
+unreachable from any constructor or parameter (ADR 0011 requires it fixed; the proof-of-concept
+lost this to a missing `ClassVar`). Each has a test; a change that weakens either is real.
+
 Note also that **each import carries its own deny-by-default `.gitignore`**, and each admits a
 small fraction of what is on disk: `.scratch/dl/` tracks 34 files out of 2.2 GB,
 `.scratch/hmm-lush/` 143 out of 929 MB, `.scratch/py-rudimentary/` 73 out of 1.7 GB, and

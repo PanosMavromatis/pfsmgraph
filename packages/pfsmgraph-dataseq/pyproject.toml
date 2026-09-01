@@ -17,10 +17,14 @@ classifiers = [
     "Programming Language :: Python :: 3",
 ]
 
-# Third-party runtime dependencies (numpy? torch?) are deliberately deferred to
-# the dataseq merge -- the dl-derived merge base fixes them (PRD §3.5, §8).
+# Settled at the dataseq merge (2026-08-31). numpy only: codes are int32 arrays,
+# which is what align and hmm index dense matrices with in DP inner loops and
+# what a Cython or CUDA buffer wants. torch and pandas were both rejected --
+# torch.utils.data.Dataset is duck-typed, so a stock DataLoader works against a
+# container that never imports torch, and pandas leaves with ingestion, which
+# is the caller's business (PRD §3.5, §8; docs/plan/DEFERRED.md).
 # No intra-family dependencies by design (PRD §3.4, §5.5).
-dependencies = []
+dependencies = ["numpy>=1.24"]
 
 [build-system]
 # Presumed pure-Python (dl-derived base); confirm at merge, switch to

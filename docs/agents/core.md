@@ -4,7 +4,11 @@ Shared project knowledge for any coding agent working in this repository.
 
 ## Current state
 
-**The workspace is scaffolded and `uv sync`s cleanly; no algorithms are implemented.** In place: the uv workspace root `pyproject.toml` (virtual — no `[project]` table), `uv.lock`, all five `packages/*` members with their own `pyproject.toml`, the (currently dormant) `meson.build` files for `align` and `hmm`, and one empty `pfsmgraph/<pkg>/__init__.py` per member (plus `dl/rnn/` and `dl/transformer/`). Not yet present: any implementation code, any tests. The proof-of-concept alignment/HMM code has not been moved in. The initial ADR set (twelve records) is authored in `docs/design/adr/` and is authoritative for the decisions it covers; the PRD remains the narrative design document.
+**`dataseq` is implemented and tested; the other four members are still empty scaffolding.** In place: the uv workspace root `pyproject.toml` (virtual — no `[project]` table), `uv.lock`, all five `packages/*` members with their own `pyproject.toml`, the (currently dormant) `meson.build` files for `align` and `hmm`, and an empty `pfsmgraph/<pkg>/__init__.py` for the four members that have no code yet (plus `dl/rnn/` and `dl/transformer/`). The initial ADR set (twelve records) is authored in `docs/design/adr/` and is authoritative for the decisions it covers; the PRD remains the narrative design document.
+
+**What `dataseq` now contains (landed 2026-08-31).** Six modules under `packages/pfsmgraph-dataseq/src/pfsmgraph/dataseq/` and 63 tests — the first tests in this repository. `_reserved.py` hard-codes the ADR 0011 block as module constants, with no class or parameter that could relocate it; `_vocabulary.py` holds the `Vocabulary` protocol and `SymbolTable`, a frozen first-appearance-ordered implementation that encodes strictly and decodes *totally*, reserved codes included; `_record.py` and `_dataset.py` are the ragged container, whose records carry true lengths and never padding; `_collate.py` is `pad_collate`, where padding is introduced and always returned with its mask. The container imports neither torch nor pandas — verified in a subprocess — and its one runtime dependency is `numpy`.
+
+**`SymbolTable` is provisional, and `align`'s access to the mapping is unsettled.** The encoder API — the concrete constructor signature, the spelling of the strictness switch, and how `align` reaches the mapping across a distribution boundary — is settled separately and recorded in ADR 0010. `SymbolTable` is strict with *no* `UNK` fallback at all, so the opt-in is something added to it rather than a default reversed in it. Note also that `ScoringMatrix`-style consumers reach a vocabulary's symbol→code map directly, so that accessor must be published deliberately rather than left private.
 
 **`align` and `hmm` are temporarily on hatchling, not meson-python.** meson-python's editable-install import hook injects a `sys.meta_path` finder that claims the entire `pfsmgraph` PEP 420 namespace and shadows the other distributions, so `import pfsmgraph.dataseq` (and `hseg`, `dl`) fails after `uv sync`. Neither package has compiled code yet — the `meson.build` extension blocks are dormant `if fs.exists()` guards — so the switch to meson-python is deferred to when the first `.pyx` lands, at which point the namespace/editable interaction must be solved (non-editable install of the compiled members, a single combined compiled distribution, or an upstream fix). The `meson.build` files and the revert recipe are kept in `packages/pfsmgraph-{align,hmm}/pyproject.toml`. This qualifies the PRD §6.1 note, whose "namespace is fine" evidence was gathered with *setuptools* editable, which composes; meson-python's finder does not.
 
@@ -13,8 +17,9 @@ it.** It is where the three existing `dataseq` implementations are read side by 
 anything is merged into `packages/pfsmgraph-dataseq/`, together with the proof-of-concept
 alignment library whose `Alphabet` is the *encoder* ancestor. That distinction is why ADR
 0010 still says "three implementations" while also requiring the `Alphabet` reconciliation:
-four imported sources, three of them containers. So "no implementation code, no tests" above is a
-claim about `pfsmgraph`: `.scratch/` does contain Python, Cython and `tests/` directories
+four imported sources, three of them containers. So the scaffolding note above is a
+claim about the four members that have no code yet, and the test count is a claim about
+`packages/`: `.scratch/` does contain Python, Cython and `tests/` directories
 belonging to other projects, and now also Python of our own — a runnable transliteration of
 the Lush original under `.scratch/hmm-lush/translation/`, written as a reading aid for the
 merge.
@@ -42,14 +47,14 @@ pytest` still collects zero items with those files present; and the directory si
 including why an imported repository's `.git` must be renamed before its contents can be
 committed here.
 
-Still to do, in PRD order (§11): implement `dataseq` (merge of three existing implementations, `dl` version as base — §3.5); then `hmm` (Lush translation); then `align`, then `hseg`. The `dataseq` merge also promotes ADR 0010 from `Proposed` to `Accepted` by settling the encoder API.
+Still to do, in PRD order (§11): finish `dataseq` by settling the encoder API, which also promotes ADR 0010 from `Proposed` to `Accepted`; then `hmm` (Lush translation); then `align`, then `hseg`. The container half of the merge (three existing implementations, `dl` version as base — §3.5) has landed.
 
 ## Commands
 
 Toolchain: **uv** (workspace) + **pytest**. Requires `uv` and Python ≥ 3.10.
 
 - `uv sync` — create/refresh the venv; installs all five members editable (plain `.pth`) plus the `dev` group (`pytest`).
-- `uv run pytest` — run the suite (no tests exist yet).
+- `uv run pytest` — run the suite (63 tests, all in `packages/pfsmgraph-dataseq/tests/`). One narrow skip is by design: `test_torch_interop.py` verifies the `DataLoader` integration and skips when torch is absent, since torch is a dependency of no member.
 - `uv build --package pfsmgraph-<pkg>` — build one member's sdist + wheel.
 - `uv lock` — refresh `uv.lock` (committed; one lockfile for the whole family).
 
