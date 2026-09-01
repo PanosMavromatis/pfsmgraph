@@ -171,12 +171,23 @@ claims, not the style.
 **One structural point about `COMPARISON.md`, because it governs which findings against it are
 valid.** Its §2 lists the places the `dl` base must be overridden; its §3 lists divergences that
 are deliberately *not* adopted, because an Accepted ADR settles them. The split is load-bearing:
-the ADRs outrank all three implementations, the base included (see `AGENTS.md` under
-"Invariants"), so "the merge ignores Lush's X" is a finding only when X falls in §2. Against §3
-it is the intended behaviour — most visibly for the reserved block, where all three
-implementations disagree with each other *and* with [ADR 0011](../design/adr/0011-fixed-reserved-symbol-block-and-strict-encoding.md),
+the ADRs outrank every imported source — the three `dataseq` implementations, the base
+included, and `align-poc/tokalign` (see `AGENTS.md` under "Invariants") — so "the merge
+ignores Lush's X" is a finding only when X falls in §2. Against §3 it is the intended
+behaviour, most visibly for the reserved block, where the implementations disagree with each
+other *and* with [ADR 0011](../design/adr/0011-fixed-reserved-symbol-block-and-strict-encoding.md),
 and the ADR wins regardless of what any of them does. If a §3 item looks wrongly classified,
 that is worth raising; that it was not adopted is not.
+
+**Two counting caveats, because both are easy to file as errors and neither is one.** First,
+there are **four imported sources but three `dataseq` implementations**: `tokalign` is an
+alignment library contributing the *encoder* half, which is why ADR 0010 is titled
+"merging-three-implementations" while its text separately requires reconciling `Alphabet`.
+A document saying "three implementations" is therefore correct, not stale. Second, the
+precedence rule reads backwards for `tokalign` specifically — ADRs 0001–0004 were written
+*from* it, so its divergences are later decisions rather than defects, and it is the only
+source that already satisfies ADR 0011 on strictness, `gap_index` and `decode`. Reporting it
+as the most deviant of the four inverts the actual picture.
 
 **Lower-priority targets.** Claude Code handles these reliably; do not spend review budget
 on them unless something looks actively wrong: prose style and structure in `docs/`, ADR

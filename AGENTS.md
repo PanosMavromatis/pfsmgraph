@@ -12,8 +12,11 @@ Shared project knowledge for any coding agent working in this repository.
 **`align` and `hmm` are temporarily on hatchling, not meson-python.** meson-python's editable-install import hook injects a `sys.meta_path` finder that claims the entire `pfsmgraph` PEP 420 namespace and shadows the other distributions, so `import pfsmgraph.dataseq` (and `hseg`, `dl`) fails after `uv sync`. Neither package has compiled code yet — the `meson.build` extension blocks are dormant `if fs.exists()` guards — so the switch to meson-python is deferred to when the first `.pyx` lands, at which point the namespace/editable interaction must be solved (non-editable install of the compiled members, a single combined compiled distribution, or an upstream fix). The `meson.build` files and the revert recipe are kept in `packages/pfsmgraph-{align,hmm}/pyproject.toml`. This qualifies the PRD §6.1 note, whose "namespace is fine" evidence was gathered with *setuptools* editable, which composes; meson-python's finder does not.
 
 **`.scratch/` holds imported source that is not ours, together with our own writing about
-it.** It is where the four existing implementations are read side by side before anything is
-merged into `packages/pfsmgraph-dataseq/`. So "no implementation code, no tests" above is a
+it.** It is where the three existing `dataseq` implementations are read side by side before
+anything is merged into `packages/pfsmgraph-dataseq/`, together with the proof-of-concept
+alignment library whose `Alphabet` is the *encoder* ancestor. That distinction is why ADR
+0010 still says "three implementations" while also requiring the `Alphabet` reconciliation:
+four imported sources, three of them containers. So "no implementation code, no tests" above is a
 claim about `pfsmgraph`: `.scratch/` does contain Python, Cython and `tests/` directories
 belonging to other projects, and now also Python of our own — a runnable transliteration of
 the Lush original under `.scratch/hmm-lush/translation/`, written as a reading aid for the

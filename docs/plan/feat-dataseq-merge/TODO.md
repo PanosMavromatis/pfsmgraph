@@ -7,13 +7,24 @@ and 2 (settle the encoder API and promote ADR 0010)
 
 ## Constraint on every comparison below
 
-The ADRs outrank all three implementations, the `dl` base included. "Base" means starting
-point, not authority: where any implementation disagrees with an Accepted ADR, the ADR wins
-and the implementation changes — unless that ADR carves out an exception in its own text, as
+The ADRs outrank every imported source — the three `dataseq` implementations, the `dl` base
+included, **and `align-poc/tokalign`**. "Base" means starting point, not authority: where any
+of them disagrees with an Accepted ADR, the ADR wins and the implementation changes — unless that ADR carves out an exception in its own text, as
 [ADR 0011](../../design/adr/0011-fixed-reserved-symbol-block-and-strict-encoding.md) does for
 the *spelling* of the strictness switch while holding its semantics settled. So wherever a
 goal below says the base "must be overridden", it means the points the ADRs leave **open**,
 never the ones they close. Recorded as an invariant in `docs/agents/core.md`.
+
+`tokalign` is the case to watch, because the rule reads backwards there. The other three are
+evidence weighed against the ADRs; `tokalign` is what ADRs 0001–0004 were written **from**,
+so it agrees with them by construction and its divergences are overwhelmingly later
+decisions rather than defects. The ADR still wins — `Alphabet` puts user symbols at 4 and
+[ADR 0011](../../design/adr/0011-fixed-reserved-symbol-block-and-strict-encoding.md) moves
+them to 6 — but that is a renumbering, not a repair, and it is the only one of the four that
+already satisfies 0011 on strictness, `gap_index` and `decode`. Note also that it is not a
+fourth `dataseq` implementation: there are three, and `tokalign` contributes the *encoder*
+half, which is why [ADR 0010](../../design/adr/0010-dataseq-composition-merging-three-implementations.md)
+names reconciling its `Alphabet` as part of this merge while its own title still says three.
 
 ## Tasks
 
@@ -168,10 +179,31 @@ never the ones they close. Recorded as an invariant in `docs/agents/core.md`.
   > argued from first principles — the strongest available answer to "is the zero-fill
   > argument really load-bearing, or just tidy?"
 
-- [ ] Import the last implementation (rudimentary, in Python) and tabulate its divergence with the merged implementation so far
-  - [ ] The third implementation is readable in the scratch location and its provenance is recorded
-  - [ ] A written comparison of container semantics, encoder shape, and vocabulary handling
-  - [ ] Every point where the `dl`/`hmm` merged base must be overridden by this last implementation is named, with why — **among the points the ADRs leave open**, on the same terms as goal 3
+- [ ] Tabulate the two remaining implementations against the merged base
+  > **Reworded (2026-08-31).** This goal read "Import the last implementation (rudimentary,
+  > in Python) and tabulate its divergence with the merged implementation so far", which is
+  > wrong on three counts now that both are in hand. There are **two** implementations left,
+  > not one; both are already imported, so the work here is tabulation rather than import;
+  > and "rudimentary" fits only one of them. `.scratch/align-poc/tokalign` is the *most*
+  > developed of the four — it is the proof-of-concept alignment library PRD §1.2 describes
+  > and [ADRs 0001–0004](../../design/adr/README.md) derive from.
+  > **That asymmetry changes how it is read.** The other three are evidence about what has
+  > been tried, weighed against the ADRs. This one is a *source* of the ADRs, so it agrees
+  > with them by construction, and a divergence is far more likely to be a deliberate later
+  > decision than a defect. The ADRs are still the later word where the two disagree — the
+  > constraint at the top of this file is unchanged — but "tokalign does X and the merge does
+  > not" needs checking against the record that was written *from* it before it counts as a
+  > finding.
+  - [x] Both remaining implementations are readable in the scratch location with their provenance recorded
+    > **Done (2026-08-31):** `.scratch/py-rudimentary/` holds `segalign` (`ca97809`) and its
+    > predecessor `SegAlign-Draft` (`9dc37b9`); `.scratch/align-poc/` holds `tokalign`
+    > (`6d27936`, branch `feat/docker-vertex-ai`) with two nested repositories of its own.
+    > All revisions are in `.scratch/README.md`, captured before each `.git` was disabled.
+    > Note `segalign`'s working copy is dirty at `ca97809` in `glob/needleman_wunsch.py`.
+  - [ ] A written comparison of container semantics, encoder shape and vocabulary handling for **both**, kept separable — `segalign` bears on the container, `tokalign` on the encoder, and merging the two accounts would obscure which implementation supports which claim
+  - [ ] The reserved block tabulated across all four implementations and ADR 0011, since this is the first point at which the full picture exists: `dl` from 3, Lush from 2, `segalign` from 2 with `PAD` at **1**, `tokalign` from 4 with a real gap index at 3 — and only `tokalign` strict by default with a working `decode`
+  - [ ] `tokalign`'s `Alphabet` reconciled with the merged encoder, which [ADR 0010](../../design/adr/0010-dataseq-composition-merging-three-implementations.md) requires as **part of** this merge rather than a later question, since the two express the same symbol ↔ code mapping
+  - [ ] Every point where the `dl`/`hmm` merged base must be overridden by either implementation is named, with why — **among the points the ADRs leave open**, on the same terms as goal 3
 
 - [ ] Land the merged container in `packages/pfsmgraph-dataseq/`
   - [ ] `dl` version is the base; divergences resolved per the comparisons above, and **per the ADRs wherever the two disagree**

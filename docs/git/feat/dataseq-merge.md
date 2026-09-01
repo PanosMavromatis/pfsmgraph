@@ -267,3 +267,35 @@ Running log — decisions made, things tried, things deferred.
   silently tracking another project's planning documents as ours. Moving the tree into
   `align-poc/` and the policy one level above it, as `.scratch/dl/.gitignore` already governs
   `MelodyHPO/`, excludes them structurally rather than by a named exception.
+- 2026-08-31 — Goal 4 reworded before running it, and a distinction recovered in the process.
+  The goal read "Import the last implementation (rudimentary, in Python) and tabulate its
+  divergence with the merged implementation so far", which was wrong on three counts once
+  both remaining sources were in hand: two are left rather than one, both are already
+  imported so the work is tabulation rather than import, and "rudimentary" fits `segalign`
+  but not `tokalign`, which is the most developed of the four. It now reads "Tabulate the two
+  remaining implementations against the merged base", with five subgoals — the first already
+  `[x]`, since both imports and their provenance landed in the two preceding commits.
+  Two new criteria were added rather than left to the written comparison: the reserved block
+  tabulated across all four sources and ADR 0011, this being the first point at which the
+  full picture exists; and the `Alphabet` reconciliation, which
+  [ADR 0010](../../design/adr/0010-dataseq-composition-merging-three-implementations.md)
+  requires as *part of* this merge. The comparison criterion also asks for the two accounts
+  to be kept separable, since `segalign` bears on the container and `tokalign` on the
+  encoder, and one merged document would obscure which source supports which claim.
+  **The distinction, which was mine to get wrong and the documents' to get right.** Chasing
+  what looked like stale "three implementations" wording across the plan turned up that it is
+  not stale at all: `tokalign` is *not* a fourth `dataseq` implementation but an alignment
+  library contributing the encoder half. There are **four imported sources and three
+  containers**. That is exactly why ADR 0010 is titled `merging-three-implementations` while
+  its §49 separately requires reconciling `Alphabet`, and why the master plan's subgoal 51
+  needed no change. The loose phrasing was in the previous commit's `core.md` edit ("the four
+  existing implementations"), now corrected there and given as an explicit caveat in
+  `codex.md` so a reviewer does not file "three" as an error.
+  What did need widening is the **precedence rule** in this plan's constraint block, which
+  named three implementations and now names every imported source including `tokalign` —
+  with the warning that the rule reads backwards there. For the other three a divergence from
+  an ADR is evidence of a flaw; for `tokalign`, ADRs 0001–0004 were written *from* it, so a
+  divergence is almost always a later decision. `Alphabet` puts user symbols at 4 and ADR
+  0011 moves them to 6: a renumbering, not a repair. Without that in the criteria, goal 4
+  would file the most ADR-conformant of the four as the most deviant. Same failure mode as
+  the ADR-precedence rule in goal 3 — `/hitl-step` binds on subgoals, not on notes.
