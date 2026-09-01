@@ -48,11 +48,28 @@ test suite written to the [ADR 0003](../design/adr/0003-one-parameterized-test-s
 standard. The renumbering especially — deferring it past the merge is how a code-only
 edit becomes a data migration.
 
-- [ ] Merge the three `dataseq` implementations into `packages/pfsmgraph-dataseq/`, taking the `dl` version as the base (PRD §3.5): container semantics, PyTorch `Dataset` conformance, and the symbol↔code encoder/decoder. Stock `DataLoader` must remain usable without subclassing.
-- [ ] Settle the encoder API — constructor signature, the spelling of the strictness switch, and how `align` consumes the mapping at its boundary — then promote ADR 0010 from `Proposed` to `Accepted` and update its row in `docs/design/adr/README.md`.
+- [x] Merge the three `dataseq` implementations into `packages/pfsmgraph-dataseq/`, taking the `dl` version as the base (PRD §3.5): container semantics, PyTorch `Dataset` conformance, and the symbol↔code encoder/decoder. Stock `DataLoader` must remain usable without subclassing.
+  > **Branch:** feat/dataseq-merge
+  > **Done:** Six modules, ragged by construction, with padding confined to `pad_collate`
+  > and always returned with its mask. numpy is the only runtime dependency; stock
+  > `DataLoader` works without subclassing — PR #2
+- [x] Settle the encoder API — constructor signature, the spelling of the strictness switch, and how `align` consumes the mapping at its boundary — then promote ADR 0010 from `Proposed` to `Accepted` and update its row in `docs/design/adr/README.md`.
+  > **Branch:** feat/dataseq-merge
+  > **Done:** `SymbolTable(symbols)`, strict by default with `on_unknown="unk"` as the
+  > per-call opt-in, decoding total over every code including the reserved ones, and the
+  > symbol→code mapping public because `align` reads it across a distribution boundary.
+  > ADR 0010 accepted 2026-09-01 and its index row updated — PR #2
 - [ ] Renumber the proof-of-concept alignment code to the reserved block (user symbols from 6, new gap index), auditing every hard-coded index assumption. Lands here, not after.
-- [ ] Fix `dataseq`'s third-party runtime dependencies — `dependencies = []` is a placeholder — and confirm its build backend stays hatchling ([ADR 0008](../design/adr/0008-per-package-build-backends.md)).
-- [ ] Write the first test suite to the ADR 0003 standard, including the `pytest_report_header` hook that prints the backend matrix and names every excluded backend with its reason.
+- [x] Fix `dataseq`'s third-party runtime dependencies — `dependencies = []` is a placeholder — and confirm its build backend stays hatchling ([ADR 0008](../design/adr/0008-per-package-build-backends.md)).
+  > **Done:** `dependencies = ["numpy>=1.24"]`, replacing the `[]` placeholder;
+  > `build-backend = "hatchling.build"` confirmed and recorded in ADR 0010 §Resolved,
+  > after reading all four imported sources for a compiled inner loop belonging to
+  > `dataseq`. There is none — PR #2
+- [~] Write the first test suite to the ADR 0003 standard, including the `pytest_report_header` hook that prints the backend matrix and names every excluded backend with its reason.
+  > **Done:** 74 tests landed, the first in this repository. **The `pytest_report_header`
+  > hook did not** — there are no backends to enumerate until the first `.pyx`, and no
+  > `conftest.py` exists yet. Left `[~]` rather than `[x]` so this revision cannot close
+  > while the hook is still owed — PR #2
 - [ ] Release `pfsmgraph-dataseq` 0.1.0, replacing the `0.0.0` placeholder, and set honest lower bounds on the intra-family dependencies that name it.
 
 ## Closed revisions

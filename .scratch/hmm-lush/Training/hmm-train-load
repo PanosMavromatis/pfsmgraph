@@ -1,0 +1,33 @@
+#!/bin/bash
+exec lush "$0" "$@"
+!#
+
+; Load HMM library
+(libload "../Code/load-hmm")
+
+; Initialize GUI framework
+(ogre)
+
+(let ((model-path (nth 1 argv))
+      (data-set-path (nth 2 argv))
+      (model-counter (nth 3 argv))
+      (model-starting-size (nth 4 argv)))
+    (defvar dset (new dsource-seq data-set-path))
+    (defvar model
+      (new hmm model-path data-set-path (val model-starting-size)
+	   (val model-counter))))
+
+
+
+; Create the top-level trainer.
+(defvar trainer (new hmm-trainer model dset ()))  ; <-- Third argument indicates the hmm
+(defvar trainer-w (new HMMtrainerWindow trainer)) ;       is not new.
+
+
+; From this point on, the GUI takes over.
+
+; Exit script when user closes main window.
+(wait trainer-w)
+
+;(printf "End of script.\n")
+

@@ -22,6 +22,13 @@ and several of these must land *as part of* the merge rather than after it.
   reconciliation is unresolved: the constructor signature, the spelling of the
   strictness switch, and how `align` consumes the mapping at its boundary. Settle those
   during the merge, then update the ADR and the index row.
+  **Settled (2026-09-01), and the entry is closed.** All three were settled and
+  implemented: `SymbolTable(symbols)` with `from_sequences`; per-call
+  `encode(..., on_unknown="raise" | "unk")`; and `code()` plus a `sym_to_code` read-only
+  mapping published as cross-distribution API. The Q&A is recorded under goal 6 in
+  `docs/plan/feat-dataseq-merge/TODO.md`. The settled API is written into the ADR's
+  decision section, its `## Open` section has become `## Resolved`, and the index row and
+  its footnote in `docs/design/adr/README.md` read `Accepted`.
 - **Renumber the proof-of-concept alignment code to the reserved block.** The
   proof-of-concept allocates user symbols from 4, with a different gap index;
   [ADR 0011](../design/adr/0011-fixed-reserved-symbol-block-and-strict-encoding.md)
@@ -29,16 +36,43 @@ and several of these must land *as part of* the merge rather than after it.
   — **but it must land as part of the merge, not after**, and every hard-coded index
   assumption in the alignment code needs auditing. Deferring it past the merge is how it
   becomes a data migration instead of an edit.
+  **Wider than it reads (2026-08-31).** The `dl` merge base allocates user symbols from
+  **3** (`PAD` 0, `BOS` 1, `EOS` 2), a *second* wrong offset distinct from the
+  proof-of-concept's 4, and it is missing `UNK`, `GAP`, and `MSK` entirely — `GAP` being
+  the symbol `align` exists to produce. So this entry covers at least two implementations,
+  and the Lush one may add a third. Its padding is also written as the literal `[0]`, never
+  as `PAD`, so it agrees with ADR 0011 only by coincidence. See
+  `.scratch/dl/ANALYSIS.md` §3.1 and §2.3.
 - **Confirm `dataseq`'s build backend.** Its `pyproject.toml` presumes pure-Python
   (hatchling) on the strength of the `dl`-derived base; switch to meson-python only if a
   compiled inner loop is found ([ADR 0008](../design/adr/0008-per-package-build-backends.md)).
+  **Settled (2026-08-31): hatchling holds, and the entry is closed.** All four sources were
+  read; none has a compiled inner loop that belongs to `dataseq`. The landed container is
+  pure Python over numpy. `tokalign` does carry Cython, but in its alignment algorithms —
+  that is `align`'s migration and `align`'s build backend, not this one's.
 - **Fix `dataseq`'s third-party runtime dependencies.** `dependencies = []` is a
   placeholder — whether `numpy`, `torch`, or neither belongs there is determined by what
   the merge base actually needs.
+  **Settled (2026-08-31): `numpy` only, and the entry is closed.** `dependencies =
+  ["numpy>=1.24"]`. The provisional "neither" holds for `torch` and `pandas` — torch left
+  with the dataset views and pandas with ingestion, and a stock `DataLoader` is verified to
+  work against a container that never imports torch. `numpy` earned its way in as predicted:
+  codes are `int32` arrays, which is what `align` and `hmm` index dense matrices with in DP
+  inner loops and what a Cython or CUDA buffer wants. See `.scratch/dl/ANALYSIS.md` §4 and
+  the goal-5 Q&A in `docs/plan/feat-dataseq-merge/TODO.md`.
 - **Write the first test suite to the ADR 0003 standard,** including the
   `pytest_report_header` hook that prints the backend matrix. `addopts = "-ra"` is
   already configured in the root `pyproject.toml`; the header hook is the half that
   still has nowhere to live.
+  **Partly done, and the remainder re-triggered (2026-08-31).** `dataseq` now has 74 tests,
+  the first in this repository. The backend-matrix half is **not** done and should not be:
+  ADR 0003 parameterises over backends for dynamic programming, and `dataseq` is a container
+  with no DP algorithm and so no backends — under that ADR a lifecycle phase not yet reached
+  contributes no parameter at all, so there is nothing for a header to report. The hook still
+  has nowhere to live, and its real trigger is **the first `.pyx`**, where a second backend
+  first exists. One narrow skip does exist here, in `tests/test_torch_interop.py`: torch is
+  not a dependency, so the `DataLoader` integration skips when it is absent. It covers the
+  integration only, never the container's own behaviour.
 
 ## Trigger: the first `.pyx`
 
@@ -84,6 +118,41 @@ and several of these must land *as part of* the merge rather than after it.
   script, installing the plugin in the job, or reimplementing the regenerate-and-diff in a
   few lines of shell. Decide which when the workflow exists; the entry is here so the
   question is not rediscovered by a confusing review months later.
+- **Turn the executed-examples rule in `docs/api/` into a doctest run.**
+  [ADR 0013](../design/adr/0013-api-documentation-layout-and-tooling.md) requires every
+  code block in `docs/api/` to be executed and its output pasted from the run, and that
+  rule is currently a discipline with nothing enforcing it — which is the single largest
+  cost of choosing hand-written Markdown over a generator. The examples are already
+  written as `>>>` blocks, so `pytest --doctest-glob='*.md'` is most of the way there.
+  **Two things must be settled first.** Several blocks show tracebacks, and one in
+  `encoder.md` deliberately shows the *escaped* form of a `KeyError` message — because
+  `KeyError.__str__` is `repr(args[0])` — so `IGNORE_EXCEPTION_DETAIL` and the other
+  doctest option flags have to be chosen rather than defaulted. And the blocks currently
+  omit their shared setup, which reads better for a human and does not run: a doctest pass
+  needs that setup restored or supplied by a fixture. Neither is hard; both are decisions,
+  and making them badly would produce a check that passes while proving nothing.
+- **Check documented repo-state *counts* against the tree.** A recurring rot has a
+  mechanical half worth automating. Prose in `README.md`, `docs/agents/core.md`,
+  `docs/design/PRD.md` and the ADR index makes assertions about the repository that are
+  true when written and silently false later. Observed so far, all of them caught by hand
+  and none by a test: "63 tests" after the count reached 74; "the twelve initial ADRs"
+  after 0013 landed; "Two carry a non-`Accepted` status" after 0010 was promoted; "every
+  package is an empty namespace subpackage" for two commits after `dataseq` shipped; and
+  the ADR index's reading-order and PRD-coverage notes, which enumerated up to 0012 and
+  quietly stopped being exhaustive.
+  **The tractable subset is counts and existence claims**, each checkable in a line or
+  two: test count from a pytest run; ADR count from the file list; ADR statuses by
+  grepping each record's `**Status:**` against its index row; per-package implementation
+  status from whether `src/pfsmgraph/<pkg>/` holds anything but `__init__.py`; tag
+  existence from `git tag`. The shape to copy is `check-agents-md.sh` — assert, diff,
+  exit non-zero — and it inherits that script's blocker verbatim: it lives in the
+  workflow-claude plugin under the untracked `.claude/`, so wiring it up means vendoring,
+  installing the plugin in the job, or reimplementing in shell.
+  **What this does not cover, and must not be claimed to:** semantic claims. "`SymbolTable`
+  is the provisional encoder implementation" was false in exactly the same way and no
+  count-checker would have found it. Those need the reading sweep filed under "the first
+  real release"; the two entries are halves of one problem and neither substitutes for the
+  other.
 
 ## Trigger: the first real release
 
@@ -101,6 +170,39 @@ and several of these must land *as part of* the merge rather than after it.
   {`hseg`, `hmm`, `dl`}.
 - **Do not add dependency declarations to the placeholders** before then. A stub
   declaring `pfsmgraph-dataseq>=0.1` cannot resolve, because no such version exists.
+- **Drop the `.dev0` suffix and tag the release, per package.** All five members declare
+  `0.1.0.dev0`; the release commit for a package changes only that package's version to
+  `0.1.0` and is tagged `pfsmgraph-<pkg>-v<version>` — `pfsmgraph-dataseq-v0.1.0`. Hyphen,
+  not slash: git refs are paths, so `pfsmgraph-dataseq/v0.1.0` cannot coexist with a plain
+  `pfsmgraph-dataseq` tag, and some tooling mishandles the nesting. `git tag --list
+  'pfsmgraph-dataseq-*'` then gives one package's release history. Tagging is manual — no
+  command in use here creates a per-package tag (see `docs/agents/claude.md`). Keeping
+  `.dev0` until that commit is deliberate: a bare `0.1.0` on an incomplete package means an
+  accidental `uv build` + publish burns `0.1.0` on PyPI permanently, since versions are
+  immutable and deleting a release does not free the number.
+- **Sweep the prose claims about repository state, semantically.** The release is when
+  `README.md`, the PRD, and the ADR index are first read by people with no other source of
+  truth, so it is the deadline for a class of rot that has recurred on every branch so far:
+  a sentence describing the state of the repo, true when written, falsified by later work,
+  and caught only when someone happens to reread it. The front page carried "No algorithms
+  are implemented yet — every package is an empty namespace subpackage" for two commits
+  after the container landed.
+  **This is the half no script can do.** Its companion under "CI existing" covers counts
+  and existence claims; what remains is meaning — a surface described as provisional after
+  it was settled, an ADR called `Proposed` after promotion, a reviewer instruction whose
+  reference example has gone stale and now teaches the reviewer to file the correct state
+  as a defect (`docs/agents/codex.md` did exactly this), a future-tense promise stranded
+  after it was kept ("at which point 0010 is promoted"), and a dated header made internally
+  false by updating a number inside it.
+  **Read for claims, not for prose quality**, over `README.md`, `docs/agents/*.md`,
+  `docs/design/PRD.md`, `docs/design/adr/README.md` and each ADR's `Status`, and
+  `docs/api/`. The question for each sentence is only "was this true when written, and is
+  it true now" — the two differ, and where they do the fix usually preserves the history
+  rather than erasing it, as 0010's index footnote does.
+  **Why the release rather than sooner:** the cost of a stale internal note is an agent
+  briefly misled, and it is corrected on contact; the cost of a stale README at release is
+  paid by readers who cannot tell. If a second repo-hygiene item appears before then, this
+  is better promoted to its own revision via `/open-revision` than left waiting.
 
 ## Trigger: `align` acquiring a backend-selection API
 
@@ -113,6 +215,36 @@ and several of these must land *as part of* the merge rather than after it.
   taken a house position on the general shape of the question — strictness, on the
   grounds that silently absorbing a problem produces work that merely looks fine — but
   it has not been applied here.
+
+## Trigger: a vocabulary outliving the process that built it
+
+- **Vocabulary persistence (`save`/`load`).** A `SymbolTable` is built from a corpus and
+  is immutable thereafter, so today it is rebuilt wherever it is needed. That holds only
+  while every consumer sees the same corpus: an expressible train/test split, or `align`
+  scoring sequences encoded in another process, needs the *same* table rather than an
+  equivalent one — and first-appearance ordering makes "equivalent" depend on iteration
+  order, so rebuilding is not a safe substitute.
+
+  Deferred rather than dropped because it carries an undecided sub-question that would
+  otherwise have been settled as a side effect of the encoder API: **the escaping rule**.
+  Symbols here are multi-character and arbitrary, so any line- or delimiter-oriented
+  format has to say what happens to a symbol containing the delimiter — the problem
+  `.scratch/hmm-lush/COMPARISON.md` §2.3 records the Lush original solving by fiat. JSON
+  sidesteps escaping but commits the format; that trade is the decision, and it deserves
+  to be made deliberately.
+
+## Trigger: a corpus large enough for code locality to matter
+
+- **`SymbolTable.from_frequencies()`, offered but never default.** Frequency ordering
+  puts common symbols at low codes, which is what the rudimentary `segalign` did
+  (`.scratch/py-rudimentary/COMPARISON.md` §2.3) and what makes truncated vocabularies and
+  cache locality work. It is deliberately *not* the default and must never become one:
+  it makes every code a function of the whole corpus, so adding one file renumbers the
+  alphabet and silently invalidates every previously encoded sequence. First-appearance
+  ordering is stable under corpus growth, which is why it is the constructor's rule.
+
+  This wants to arrive as a separate classmethod alongside `from_sequences`, so that
+  choosing it is visible at the call site rather than being a flag on the ordinary path.
 
 ## Trigger: `hseg` design settling
 

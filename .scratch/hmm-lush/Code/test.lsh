@@ -1,0 +1,31 @@
+
+
+(de new-test1 (x)
+  ((-int-) x)
+  (1+ x))
+
+(de new-test2 (&optional x)
+  ((-int-) x)
+  (1+ x))
+
+(de new-test3 (x)
+  ((-int-) x)
+  (if (= x 0)
+      (printf "no")
+    (printf "yes")))
+
+(de new4 (x)
+  ((-int-) x)
+  (when (<> x 0)
+    (printf "yes")))
+
+(dhc-make ()
+  new-test1
+;  new-test2
+  new-test3
+  new4
+)
+
+
+
+

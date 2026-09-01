@@ -1,0 +1,25 @@
+
+
+(setq a1 [f [1 1] [0 1]])
+(setq b1 [f 5 3])
+(setq x1 [f 0 0])
+
+(setq a2 [f [1 0] [1 1]])
+(setq b2 [f 2 5])
+(setq x2 [f 0 0])
+
+(setq a3 [f [1 -1] [1 1]])
+(setq b3 [f -1 5])
+(setq x3 [f 0 0])
+
+(setq a4 [f [5 0 6] [4 3 2] [1 0 -1]])
+(setq b4 [f 52 31 -5])
+(setq x4 [f 0 0 0])
+
+(setq a5 [f [1 0 1] [0 -1 0] [-1 0 1]])
+(setq b5 [f 9 -3 5])
+(setq x5 [f 0 0 0])
+
+
+
+

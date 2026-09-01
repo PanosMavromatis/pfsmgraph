@@ -2,7 +2,7 @@
 
 A composable ecosystem of Python packages for modeling symbolic data sequences. Probabilistic finite-state models (PFSMs) are the unifying core, bridging sequence alignment, hierarchical segmentation, HMMs (Baum-Welch), deep learning (RNNs, Transformers), interpretability, and graph operations.
 
-> **Status: scaffolding.** The workspace layout, package boundaries, and build backends are in place. No algorithms are implemented yet — every package is an empty namespace subpackage. See [`docs/design/PRD.md`](docs/design/PRD.md) for the design and [`docs/design/adr/`](docs/design/adr/README.md) for the decision records, which are authoritative.
+> **Status: one package implemented, four scaffolded.** The workspace layout, package boundaries, and build backends are in place. `pfsmgraph-dataseq` — the base layer every other member depends on — is implemented, tested, and documented at [`docs/api/dataseq/`](docs/api/dataseq/README.md); the other four are still empty namespace subpackages. Nothing has been released beyond the `0.0.0` name placeholders. See [`docs/design/PRD.md`](docs/design/PRD.md) for the design and [`docs/design/adr/`](docs/design/adr/README.md) for the decision records, which are authoritative.
 
 ## Packages
 
@@ -10,13 +10,15 @@ A composable ecosystem of Python packages for modeling symbolic data sequences. 
 
 | Distribution | Import | Role | Depends on | Build backend |
 |---|---|---|---|---|
-| `pfsmgraph-dataseq` | `pfsmgraph.dataseq` | Data sequence container + symbol↔code encoder; PyTorch `Dataset`-compatible base layer | — | hatchling |
+| `pfsmgraph-dataseq` | `pfsmgraph.dataseq` | Data sequence container + symbol↔code encoder; PyTorch `Dataset`-compatible base layer&nbsp;‡ | — | hatchling |
 | `pfsmgraph-align` | `pfsmgraph.align` | Sequence alignment (DP-heavy, compiled) | `dataseq` | meson-python&nbsp;† |
 | `pfsmgraph-hseg` | `pfsmgraph.hseg` | Hierarchical segmentation | `dataseq`, `align` | hatchling |
 | `pfsmgraph-hmm` | `pfsmgraph.hmm` | Baum-Welch, topology search via state merge/split | `dataseq`, `align` | meson-python&nbsp;† |
 | `pfsmgraph-dl` | `pfsmgraph.dl` | PyTorch models (`rnn`, `transformer` submodules) | `dataseq`, `align` | hatchling |
 
 † `align` and `hmm` are meson-python by design (they get Cython + CUDA kernels), but are **temporarily on hatchling** until the first kernel lands — meson-python's editable-install hook currently shadows the shared namespace. See [`packages/pfsmgraph-align/pyproject.toml`](packages/pfsmgraph-align/pyproject.toml).
+
+‡ The only member with an implementation. Its public API is documented at [`docs/api/dataseq/`](docs/api/dataseq/README.md); the other four rows describe intent, not code.
 
 ```
                   dataseq          (base — no intra-family dependencies)
@@ -34,6 +36,7 @@ A composable ecosystem of Python packages for modeling symbolic data sequences. 
 pyproject.toml                 # uv workspace root (virtual — not a package)
 docs/design/PRD.md             # authoritative design document
 docs/design/adr/               # decision records (authoritative)
+docs/api/                      # API documentation, one subdirectory per package
 packages/
 ├── pfsmgraph-dataseq/
 ├── pfsmgraph-align/           # + meson.build

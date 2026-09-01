@@ -1,0 +1,1102 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;;  hmm-trainer.lsh
+;;
+
+; My code.
+(libload "../HMMlib/hmm-param")
+
+
+(de *factor* () 1.0)                  ; Normally set to 1.0
+;(de *factor* () 2.0)                  ; Normally set to 1.0
+;(de *factor* () 4.0)                  ; Normally set to 1.0
+;(de *factor* () 8.0)                  ; Normally set to 1.0
+;(de *factor* () 16.0)                  ; Normally set to 1.0
+;(de *factor* () 1.0)
+
+(de *min-split-trials* () 2)          ; Normally set to 2.
+(de *split-trials-per-state-p* () 0)  ; Set to 20, or even 50 if we want to be thorough
+
+
+(defclass hmm-trainer object
+  
+  ((-obj- (hmm)) model)
+  ((-obj- (dsource-seq)) data-source)
+;  ((-obj- (dsource-seq)) test-data-source)
+  
+  ((-obj- (hmm-param)) params)
+  ((-obj- (seq-state)) data-seq)
+  ((-int-) data-seq-size)
+;  ((-obj- (seq-state)) test-data-seq)
+  
+  ((-bool-) dirty)
+  ((-bool-) topology-dirty)
+  
+  ((-int-) total-cycles)
+  ((-int-) saved-total-cycles)
+  
+  ((-float-) last-saved-d)
+
+  ((-idx1- (-float-)) init-state-p-r)
+  ((-idx2- (-float-)) transition-p-r)
+  ((-idx3- (-float-)) output-p-r)
+  ((-float-) data-p)
+  
+  ((-float-) data-dl)
+  ((-float-) model-dl)
+  ((-float-) total-dl)
+  ((-float-) test-data-dl)
+  
+  ((-bool-) split?)
+  ((-bool-) merge?)
+  ((-int-) next-split)
+  ((-int-) next-merge-1)
+  ((-int-) next-merge-2))
+
+
+
+(defmethod hmm-trainer hmm-trainer (in-model in-data-source
+					     &optional (new? t))
+  ((-obj- (hmm)) in-model)
+  
+  (setq model in-model)
+  (setq params (new hmm-param model))
+  
+  (setq data-source in-data-source)
+  (setq data-seq (==> data-source fprop-all))
+  (==> data-seq set-alphabet :model:alphabet)
+  (setq data-seq-size (idx-nelements :data-seq:symbol-data))
+  
+  (setq split? ())
+  (setq merge? ())
+  (setq topology-dirty t)
+  
+  (setq test-data-dl 0.0)
+  
+  ;; Initialize state variables
+  (setq total-cycles 0)
+  (setq saved-total-cycles 0)
+  (setq last-saved-d :params:d)
+  
+  (if (not new?)
+      (==> this update-trainer t)
+    (==> this update-data-p)
+    (==> this update-approx-p t)
+    ;; Run Baum-Welch on the initial model before saving it
+    (==> this run-converge)
+    (==> this suggest-d)
+    (==> this keep-d)
+    (==> this update-all ())
+    (==> this keep-model)))
+
+
+;; * Each time the model parameters change, method `update-all' should be called.
+;; * Method `update-dl' should be called if only d has changed
+;; * In the trainer constructor, just call method `update-trainer'.  Method 
+;;    `update-params' is not needed there, since this was taken care of
+;;    by the constructor.
+;; * From the point of view of this class, method `update-view' does not exist.
+;;    This way training can also take place without the GUI.  Method `update-view'
+;;    is therefore called in the hmm-trainer-view constructor and at the end of 
+;;    any button action that has changed the state of the model or trainer.
+
+(defmethod hmm-trainer update-all (new-approx-matrices)
+  ((-bool-) new-approx-matrices)
+  (==> this update-params)
+  (==> this update-trainer new-approx-matrices))
+
+(defmethod hmm-trainer update-params ()
+  (==> params update-entropy))
+
+(defmethod hmm-trainer update-trainer (new-approx-matrices)
+  ((-bool-) new-approx-matrices)
+  (==> this update-data)
+  (==> this update-dl new-approx-matrices))
+
+(defmethod hmm-trainer update-data ()
+  (==> this update-data-p)                ; These two methods always occur together.
+  (==> this update-viterbi-path))         ; I am only separating them because each one is
+                                          ;   rather complex.  The user need only call
+                                          ;   method `update-data'.
+
+;;  Method `update-data-p'
+;;    Uses a trellis algorithm with forward pass only.
+;;    Answers #1 of Rabiner's `three fundamental questions'.
+
+(defmethod hmm-trainer update-data-p ()
+  (let* ((d-seq :data-seq:symbol-data)
+	 (model-size-1 (1- :params:size))
+	 (init-state-p :params:init-state-p)
+	 (transition-p :params:transition-p)
+	 (output-p :params:output-p)
+         (alpha* (float-matrix (1+ data-seq-size) :params:size))
+         (Q-t (float-matrix (1+ data-seq-size)))
+	 (result-p 0.0))
+    ((-idx1- (-int-)) d-seq)
+    ((-int-) model-size-1)
+    ((-idx1- (-float-)) init-state-p)
+    ((-idx2- (-float-)) transition-p)
+    ((-idx3- (-float-)) output-p)
+    ((-idx2- (-float-)) alpha*)
+    ((-idx1- (-float-)) Q-t)
+    ((-float-) result-p)
+    ;; -----------------------------------------------------------------
+    ;;  Single stage involving forward pass only
+    ;; ------------------------------------------
+    ;;  Initialize first trellis column & corresponding scaling factor.
+    (for (state-j 0 model-size-1)
+	 (alpha* 0 state-j
+		 (init-state-p state-j)))
+    (Q-t 0 1.0)
+    ;;  Iterate over positions in training sequence
+    (for (position-i 1 data-seq-size)
+	 ; Initialize scaling factor
+	 (Q-t position-i 0.0)
+	 ; For each state in current sequence position
+	 (for (state-j 0 model-size-1)
+	      ; Initialize alpha*
+	      (alpha* position-i state-j 0.0)
+	      ; Accumulate in alpha* contribution from each state
+	      ;  in previous sequence position
+	      (for (state-k 0 model-size-1)
+		   (alpha* position-i state-j
+			   (+ (alpha* position-i state-j)
+			      (* (alpha* (1- position-i) state-k)
+				 (transition-p state-k state-j)
+				 (output-p state-k state-j
+					   (d-seq (1- position-i)))))))
+	      ; Update scaling factor
+	      (Q-t position-i
+		   (+ (Q-t position-i)
+		      (alpha* position-i state-j))))
+	 ; Apply scaling factor to alpha*
+	 (for (state-j 0 model-size-1)
+	      (alpha* position-i state-j
+		      (safe-/ (alpha* position-i state-j)
+			      (Q-t position-i))))
+	 ; Add contribution of scaling factor to data DL.
+	 (setq result-p (safe-add--log2 result-p (Q-t position-i))))
+    (let ((sum-alpha* 0.0))
+      (for (state-j 0 model-size-1)
+	   (setq+ sum-alpha* (alpha* data-seq-size state-j)))
+      (setq result-p (safe-add--log2 result-p sum-alpha*)))
+;    (setq data-p result-p)))
+    (setq data-p (* (*factor*) result-p)))) ;;; ***
+
+
+
+(defmethod hmm-trainer update-viterbi-path ()
+  (let* ((init-state-p :params:init-state-p)
+         (transition-p :params:transition-p)
+	 (output-p :params:output-p)
+	 (state-entropies :params:state-entropies)
+	 (d-seq :data-seq:symbol-data)
+	 (path-states :data-seq:path-states)
+	 (path-entropy :data-seq:path-entropy)
+	 (model-size-1 (1- :params:size))
+	 (delta (float-matrix (1+ data-seq-size) :params:size))
+         (psi (float-matrix (1+ data-seq-size) :params:size))
+	 (cand-delta -1.0)
+	 (best-delta -1.0))
+    ((-idx1- (-float-)) init-state-p)
+    ((-idx2- (-float-)) transition-p)
+    ((-idx3- (-float-)) output-p)
+    ((-idx1- (-float-)) state-entropies)
+    ((-idx1- (-int-)) d-seq)
+    ((-idx1- (-int-)) path-states)
+    ((-idx1- (-float-)) path-entropy)
+    ((-int-) model-size-1)
+    ((-idx2- (-float-)) delta)
+    ((-idx2- (-float-)) psi)
+    ((-float-) cand-delta)
+    ((-float-) best-delta)
+    ;; -----------------------------------------------------------------
+    ;;  Stage 1: the forward pass
+    ;; ---------------------------
+    (for (state-j 0 model-size-1)
+	 (delta 0 state-j
+		(init-state-p state-j)))
+    ;   (psi 0 state-j) is never used, and is in fact undefined.
+    ;; Iterate over positions in training sequence
+    (for (position-i 1 data-seq-size)
+	 ; For each state in current sequence position
+	 (for (state-j 0 model-size-1)
+	      (delta position-i state-j -1.0)
+	      (psi position-i state-j 0)
+	      (for (state-k 0 model-size-1)
+		   (setq cand-delta
+			 (safe-add--log2 (delta (1- position-i) state-k)
+					 (* (transition-p state-k state-j)
+					    (output-p state-k state-j
+						      (d-seq (1- position-i))))))
+		   (when (safe->--log (delta position-i state-j) cand-delta)
+		     (delta position-i state-j cand-delta)
+		     (psi position-i state-j state-k)))))
+    ;; -----------------------------------------------------------------
+    ;;  Stage 2: the backward pass
+    ;; ----------------------------
+    (setq best-delta -1.0)
+    (path-states data-seq-size 0)
+    (for (state-j 0 model-size-1)
+	 (when (safe->--log best-delta (delta data-seq-size state-j))
+	   (setq best-delta (delta data-seq-size state-j))
+	   (path-states data-seq-size state-j)))
+    ; Iterate backwards over positions in training sequence
+    (for (position-i (1- data-seq-size) 0 -1)
+	 (path-states position-i
+		      (psi (1+ position-i) (path-states (1+ position-i)))))
+    ;; -----------------------------------------------------------------
+    ;;  At the end, add entropy values to the path
+    ;; --------------------------------------------
+    (for (position-i 0 data-seq-size)
+	 (path-entropy position-i
+		       (state-entropies (path-states position-i))))))
+
+
+
+(defmethod hmm-trainer update-dl (new-approx-matrices)
+  ((-bool-) new-approx-matrices)
+  (==> this update-approx-p new-approx-matrices)
+  (==> this update-data-dl)
+  (==> this update-model-dl)
+  (==> this update-total-dl))
+
+
+(defmethod hmm-trainer update-approx-p (new-matrices)
+  ((-bool-) new-matrices)
+  (==> this update-approx-init-state-p new-matrices)
+  (==> this update-approx-transition-p new-matrices)
+  (==> this update-approx-output-p new-matrices))
+
+(defmethod hmm-trainer update-approx-init-state-p (new-matrices)
+  ((-bool-) new-matrices)
+  (let ((size :params:size)
+	(d :params:d)
+	(init-state-p :params:init-state-p))
+    ((-int-) size)
+    ((-float-) d)
+    ((-idx1- (-float-)) init-state-p)
+    (when new-matrices
+      (setq init-state-p-r (float-matrix size)))
+    (let ((p-vector (float-matrix size))
+	  (factor 0.0))
+      ((-idx1- (-float-)) p-vector)
+      ((-float-) factor)
+      (for (state-i 0 (1- size))
+	   (p-vector state-i
+		     (round-using (init-state-p state-i)
+				  d))
+	   (setq+ factor (p-vector state-i)))
+      (for (state-i 0 (1- size))
+	   (init-state-p-r state-i
+			   (safe-/ (p-vector state-i) factor))))))
+
+(defmethod hmm-trainer update-approx-transition-p (new-matrices)
+  ((-bool-) new-matrices)
+  (let ((size :params:size)
+	(d :params:d)
+	(transition-p :params:transition-p))
+    ((-int-) size)
+    ((-float-) d)
+    ((-idx2- (-float-)) transition-p)
+    (when new-matrices
+      (setq transition-p-r (float-matrix size size)))
+    (for (state-i 0 (1- size))
+	 (let ((p-vector (float-matrix size))
+	       (factor 0.0))
+	   ((-idx1- (-float-)) p-vector)
+	   ((-float-) factor)
+	   (for (state-j 0 (1- size))
+		(p-vector state-j
+			  (round-using (transition-p state-i state-j)
+				       d))
+		(setq+ factor (p-vector state-j)))
+	   (for (state-j 0 (1- size))
+		(transition-p-r state-i state-j
+				(safe-/ (p-vector state-j) factor)))))))
+
+(defmethod hmm-trainer update-approx-output-p (new-matrices)
+  ((-bool-) new-matrices)
+  (let ((size :params:size)
+	(d :params:d)
+	(alphabet-size :model:alphabet-size)
+	(output-p :params:output-p))
+    ((-int-) size)
+    ((-float-) d)
+    ((-int-) alphabet-size)
+    ((-idx3- (-float-)) output-p)
+    (when new-matrices
+      (setq output-p-r (float-matrix size size alphabet-size)))
+    (for (state-i 0 (1- size))
+	 (for (state-j 0 (1- size))
+	      (let ((p-vector (float-matrix alphabet-size))
+		    (factor 0.0))
+		((-idx1- (-float-)) p-vector)
+		((-float-) factor)
+		(for (symbol-k 0 (1- alphabet-size))
+		     (p-vector symbol-k
+			       (round-using (output-p state-i state-j symbol-k)
+					    d))
+		     (setq+ factor (p-vector symbol-k)))
+		(for (symbol-k 0 (1- alphabet-size))
+		     (output-p-r state-i state-j symbol-k
+				 (safe-/ (p-vector symbol-k) factor))))))))
+
+
+(defmethod hmm-trainer update-data-dl ()
+  ; Same as update-data-p, except that it uses approximate p matrices
+  (let* ((d-seq :data-seq:symbol-data)
+	 (model-size-1 (1- :params:size))
+         (alpha* (float-matrix (1+ data-seq-size) :params:size))
+         (Q-t (float-matrix (1+ data-seq-size)))
+	 (result-dl 0.0))
+    ((-idx1- (-int-)) d-seq)
+    ((-int-) model-size-1)
+    ((-idx2- (-float-)) alpha*)
+    ((-idx1- (-float-)) Q-t)
+    ((-float-) result-dl)
+    ;; -----------------------------------------------------------------
+    ;;  Single stage involving forward pass only
+    ;; ------------------------------------------
+    ;;  Initialize first trellis column & corresponding scaling factor.
+    (for (state-j 0 model-size-1)
+	 (alpha* 0 state-j
+		 (init-state-p-r state-j)))
+    (Q-t 0 1.0)
+    ;;  Iterate over positions in training sequence
+    (for (position-i 1 data-seq-size)
+	 ; Initialize scaling factor
+	 (Q-t position-i 0.0)
+	 ; For each state in current sequence position
+	 (for (state-j 0 model-size-1)
+	      ; Initialize alpha*
+	      (alpha* position-i state-j 0.0)
+	      ; Accumulate in alpha* contribution from each state
+	      ;  in previous sequence position
+	      (for (state-k 0 model-size-1)
+		   (alpha* position-i state-j
+			   (+ (alpha* position-i state-j)
+			      (* (alpha* (1- position-i) state-k)
+				 (transition-p-r state-k state-j)
+				 (output-p-r state-k state-j
+					     (d-seq (1- position-i)))))))
+	      ; Update scaling factor
+	      (Q-t position-i
+		   (+ (Q-t position-i)
+		      (alpha* position-i state-j))))
+	 ; Apply scaling factor to alpha*
+	 (for (state-j 0 model-size-1)
+	      (alpha* position-i state-j
+		      (safe-/ (alpha* position-i state-j)
+			      (Q-t position-i))))
+	 ; Add contribution of scaling factor to data DL.
+	 (setq result-dl (safe-add--log2 result-dl (Q-t position-i))))
+    (let ((sum-alpha* 0.0))
+      (for (state-j 0 model-size-1)
+	   (setq+ sum-alpha* (alpha* data-seq-size state-j)))
+      (setq result-dl (safe-add--log2 result-dl sum-alpha*)))
+;    (setq data-dl result-dl)))
+    (setq data-dl (* (*factor*) result-dl)))) ;;; ***
+
+
+(defmethod hmm-trainer update-model-dl ()
+  (let* ((n-states :params:size)
+	 (d :params:d)
+	 (n-states-r (to-float n-states))
+	 (n-symbols :model:alphabet-size)
+	 (result-dl (+ (int-code-length n-states-r)
+		       (int-code-length d)
+		       (* (1+ n-states-r)
+			  (comb-code-length d (1+ n-states)))))
+	 (n-non-0-transitions 0))
+    ((-int-) n-states)
+    ((-float-) d)
+    ((-float-) n-states-r)
+    ((-int-) n-symbols)
+    ((-float-) result-dl)
+    ((-int-) n-non-0-transitions)
+    ; Calculate the number of non-zero transitions at level of accuracy
+    ;   defined by d.
+    (for (state-i 0 (1- n-states))
+	 (for (state-j 0 (1- n-states))
+	      (when (> (transition-p-r state-i state-j) 0)
+		(incr n-non-0-transitions))))
+    (setq+ result-dl
+	   (* n-non-0-transitions            ; need 'to-float' conversions here
+	      (comb-code-length d (1+ n-symbols))))
+    (setq model-dl result-dl)))
+
+
+(defmethod hmm-trainer update-total-dl ()
+  (if (< data-dl 0)
+      (setq total-dl 1e100)
+    (setq total-dl (+ data-dl model-dl))))
+
+
+(defmethod hmm-trainer suggest-d-with-update ()
+  (==> this suggest-d)
+  (==> this update-dl ()))
+
+
+(defmethod hmm-trainer suggest-d ()
+  (let ((result (minimize-int (lambda (x)
+				(setq :params:d x)
+				(==> this update-dl ())
+				total-dl)
+			      1 3821 10000)))
+    (setq :params:d (car result))))
+
+(defmethod hmm-trainer keep-d ()
+  (setq last-saved-d :params:d)
+  (setq dirty t))
+
+(defmethod hmm-trainer reset-d ()
+  (setq :params:d last-saved-d))
+
+
+(defmethod hmm-trainer update-training-log ()
+  (setqC :params:training-log
+	 (==> this training-log-line)))
+
+
+(defmethod hmm-trainer training-log-line ()
+  (concat (sprintf "  %3d" :params:size)
+	  (if split?
+	      (sprintf "   %3d ^     " next-split)
+	    (if merge?
+		(sprintf "   %3d v %-3d " next-merge-1 next-merge-2)
+	      "       -     "))
+	  (sprintf "  %-9g  %-9g  %-9g  %-5g  %-9g\n"
+		   data-dl
+		   model-dl
+		   total-dl
+		   :params:d
+		   test-data-dl)))
+
+
+(defmethod hmm-trainer run-add-with-update (n-cycles)
+  ((-int-) n-cycles)
+  (==> this run-add n-cycles)
+  (==> this update-all ()))
+
+
+(defmethod hmm-trainer run-add (n-cycles)
+  ((-int-) n-cycles)
+  (let* ((init-state-p :params:init-state-p)
+	 (transition-p :params:transition-p)
+	 (output-p :params:output-p)
+	 (d-seq :data-seq:symbol-data)
+	 (model-size-1 (1- :params:size))
+         (alpha* (float-matrix (1+ data-seq-size) :params:size))
+         (beta* (float-matrix (1+ data-seq-size) :params:size))
+         (Q-t (float-matrix (1+ data-seq-size)))
+         (P-t (float-matrix (1+ data-seq-size) :params:size :params:size))
+         (C-in (float-matrix :params:size))
+         (C-t (float-matrix :params:size :params:size))
+         (C-t-y (float-matrix :params:size :params:size :model:alphabet-size)))
+    ((-idx1- (-float-)) init-state-p)
+    ((-idx2- (-float-)) transition-p)
+    ((-idx3- (-float-)) output-p)
+    ((-idx1- (-int-)) d-seq)
+    ((-int-) model-size-1)
+    ((-idx2- (-float-)) alpha*)
+    ((-idx2- (-float-)) beta*)
+    ((-idx1- (-float-)) Q-t)
+    ((-idx3- (-float-)) P-t)
+    ((-idx1- (-float-)) C-in)
+    ((-idx2- (-float-)) C-t)
+    ((-idx3- (-float-)) C-t-y)
+    
+    ; Begin algorithm
+    (for (i 1 n-cycles)
+         ;; -----------------------------------------------------------------
+         ;;  Stage 1: the forward pass
+         ;; ---------------------------
+         ;;    alpha* and Q-t are calculated from the existing model
+         ;;     parameters.
+         ;;  
+         ;;  Initialize first trellis column & corresponding scaling factor.
+	 (for (state-j 0 model-size-1)
+	      (alpha* 0 state-j
+		      (init-state-p state-j)))
+         (Q-t 0 1.0)
+         ;;  Iterate over positions in training sequence
+         (for (position-i 1 data-seq-size)
+	      ; Initialize scaling factor
+	      (Q-t position-i 0.0)
+	      ; For each state in current sequence position
+	      (for (state-j 0 model-size-1)
+		   ; Initialize alpha*
+		   (alpha* position-i state-j 0.0)
+		   ; Accumulate in alpha* contribution from each state
+		   ;  in previous sequence position
+		   (for (state-k 0 model-size-1)
+		        (alpha* position-i state-j
+			        (+ (alpha* position-i state-j)
+				   (* (alpha* (1- position-i) state-k)
+				      (transition-p state-k state-j)
+				      (output-p state-k state-j
+					        (d-seq (1- position-i)))))))
+		   ; Update scaling factor
+		   (Q-t position-i
+		        (+ (Q-t position-i)
+			   (alpha* position-i state-j))))
+	      ; Apply scaling factor to alpha*
+	      (for (state-j 0 model-size-1)
+		   (alpha* position-i state-j
+			   (/ (alpha* position-i state-j)
+			      (Q-t position-i)))))
+         ;; -----------------------------------------------------------------
+         ;;  Stage 2: the backward pass
+         ;; ----------------------------
+         ;;    beta* is calculated from Q-t and the existing model
+         ;;     parameters.
+         ;;  
+         ;;  Initialize last trellis column
+         (for (state-j 0 model-size-1)
+	      (beta* data-seq-size state-j
+		     (/ 1.0 (Q-t data-seq-size))))
+	 ;; Iterate backwards over positions in training sequence
+	 (for (position-i (1- data-seq-size) 0 -1)
+	      ; For each state in current sequence position
+	      (for (state-j 0 model-size-1)
+		   ; Initialize beta*
+		   (beta* position-i state-j 0.0)
+		   ; Accumulate in beta* contribution from each state
+		   ;  in next sequence position
+		   (for (state-k 0 model-size-1)
+			(beta* position-i state-j
+			       (+ (beta* position-i state-j)
+				  (* (beta* (1+ position-i) state-k)
+				     (transition-p state-j state-k)
+				     (output-p state-j state-k
+					       (d-seq position-i))))))
+		   ; Apply scaling factor to beta*
+		   (beta* position-i state-j
+			  (/ (beta* position-i state-j)
+			     (Q-t position-i)))))
+         ;; -----------------------------------------------------------------
+         ;;  Stage 3: evaluating transition probabilities
+         ;; ----------------------------------------------
+         ;;    P-t is calculated from alpha*, beta*, and the existing model
+         ;;     parameters.
+	 ;;
+         (for (position-i 0 (1- data-seq-size))
+	      (for (state-j 0 model-size-1)
+		   (for (state-k 0 model-size-1)
+			(P-t position-i state-j state-k
+			     (* (alpha* position-i state-j)
+				(transition-p state-j state-k)
+				(output-p state-j state-k (d-seq position-i))
+				(beta* (1+ position-i) state-k))))))
+         ;; -----------------------------------------------------------------
+         ;;  Stage 4: obtaining the counts
+         ;; -------------------------------
+         ;;    C-in, C-t, and C-t-y are calculated from P-t.
+	 ;;
+	 ;; For each pair of states in the model
+         (for (state-j 0 model-size-1)
+	      ; Initialize count for initial state probabilities  *** new for init-state-p
+	      (C-in state-j 0.0)
+	      (for (state-k 0 model-size-1)
+		   ; Update counts for initial state              *** new for init-state-p
+		   (C-in state-j
+		         (+ (C-in state-j)
+		            (P-t 0 state-j state-k)))
+		   ; Initialize counts for transitions and outputs
+		   (C-t state-j state-k 0.0)
+		   (for (symbol-l 0 (1- :model:alphabet-size))
+			(C-t-y state-j state-k symbol-l 0.0))
+		   ; Update counts for each position in data sequence
+		   (for (position-i 0 (1- data-seq-size))
+			(C-t state-j state-k
+			     (+ (C-t state-j state-k)
+				(P-t position-i state-j state-k)))
+			(C-t-y state-j state-k (d-seq position-i)
+			       (+ (C-t-y state-j state-k (d-seq position-i))
+				  (P-t position-i state-j state-k))))))
+         ;; -----------------------------------------------------------------
+         ;;  Stage 5: parameter estimation
+         ;; -------------------------------
+         ;;    The new model parameters are calculated from C-in, C-t,
+         ;;      and C-t-y.
+         ;;
+	 ;;  For each state in the model
+	 (let ((init-count 0.0))                                ; *** new for init-state-p
+	   ((-float-) init-count)
+	   (for (state-j 0 model-size-1)
+		(setq+ init-count (C-in state-j)))
+	   (for (state-j 0 model-size-1)
+		(let ((out-count-j 0.0))
+		  ((-float-) out-count-j)
+	          ; Calculate outgoing count
+		  (for (state-k 0 model-size-1)
+		       (setq+ out-count-j (C-t state-j state-k)))
+		  ; Calculate new model parameters:
+		  ;   initial state probabilities...              *** new for init-state-p
+		  (init-state-p state-j
+				(safe-/ (C-in state-j)
+					init-count))
+		  (for (state-k 0 model-size-1)
+		       ; ...transition probabilities...
+		       (transition-p state-j state-k
+				     (safe-/ (C-t state-j state-k)
+					     out-count-j))
+		       ; ...and output probabilities
+		       (for (symbol-l 0 (1- :model:alphabet-size))
+			    (output-p state-j state-k symbol-l
+				      (safe-/ (C-t-y state-j state-k symbol-l)
+					      (C-t state-j state-k))))))))
+         ;; -----------------------------------------------------------------
+         (setq total-cycles (1+ total-cycles))))
+    (setq dirty t))
+
+
+
+(defmethod hmm-trainer run-converge-with-update ()
+  (==> this run-converge)
+  (==> this update-all ()))
+
+
+(defmethod hmm-trainer run-converge ()
+  (let ((old-data-p data-p)
+	(n-no-change 0))
+    ((-float-) old-data-p)
+    ((-int-) n-no-change)
+    (while (< n-no-change 3)
+      (==> this run-add 10)
+      (==> this update-data-p)
+      (if (< (abs (- data-p old-data-p)) (* 1e-1 (*factor*)))
+;      (if (< (abs (- data-p old-data-p)) 1e-2)
+          ; Also tried 1e-4, 1e-5, 1e-10.  Even 1e-4 takes forever sometimes.
+	  (incr n-no-change)
+	(setq n-no-change 0))
+      (setq old-data-p data-p))))
+
+
+(defmethod hmm-trainer keep-model ()
+  (if (not dirty)
+      (beep)
+    (==> this reset-d)
+    (when topology-dirty
+      (==> this update-training-log)
+      (setq topology-dirty ()))
+    (==> params copy-to-model)
+    (setq+ :model:counter 1)
+    (==> this save-model)
+    (setq saved-total-cycles total-cycles)
+    (setq split? ())
+    (setq merge? ())
+    (setq dirty ())))
+
+
+(defmethod hmm-trainer reset-model ()
+  (if (not dirty)
+      (beep)
+    (==> params copy-from-model)
+    (==> this update-all t)
+    (setq total-cycles saved-total-cycles)
+    (setq split? ())
+    (setq merge? ())
+    (setq dirty ())
+    (setq topology-dirty ())))
+
+
+(defmethod hmm-trainer save-model ()
+  (==> model save)
+  (==> model export :model:name this)
+  (==> this save-viterbi-path)
+  (==> this save-total-dl))
+
+
+(defmethod hmm-trainer save-viterbi-path ()
+  (let ((basename (concat :model:name "_"
+			  (zero-padded :model:counter 4) "_"
+			  (zero-padded :model:size 3))))
+    (writing (open-write (concat basename ".vpath.xls"))
+      (printf "Output\tStates\tEntropy\n")
+      (printf "-\t[%d]\t%f\n"
+	      (:data-seq:path-states 0)
+	      (round-to (:data-seq:path-entropy 0)
+			0.0001))
+      (for (pos-i 0 (1- :data-seq:size))
+	   (printf "%s\t[%d]\t%f\n"
+		   (ptr-str (:data-seq:alphabet (:data-seq:symbol-data pos-i)))
+		   (:data-seq:path-states (1+ pos-i))
+		   (round-to (:data-seq:path-entropy (1+ pos-i))
+			     0.0001))))))
+
+
+(defmethod hmm-trainer save-total-dl ()
+  (let ((basename (concat :model:name "_"
+			  (zero-padded :model:counter 4) "_"
+			  (zero-padded :model:size 3))))
+    (writing (open-write (concat basename ".hmm/_total_dl"))
+      (print total-dl))))
+
+
+(defmethod hmm-trainer try-split-with-update (state-n)
+  (if (or dirty
+          (< state-n 0)
+          (>= state-n :params:size))
+      (beep)
+    (==> this try-split state-n)
+    (setq next-split state-n)
+    (setq split? t)
+    (setq merge? ())))
+
+
+(defmethod hmm-trainer try-split (state-n)
+  (==> params split-state state-n)
+  
+  ;; The following sequence of actions is similar to that
+  ;;   in the hmm-trainer constructor.
+  (setq dirty t)
+  (setq topology-dirty t)
+  
+  ;; Calculate description lengths etc.
+  (==> this update-data-p)
+  (==> this update-approx-p t)
+  
+  ;; Initialize state variables
+  (setq total-cycles 0)
+  (setq saved-total-cycles 0)
+  (setq last-saved-d :params:d)
+  
+  ;; Run Baum-Welch on the split-state model
+  (==> this run-converge)
+  (==> this suggest-d)
+  (==> this keep-d)
+  (==> this update-all ()))
+
+
+(defmethod hmm-trainer suggest-split ()
+  (if dirty
+      (beep)
+    (let* ((size-before-split :model:size)
+	   (best-split 0)
+	   (best-total-dl 1e100)
+	   (best-state-p ())
+	   (best-state-entropies ())
+	   (best-entropy ())
+	   (best-init-state-p ())
+	   (best-transition-p ())
+	   (best-output-p ())
+	   (best-d 0.0)
+	   (basename :model:name))
+      (setq basename (concat basename "_"
+			     (zero-padded :model:counter 4) "_"
+			     (zero-padded size-before-split 3)))
+      (printf "\n*** Searching for %d-state model using state splitting ***\n"
+              (1+ size-before-split))
+      (writing (open-append (concat basename ".trials.txt"))
+	(printf "\n*** Searching for %d-state model using state-splitting ***\n"
+		(1+ size-before-split)))
+      (for (trial-split 0 (1- size-before-split))
+	   (printf "\nTrial split: %d ^\n" trial-split)
+	   (writing (open-append (concat basename ".trials.txt"))
+	     (printf "\nTrial split: %d ^\n" trial-split))
+	   ;; For each choice of state, try several times.
+ 	   (for (repeat 1 (+ (*min-split-trials*)
+			     (int (* (*split-trials-per-state-p*)
+				     (:model:state-p trial-split)))))
+		(==> this try-split trial-split)
+		(print total-dl)
+		(writing (open-append (concat basename ".trials.txt"))
+		  (print total-dl))
+		(when (< total-dl best-total-dl)
+		  (setq best-split trial-split)
+		  (setq best-total-dl total-dl)
+		  (setq best-state-p :params:state-p)
+		  (setq best-state-entropies :params:state-entropies)
+		  (setq best-entropy :params:entropy)
+		  (setq best-init-state-p :params:init-state-p)
+		  (setq best-transition-p :params:transition-p)
+		  (setq best-output-p :params:output-p)
+		  (setq best-d :params:d))
+		(==> this reset-model)))
+      (setq next-split best-split)
+      
+      (setq :params:size (1+ size-before-split))
+      (setq :params:state-p (idx-copy best-state-p))
+      (setq :params:state-entropies (idx-copy best-state-entropies))
+      (setq :params:entropy best-entropy)
+      (setq :params:init-state-p (idx-copy best-init-state-p))
+      (setq :params:transition-p (idx-copy best-transition-p))
+      (setq :params:output-p (idx-copy best-output-p))
+      (setq :params:d best-d)
+      
+      (setq split? t)
+      (setq merge? ())
+      (setq dirty t)
+      (setq topology-dirty t)
+      
+      ;; Initialize state variables
+      (setq total-cycles 0)
+      (setq saved-total-cycles 0)
+      (setq last-saved-d :params:d)
+      
+      ;; No need to run Baum-Welch or suggest-d on the split-state model
+      (==> this update-trainer t))))
+
+
+(defmethod hmm-trainer try-merge-with-update (state-n1 state-n2)
+  (if (or dirty
+          (< state-n1 0)
+          (>= state-n1 :params:size)
+          (< state-n2 0)
+          (>= state-n2 :params:size)
+          (= state-n1 state-n2))
+      (beep)
+    (==> this try-merge state-n1 state-n2)
+    (setq next-merge-1 state-n1)
+    (setq next-merge-2 state-n2)
+    (setq merge? t)
+    (setq split? ())))
+
+
+(defmethod hmm-trainer try-merge (state-n1 state-n2)
+  (==> params merge-states state-n1 state-n2)
+  
+  ;; The following sequence of actions is similar to that
+  ;;   in the hmm-trainer constructor.
+  (setq dirty t)
+  (setq topology-dirty t)
+  
+  ;; Calculate description lengths etc.
+  (==> this update-data-p)
+  (==> this update-approx-p t)
+  
+  ;; Initialize state variables
+  (setq total-cycles 0)
+  (setq saved-total-cycles 0)
+  (setq last-saved-d :params:d)
+  
+  ;; Run Baum-Welch on the merged-state model
+  (==> this run-converge)
+  (==> this suggest-d)
+  (==> this keep-d)
+  (==> this update-all ()))
+
+
+(defmethod hmm-trainer suggest-merge ()
+  (if dirty
+      (beep)
+    (let* ((size-before-merge :model:size)
+	   (best-merge-1 0)
+	   (best-merge-2 0)
+	   (best-total-dl 1e100)
+	   (best-state-p ())
+	   (best-state-entropies ())
+	   (best-entropy ())
+	   (best-init-state-p ())
+	   (best-transition-p ())
+	   (best-output-p ())
+	   (best-d 0.0)
+	   (basename :model:name))
+      (setq basename (concat basename "_"
+			     (zero-padded :model:counter 4) "_"
+			     (zero-padded size-before-merge 3)))
+      (printf "\n*** Searching for %d-state model using state merging ***\n"
+              (1- size-before-merge))
+      (writing (open-append (concat basename ".trials.txt"))
+	(printf "\n*** Searching for %d-state model using state merging ***\n"
+		(1- size-before-merge)))
+      (for (trial-merge-1 0 (- size-before-merge 2))
+	   (for (trial-merge-2 (1+ trial-merge-1) (1- size-before-merge))
+		(printf "\nTrial merge: %d v %d\n" trial-merge-1 trial-merge-2)
+		(writing (open-append (concat basename ".trials.txt"))
+		  (printf "\nTrial merge: %d v %d\n" trial-merge-1 trial-merge-2))
+		(==> this try-merge trial-merge-1 trial-merge-2)
+		(print total-dl)
+		(writing (open-append (concat basename ".trials.txt"))
+		  (print total-dl))
+		(when (< total-dl best-total-dl)
+		  (setq best-merge-1 trial-merge-1)
+		  (setq best-merge-2 trial-merge-2)
+		  (setq best-total-dl total-dl)
+		  (setq best-state-p :params:state-p)
+		  (setq best-state-entropies :params:state-entropies)
+		  (setq best-entropy :params:entropy)
+		  (setq best-init-state-p :params:init-state-p)
+		  (setq best-transition-p :params:transition-p)
+		  (setq best-output-p :params:output-p)
+		  (setq best-d :params:d))
+		(==> this reset-model)))
+      (setq next-merge-1 best-merge-1)
+      (setq next-merge-2 best-merge-2)
+      
+      (setq :params:size (1- size-before-merge))
+      (setq :params:state-p (idx-copy best-state-p))
+      (setq :params:state-entropies (idx-copy best-state-entropies))
+      (setq :params:entropy best-entropy)
+      (setq :params:init-state-p (idx-copy best-init-state-p))
+      (setq :params:transition-p (idx-copy best-transition-p))
+      (setq :params:output-p (idx-copy best-output-p))
+      (setq :params:d best-d)
+      
+      (setq split? ())
+      (setq merge? t)
+      (setq dirty t)
+      (setq topology-dirty t)
+      
+      ;; Initialize state variables
+      (setq total-cycles 0)
+      (setq saved-total-cycles 0)
+      (setq last-saved-d :params:d)
+      
+      ;; No need to run Baum-Welch or suggest-d on the merged-state model
+      (==> this update-trainer t))))
+
+
+(defmethod hmm-trainer suggest-move ()
+  (if dirty
+      (beep)
+    (let* ((size-before-move :model:size)
+	   (best-size 0)
+	   (best-split 0)
+	   (best-merge-1 0)
+	   (best-merge-2 0)
+	   (chose-split? ())
+	   (chose-merge? ())
+	   (best-total-dl 1e100)
+	   (best-state-p ())
+	   (best-state-entropies ())
+	   (best-entropy ())
+	   (best-init-state-p ())
+	   (best-transition-p ())
+	   (best-output-p ())
+	   (best-d 0.0)
+	   (basename :model:name))
+      (setq basename (concat basename "_"
+			     (zero-padded :model:counter 4) "_"
+			     (zero-padded size-before-move 3)))
+      
+      ;; ----------------------
+      ;;  Trying state merging
+      ;; ----------------------
+      (printf "\n*** Searching for %d-state model using state merging ***\n"
+              (1- size-before-move))
+      (writing (open-append (concat basename ".trials.txt"))
+	(printf "\n*** Searching for %d-state model using state merging ***\n"
+		(1- size-before-move)))
+      (for (trial-merge-1 0 (- size-before-move 2))
+	   (for (trial-merge-2 (1+ trial-merge-1) (1- size-before-move))
+		(printf "\nTrial merge: %d v %d\n" trial-merge-1 trial-merge-2)
+		(writing (open-append (concat basename ".trials.txt"))
+		  (printf "\nTrial merge: %d v %d\n" trial-merge-1 trial-merge-2))
+		(==> this try-merge trial-merge-1 trial-merge-2)
+		(print total-dl)
+		(writing (open-append (concat basename ".trials.txt"))
+		  (print total-dl))
+		(when (< total-dl best-total-dl)
+		  (setq best-size (1- size-before-move))
+		  (setq best-merge-1 trial-merge-1)
+		  (setq best-merge-2 trial-merge-2)
+		  (setq best-total-dl total-dl)
+		  (setq best-state-p :params:state-p)
+		  (setq best-state-entropies :params:state-entropies)
+		  (setq best-entropy :params:entropy)
+		  (setq best-init-state-p :params:init-state-p)
+		  (setq best-transition-p :params:transition-p)
+		  (setq best-output-p :params:output-p)
+		  (setq best-d :params:d)
+		  (setq chose-split? ())
+		  (setq chose-merge? t))
+		(==> this reset-model)))
+      (setq next-merge-1 best-merge-1)
+      (setq next-merge-2 best-merge-2)
+      
+      ;; ------------------------
+      ;;  Trying state splitting
+      ;; ------------------------
+      (printf "\n*** Searching for %d-state model using state splitting ***\n"
+              (1+ size-before-move))
+      (writing (open-append (concat basename ".trials.txt"))
+	(printf "\n*** Searching for %d-state model using state-splitting ***\n"
+		(1+ size-before-move)))
+      (for (trial-split 0 (1- size-before-move))
+	   (printf "\nTrial split: %d ^\n" trial-split)
+	   (writing (open-append (concat basename ".trials.txt"))
+	     (printf "\nTrial split: %d ^\n" trial-split))
+	   ;; For each choice of state, try several times.
+ 	   (for (repeat 1 (+ (*min-split-trials*)
+			     (int (* (*split-trials-per-state-p*)
+				     (:model:state-p trial-split)))))
+		(==> this try-split trial-split)
+		(print total-dl)
+		(writing (open-append (concat basename ".trials.txt"))
+		  (print total-dl))
+		(when (< total-dl best-total-dl)
+		  (setq best-size (1+ size-before-move))
+		  (setq best-split trial-split)
+		  (setq best-total-dl total-dl)
+		  (setq best-state-p :params:state-p)
+		  (setq best-state-entropies :params:state-entropies)
+		  (setq best-entropy :params:entropy)
+		  (setq best-init-state-p :params:init-state-p)
+		  (setq best-transition-p :params:transition-p)
+		  (setq best-output-p :params:output-p)
+		  (setq best-d :params:d)
+		  (setq chose-split? t)
+		  (setq chose-merge? ()))
+		(==> this reset-model)))
+      (setq next-split best-split)
+      
+      ;; ----------------------
+      ;;  Restoring best model
+      ;; ----------------------
+      (setq :params:size best-size)
+      (setq :params:state-p (idx-copy best-state-p))
+      (setq :params:state-entropies (idx-copy best-state-entropies))
+      (setq :params:entropy best-entropy)
+      (setq :params:init-state-p (idx-copy best-init-state-p))
+      (setq :params:transition-p (idx-copy best-transition-p))
+      (setq :params:output-p (idx-copy best-output-p))
+      (setq :params:d best-d)
+      
+      (setq split? chose-split?)
+      (setq merge? chose-merge?)
+      (setq dirty t)
+      (setq topology-dirty t)
+      
+      ;; Initialize state variables
+      (setq total-cycles 0)
+      (setq saved-total-cycles 0)
+      (setq last-saved-d :params:d)
+      
+      ;; No need to run Baum-Welch or suggest-d on the new model
+      (==> this update-trainer t))))
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(dhc-make
+ ()
+ *factor*
+ *min-split-trials*
+ *split-trials-per-state-p*
+ 
+ (hmm-trainer
+  update-params
+  update-data-p
+  update-viterbi-path
+  update-data
+  update-approx-init-state-p
+  update-approx-transition-p
+  update-approx-output-p
+  update-approx-p
+  update-data-dl
+  update-model-dl
+  update-total-dl
+  update-dl
+  update-trainer
+  update-all
+  
+  run-add
+  run-converge
+  run-converge-with-update
+  ))
+
+

@@ -1,0 +1,319 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;;  hmm.lsh
+;;
+
+; Lush libraries
+(libload "libidx/idx-io")
+
+; My code.
+(libload "../Utility/util")
+(libload "../SeqData/dsource-seq")
+
+
+#? **** Hidden Markov Models
+;; Classes and methods for defining Hidden Markov Models (HMMs).
+;; In keeping with the spirit of the gblearn2 library, this file
+;; only defines the architecture.  Training of HMMs is defined
+;; through trainer classes in files 'hmm-bw', 'hmm-so', etc.
+
+
+#? ** hmm
+;; Class representing a HMM.
+;; It is a direct subclass of gb-module.
+;; The size and alphabet size are explicitly represented as slots.
+
+(defclass hmm object
+  ((-str-) name)
+  ((-int-) alphabet-size)
+  ((-idx1- (-gptr-)) alphabet)
+  ((-int-) size)
+  
+  ((-int-) counter)
+  
+  ((-idx1- (-float-)) state-p)
+  ((-idx1- (-float-)) state-entropies)
+  ((-float-) entropy)
+  
+  ((-idx1- (-float-)) init-state-p)
+  ((-idx2- (-float-)) transition-p)
+  ((-idx3- (-float-)) output-p)
+  ((-float-) d)
+  
+  ((-str-) training-log))
+
+
+#? (==> <hmm> hmm <hmm-name> [<data-seq-name> [<in-size>]])
+;; Constructor.  When called with a single argument, loads a saved HMM.
+;;  If a second argument is present, an empty HMM is created with the
+;;  an alphabet saved in the location specified by the second argument. 
+;;  That location can be a data source (.sds) or another HMM (.hmm); for 
+;;  that reason, the file extension cannot be omitted in the second argument.
+;;  An optional third argument, which defaults to 1, specifies the HMM's 
+;;  initial size.
+;; Not compilable.
+
+(defmethod hmm hmm (hmm-name data-seq-name in-size
+			     &optional (in-counter 0))
+  ((-str-) hmm-name)
+  ((-str-) data-seq-name)
+  ((-int-) in-size)
+  ((-int-) in-counter)
+  (setq name hmm-name)
+  (setq data-seq-name (concat data-seq-name ".sds/"))
+  (setq size in-size)
+  (setq counter in-counter)
+  
+  (if (= counter 0)
+      (progn
+	;; [ Will call a simpler version of the 'check consistency' script here. ]
+	(reading (open-read (concat data-seq-name "_alphabet_size"))
+	  (setq alphabet-size (read)))
+;	(setq alphabet (array alphabet-size)) ; *** This was the source of the problem
+	;; Partick's hack, part 1:
+	(setq alphabet (gptr-matrix alphabet-size))
+	(reading (open-read (concat data-seq-name "_alphabet"))
+	  (for (i 0 (1- alphabet-size))
+;	       (alphabet (read) (read))))
+	       ;; Partick's hack, part 2:
+	       (alphabet (read)
+			 (str-ptr (sprintf "%l" (read))))))
+;			 (sprintf "%l" (read)))))
+	(setq state-p (float-matrix size))
+	(setq state-entropies (float-matrix size))
+	(setq init-state-p (float-matrix size))
+	(setq transition-p (float-matrix size size))
+	(setq output-p (float-matrix size size alphabet-size))
+	(setq d 10000.0)
+	(setq training-log "")
+	(==> this init-random 0.001))
+    (==> this load (concat name "_"
+			   (zero-padded counter 4) "_"
+			   (zero-padded size 3)))))
+
+
+#? (==> <hmm> save [<as-name>])
+;; Saves a HMM.
+;; If <as-name> is not specified, the HMM's name is used.
+;; Not compilable.
+
+(defmethod hmm save (&optional as-name)
+  (if (not as-name)
+      (setq as-name name))
+  (let* ((basename (concat as-name "_"
+			   (zero-padded counter 4) "_"
+			   (zero-padded size 3)))
+	 (dir-name (concat basename ".hmm/")))
+    (mkdir-on-need dir-name)
+    (writing (open-write (concat dir-name "_alphabet_size"))
+      (print alphabet-size))
+    (writing (open-write (concat dir-name "_alphabet"))
+      (for (i-symb 0 (1- alphabet-size))
+	   (printf "%d\t%l\n" i-symb (alphabet i-symb))))
+    (writing (open-write (concat dir-name "_size"))
+      (print size))
+    (writing (open-write (concat dir-name "d"))
+      (print d))
+    (save-ascii-matrix state-p (concat dir-name "state_p"))
+    (save-ascii-matrix state-entropies (concat dir-name "state_entropies"))
+    (writing (open-write (concat dir-name "entropy"))
+      (print entropy))
+    (save-ascii-matrix init-state-p (concat dir-name "init_state_p"))
+    (save-ascii-matrix transition-p (concat dir-name "transition_p"))
+    (save-ascii-matrix output-p (concat dir-name "output_p"))
+    (==> this export as-name)
+    (==> this save-training-log dir-name)))
+
+
+(defmethod hmm export (name &optional trainer)
+  (let ((basename (concat name "_"
+			  (zero-padded counter 4) "_"
+			  (zero-padded size 3)))
+        (l-init-state-p ())
+        (l-transition-p ())
+        (l-output-p ()))
+    (if trainer
+	(progn (setqC basename "_trunc")
+	       (setq l-init-state-p :trainer:init-state-p-r)
+	       (setq l-transition-p :trainer:transition-p-r)
+	       (setq l-output-p :trainer:output-p-r))
+      (setq l-init-state-p init-state-p)
+      (setq l-transition-p transition-p)
+      (setq l-output-p output-p))
+    (writing (open-write (concat basename ".dot"))
+      (printf "digraph %l {\n\nrankdir=LR;\n" basename)
+      (printf "subgraph cluster_0 {\n  label = \"< Model Entropy = %f >\";\n"
+	      (round-to entropy 0.0001))
+      (for (state-i 0 (1- size))
+	   (printf "\n%d [ label = \"s%d : %4.2f\\n %4.2f -->\\n<%f>\" ];"
+		   state-i state-i (state-p state-i) (l-init-state-p state-i)
+		   (round-to (state-entropies state-i) 0.0001)))
+      (printf "\n}\n")
+      (for (state-i 0 (1- size))
+	   (for (state-j 0 (1- size))
+		(let ((transition-p-ij (l-transition-p state-i state-j)))
+		  (when (not (< transition-p-ij 1e-3))
+		    (printf "\n%d -> %d [ label = \"[%4.2f]" state-i state-j transition-p-ij)
+		    (for (symbol-k 0 (1- alphabet-size))
+			 (let ((output-p-ijk (l-output-p state-i state-j symbol-k)))
+			   (when (not (< output-p-ijk 1e-3))
+			     (printf "\\n%s(%4.2f)"
+				     (ptr-str (alphabet symbol-k)) output-p-ijk))))
+		    (printf "\" ];")))))
+      (printf "\n}\n"))))
+
+
+(defmethod hmm save-training-log (basename &optional (append ()))
+  (let ((file-name (concat basename "_training_log")))
+    (if append
+	(writing (open-append file-name)
+	  (printf "%s" training-log))
+      (writing (open-write file-name)
+	(printf "%s" training-log)))))
+
+
+
+#? (==> <hmm> load <basename>)
+;; Loads a saved HMM.
+;; Not compilable.
+
+(defmethod hmm load (basename)
+  (let ((dir-name (concat basename ".hmm/")))
+    ;; [ Will call the 'check consistency' script here. ]
+    (reading (open-read (concat dir-name "_alphabet_size"))
+      (setq alphabet-size (read)))
+    (setq alphabet (gptr-matrix alphabet-size))
+    (reading (open-read (concat data-seq-name "_alphabet"))
+      (for (i 0 (1- alphabet-size))
+	   (alphabet (read)
+		     (str-ptr (sprintf "%l" (read))))))
+    (reading (open-read (concat dir-name "_size"))
+      (setq size (read)))
+    (reading (open-read (concat dir-name "d"))
+      (setq d (read)))
+    (setq state-p
+	  (load-matrix (concat dir-name "state_p")))
+    (setq state-entropies
+	  (load-matrix (concat dir-name "state_entropies")))
+    (reading (open-read (concat dir-name "entropy"))
+      (setq entropy (read)))
+    (setq init-state-p
+	  (load-matrix (concat dir-name "init_state_p")))
+    (setq transition-p
+	  (load-matrix (concat dir-name "transition_p")))
+    (setq output-p
+	  (load-matrix (concat dir-name "output_p")))
+    (reading (open-read (concat dir-name "_training_log"))
+      (setq training-log (read-string "~\e")))))
+
+
+#? (==> <hmm> init-random [<noise-width>])
+;; Initializes a pre-existing HMM by placing random noise on its parameter
+;;  slots.  This noise is appropriately normalized to represent probability
+;;  distributions.  An optional argument specifies the noise width as a 
+;;  fraction of the mean.
+;; Might be compilable.  We'll see.
+
+(defmethod hmm init-random (noise-width)
+  ((-float-) noise-width)
+  (rand-p-vector init-state-p noise-width)
+  (idx-bloop ((i-trans-x transition-p)
+	      (i-out-x output-p))
+    (rand-p-vector i-trans-x noise-width)
+    (idx-bloop ((j-out-x i-out-x))
+      (rand-p-vector j-out-x noise-width)))
+  (==> this update-entropy))
+
+
+(defmethod hmm update-entropy ()
+  
+  ;; Calculate state probabilites
+  (let ((A (float-matrix size size))
+	(B (float-matrix size)))
+    ((-idx2- (-float-)) A)
+    ((-idx1- (-float-)) B)
+    (for (state-j 0 (1- size))
+	 (A 0 state-j 1.0)
+	 (for (state-i 1 (1- size))
+	      (A state-i state-j
+		 (- (transition-p state-j state-i)
+		    (int-delta state-i state-j)))))
+    (B 0 1.0)
+    (for (state-i 1 (1- size))
+	 (B state-i 0.0))
+    (LU-solve A B state-p))
+  
+  ;; Caluclate state entropies
+  (for (state-i 0 (1- size))
+       (let ((symbol-p-i (float-matrix alphabet-size)))
+	 (for (symbol-k 0 (1- alphabet-size))
+	      (for (state-j 0 (1- size))
+		   (symbol-p-i symbol-k
+			       (+ (symbol-p-i symbol-k)
+				  (* (transition-p state-i state-j)
+				     (output-p state-i state-j symbol-k))))))
+	 (state-entropies state-i (calculate-entropy symbol-p-i))))
+  
+  ;; Calculate total model entropy
+  (setq entropy 0.0)
+  (for (state-i 0 (1- size))
+       (setq+ entropy
+	      (* (state-p state-i)
+		 (state-entropies state-i)))))
+
+
+
+#? (==> <hmm> print [<params>])
+;; Prints contents of a HMM in easy-to-read form.
+;;;;;;; Do we really need this function? ;;;;;;;;
+
+(defmethod hmm print (&optional params)
+  (let ((l-size 0)
+	(l-state-p ())
+	(l-init-state-p ())
+	(l-transition-p ())
+	(l-output-p ()))
+    (if params
+	(progn (setq l-size :params:size)
+	       (setq l-state-p :params:state-p)
+	       (setq l-init-state-p :params:init-state-p)
+	       (setq l-transition-p :params:transition-p)
+	       (setq l-output-p :params:output-p))
+      (setq l-size size)
+      (setq l-state-p state-p)
+      (setq l-init-state-p init-state-p)
+      (setq l-transition-p transition-p)
+      (setq l-output-p output-p))
+    (for (state-i 0 (1- l-size))
+	 (printf "\n\nFrom State %d -- P = %f\n      (init-p = %f)\n"
+		 state-i
+		 (l-state-p state-i)
+		 (l-init-state-p state-i))
+	 (for (state-j 0 (1- l-size))
+	      (let ((transition-p-ij (l-transition-p state-i state-j)))
+		(when (not (< transition-p-ij 1e-3))
+		  (printf "\n    to State %d with P = %f\n"
+		          state-j
+		          transition-p-ij)
+		  (for (symbol-k 0 (1- alphabet-size))
+		       (let ((output-p-ijk (l-output-p state-i state-j
+						       symbol-k)))
+			 (when (not (< output-p-ijk 1e-3))
+			   (printf "       %l with P = %f\n"
+				   (alphabet symbol-k)
+				   output-p-ijk))))))))))
+				   
+
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(dhc-make
+ ()
+ (hmm
+  update-entropy
+  init-random
+  ))
+
+

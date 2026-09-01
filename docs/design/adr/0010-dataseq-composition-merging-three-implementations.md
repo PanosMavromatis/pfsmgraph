@@ -1,9 +1,9 @@
 # 0010. `dataseq` is a merge of three existing implementations, with `dl` as the base
 
-- **Status:** **Proposed** — the composition is decided, but PRD §9 requires the encoder
-  API reconciliation to be resolved *during the merge* before this record is finalized.
-  Promote to `Accepted` when the merge lands.
-- **Date:** 2026-08-21
+- **Status:** **Accepted** (2026-09-01) — held at `Proposed` until the encoder API
+  reconciliation was resolved *during the merge*, as PRD §9 requires. It was, and the
+  settled API is recorded below.
+- **Date:** 2026-08-21 (accepted 2026-09-01)
 - **Source:** PRD §1.5, §3.5, §8 — decision D10
 
 ## Context
@@ -50,6 +50,41 @@ The proof-of-concept's `Alphabet` type overlaps directly with the encoder/decode
 merged — the two express the same symbol ↔ integer-code mapping — so reconciling them is
 part of this merge rather than a separate question. `ScoringMatrix` and
 `AlignmentResult` are alignment-specific and stay in `align`.
+
+### The reconciled encoder API (settled 2026-09-01)
+
+This is the reconciliation the ADR was held open for. Three decisions, each with the
+alternative it displaced:
+
+**`SymbolTable(symbols: Iterable[str])`**, frozen and first-appearance-ordered, with
+`SymbolTable.from_sequences(sequences)` for a corpus. `Alphabet` was rejected as the
+name: it implies single characters, and this family's symbols are words (`'Maior'`,
+`'D3'`) — which is the whole reason [ADR 0001](0001-encode-at-the-boundary.md) exists.
+First-appearance rather than frequency ordering, because frequency makes every code a
+function of the whole corpus, so adding one file renumbers the alphabet and invalidates
+everything already encoded.
+
+**Strictness is a per-call argument:** `encode(symbols, on_unknown="raise" | "unk")`,
+defaulting to `"raise"`. [ADR 0011](0011-fixed-reserved-symbol-block-and-strict-encoding.md)
+fixed the semantics and left only this spelling. Per call rather than per table because
+one mapping is legitimately wanted with two behaviours — strict over curated training
+data, `UNK`-tolerant at inference — and building two tables to express that would make
+them two *different vocabularies*, which is exactly the failure mode this ADR exists to
+prevent. The value is validated before the encode loop, so a misspelled policy cannot
+masquerade as the default until the first unseen symbol appears.
+
+**The symbol → code mapping is public API:** `code(symbol)` and a `sym_to_code` property
+returning a `MappingProxyType`. Both are on the `Vocabulary` protocol, not merely on the
+concrete class, because the consumer is in another distribution: `align`'s
+`ScoringMatrix` builds an `(size, size)` array from the whole mapping at construction
+time. In the proof-of-concept it did this by indexing `alphabet._sym_to_idx` directly, so
+the mapping was already cross-package API in everything but name; this publishes it
+deliberately rather than leaving three packages reaching into an underscore.
+
+Two things `Alphabet` lacks were deliberately **not** added here — persistence, which
+carries an undecided escaping rule for symbols containing a delimiter, and a frequency
+reordering, which must arrive as a separate classmethod so that choosing it stays visible
+at the call site. Both are in `docs/plan/DEFERRED.md` under their own triggers.
 
 ## Consequences
 
@@ -102,16 +137,20 @@ this stage. (Note that this does *not* relax the `PAD`=0 requirement of
 [ADR 0011](0011-fixed-reserved-symbol-block-and-strict-encoding.md), since `dataseq`
 serves `dl` as well.)
 
-## Open
+## Resolved
 
-These are the items that keep this ADR at `Proposed`. All are to be resolved *during*
-the merge, per PRD §8:
+These were the items that held this ADR at `Proposed`. Both were resolved *during* the
+merge, per PRD §8, and both are recorded here rather than deleted — an ADR whose open
+questions vanish silently reads as though none were ever asked.
 
-- The exact shape of the reconciled encoder API: **constructor signature**, the
-  **strictness switch** (see
-  [ADR 0011](0011-fixed-reserved-symbol-block-and-strict-encoding.md)), and **how
-  `align` consumes the mapping at its boundary**.
-- Whether `dataseq` is pure-Python (hatchling) or carries performance-critical inner
-  loops warranting compilation (meson-python) —
-  [ADR 0008](0008-per-package-build-backends.md). The `dl`-derived base is presumed pure
-  Python; confirm once merged.
+- **The exact shape of the reconciled encoder API** — constructor signature, the
+  strictness switch (see
+  [ADR 0011](0011-fixed-reserved-symbol-block-and-strict-encoding.md)), and how `align`
+  consumes the mapping at its boundary. **Settled 2026-09-01**; see *The reconciled
+  encoder API* under Decision above.
+- **Whether `dataseq` is pure-Python (hatchling) or warrants compilation
+  (meson-python)** — [ADR 0008](0008-per-package-build-backends.md). **Settled
+  2026-08-31: hatchling.** All four imported sources were read and none has a compiled
+  inner loop belonging to `dataseq`; the landed container is pure Python over numpy. The
+  proof-of-concept does carry Cython, but in its alignment algorithms — that is `align`'s
+  build backend, not this one's.

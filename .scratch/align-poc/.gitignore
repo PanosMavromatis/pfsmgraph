@@ -1,0 +1,186 @@
+# Import of the tokalign working tree -- the proof-of-concept alignment library
+# that PRD 1.2 describes and that ADRs 0001-0004 are derived from. 194 MB on
+# disk, ~90% of it a `.venv` and a mypy cache. Deny-by-default, as with the other
+# three imports: nothing is tracked unless named below.
+#
+# The layout follows `.scratch/dl/`: this file sits one level *above* the
+# imported repository, so `align-poc/` holds our own analysis `.md` files beside
+# `tokalign/` rather than inside it. That is not only tidiness -- `!/*.md` below
+# means "our writing", and with the policy one level down it also matched
+# tokalign's own `TODO.md` and `TODO.human.md`, silently tracking another
+# project's planning docs as though they were ours.
+#
+# The repo-root `.gitignore` still applies underneath these rules, and is what
+# keeps `.venv`, `.mypy_cache/`, `.pytest_cache/`, `build/`, `*.egg-info/`,
+# `__pycache__/` and `.DS_Store` out even inside re-included directories. Do not
+# restate those here; a negation added below could re-admit them by accident.
+#
+# --- THIS FILE IS PHASED ------------------------------------------------------
+# `.scratch/` is no longer deleted when this branch merges: it stays as the
+# migration source for `hmm` and `align` 0.1.0 as well. So the tracked set is
+# scoped to *the package currently being migrated*, and widens when that changes.
+# The phases below are ordered by PRD 11 implementation order. Exactly one is
+# active; switching means uncommenting the next block, not re-deriving it.
+#
+#   Phase 1  dataseq   DONE     -- the `Alphabet` encoder only; rules retained
+#   Phase 2  hmm       ACTIVE   -- nothing here; `hmm` is seeded from hmm-lush
+#   Phase 3  align     inert    -- the algorithms, the .pyx, the backend registry
+#
+# Keeping the inert rules written but commented is the point: the reasoning for
+# what `align` will need was worked out while the tree was in front of us, and
+# re-deriving it in three months' time would cost more than the comments do.
+#
+# Advancing to Phase 2 on 2026-09-01 added no files, and that is the finding
+# rather than an oversight: nothing in tokalign is HMM-related, so Phase 2 was
+# written empty by design and advancing into it is a pointer move.
+#
+# Phase 1's rules are *retained* rather than removed, and not merely out of
+# tidiness. The tracked set can only widen. `.gitignore` is consulted only for
+# files git does not already track, so re-commenting Phase 1 would change nothing
+# about what is in the index; actually untracking those five files would take a
+# `git rm --cached`, which is a deletion commit and re-opens the squash-merge
+# hazard that retention stands down. See
+# `docs/design/adr/0014-scratch-retention-and-per-package-scoping.md`.
+#
+# --- EIGHT RENAMES WERE NEEDED ON IMPORT --------------------------------------
+# The most of any import so far; `hmm-lush` needed none. Three nested
+# repositories and five agent-instruction files, all recorded in
+# `.scratch/README.md` with their revisions, which were captured *before*
+# disabling:
+#   tokalign/{.,tokalign-dev,dev/plugins/workflow-claude}/.git -> .git-disabled
+#   the same three directories' CLAUDE.md                      -> CLAUDE.md.orig
+#   tokalign/AGENTS.md, tokalign/AGENTS.override.md            -> *.orig
+#
+# The `AGENTS.md` pair matters beyond the usual reason. That project uses the
+# same agent-docs toolchain as pfsmgraph, so those two files are not merely
+# another project's instructions -- they are the *generated artefacts* of one,
+# and the `protect-agent-docs.py` hook matches on filename, so under their
+# original names they would have been treated as this repository's own.
+#
+# `tokalign/dev/plugins/workflow-claude/` is a vendored clone of the same plugin
+# this repository uses, and its directory is mode 555. Renaming a child needs
+# write permission on the parent, so its two renames required `chmod u+w` first;
+# the mode was restored to 555 afterwards. Anyone re-running this import needs to
+# know that, because the failure is a bare "Permission denied" that looks like a
+# sandbox restriction rather than a file mode.
+
+# --- deny everything at this level -------------------------------------------
+/*
+!/.gitignore
+
+# Our own writing about the import -- an ANALYSIS.md and anything joining it.
+# Easy to forget and it fails silently: a file written here without this
+# negation is simply invisible to `git status`, so the work looks committed and
+# is not. It has now caught out two of the four imports.
+!/*.md
+
+!/tokalign/
+/tokalign/*
+
+# Narrative context and the declared build/runtime dependencies. `pyproject.toml`
+# is tracked in every phase: it is the evidence for what `align` will need at
+# build time (PRD 6.1 records `setuptools.build_meta` with `cython`/`numpy`,
+# which ADR 0008 replaces with meson-python), and `docs/plan/DEFERRED.md` makes
+# that a live question rather than a historical note.
+!/tokalign/README.md
+!/tokalign/pyproject.toml
+
+!/tokalign/src/
+!/tokalign/tests/
+/tokalign/src/*
+!/tokalign/src/tokalign/
+/tokalign/tests/*
+
+# =============================================================================
+# Phase 1 -- dataseq  (DONE -- rules retained; see the header)
+# =============================================================================
+# Only the encoder. `Alphabet` is a bidirectional string <-> integer mapping over
+# multi-character symbols, and [ADR 0010](../../docs/design/adr/0010-dataseq-composition-merging-three-implementations.md)
+# names reconciling it with the merged encoder as *part of* this merge rather
+# than a later question -- the two express the same thing. It is also the only
+# one of the four implementations that already agrees with ADR 0011 on the points
+# that matter: `encode` raises `KeyError` on an unseen symbol (strict by default),
+# there is a real `gap_index`, and `decode` exists. What it needs is renumbering,
+# not repair: `RESERVED_INDICES = 3` puts padding/BOS/EOS at 0-2, gap at 3 and
+# user symbols at 4, where ADR 0011 inserts `UNK` and `MSK` and moves users to 6.
+/tokalign/src/tokalign/*
+!/tokalign/src/tokalign/__init__.py
+!/tokalign/src/tokalign/_types.py
+
+# Tracked only because `tests/conftest.py` imports it, and pytest loads that
+# conftest for the whole `tests/` tree -- so without it `test_types.py` does not
+# run. It is independently worth reading as the origin of ADR 0003's backend
+# discovery, which is Phase 3's concern.
+!/tokalign/src/tokalign/_backends.py
+
+!/tokalign/tests/conftest.py
+!/tokalign/tests/test_types.py
+
+# =============================================================================
+# Phase 2 -- hmm  (ACTIVE -- inert by design; nothing to add)
+# =============================================================================
+# `hmm` 0.1.0 is seeded from `.scratch/hmm-lush/`, not from here. This section
+# exists so its emptiness is a recorded finding rather than an oversight: nothing
+# in tokalign is HMM-related. It was made active on 2026-09-01 and added nothing;
+# `.scratch/hmm-lush/` is where the `hmm` migration reads from, and its policy is
+# already scoped to the whole live library, so it needs no widening either.
+
+# =============================================================================
+# Phase 3 -- align  (inert -- uncomment when align migration begins)
+# =============================================================================
+# This is the bulk of the library and the reason the import was kept. Everything
+# below is deliberate, not a leftover:
+#
+#   scoring.py            substitution/affine-gap scoring built on ScoringMatrix
+#   algorithms/_registry.py
+#                         algorithm + backend dispatch; with _backends.py this is
+#                         the concrete form of ADR 0003's parameterized suite and
+#                         ADR 0004's optional-extra split
+#   algorithms/needleman_wunsch/_python.py
+#                         the pure-Python phase-1 implementation
+#   algorithms/needleman_wunsch/_cython.pyx
+#                         the phase-2 kernel. ADR 0002 calls this "explicitly the
+#                         reference template for future kernels and wavefront
+#                         passes", so it is the single most load-bearing file
+#                         here, and the first `.pyx` in this repo triggers the
+#                         meson-python switch in DEFERRED.md
+#
+# !/tokalign/src/tokalign/scoring.py
+# !/tokalign/src/tokalign/algorithms/
+# /tokalign/src/tokalign/algorithms/*
+# !/tokalign/src/tokalign/algorithms/*.py
+# !/tokalign/src/tokalign/algorithms/needleman_wunsch/
+# /tokalign/src/tokalign/algorithms/needleman_wunsch/*
+# !/tokalign/src/tokalign/algorithms/needleman_wunsch/*.py
+# !/tokalign/src/tokalign/algorithms/needleman_wunsch/*.pyx
+# !/tokalign/tests/algorithms/
+# /tokalign/tests/algorithms/*
+# !/tokalign/tests/algorithms/*.py
+# !/tokalign/tests/test_scoring.py
+# !/tokalign/setup.py      # the Cython build_ext invocation ADR 0008 replaces
+# !/tokalign/benchmarks/   # 4 files; evidence for the phase-2 speedup claim
+
+# --- deliberately not tracked in any phase, with reasons ---------------------
+#
+#   .venv/, .mypy_cache/     119 MB + 55 MB. Root rules exclude both.
+#   build/, src/*.egg-info/  Compiled output and packaging metadata.
+#   .git-disabled/ x3        5.6 MB, still readable with
+#                            `git --git-dir=<path>/.git-disabled log`.
+#   TODO.md, TODO.human.md   tokalign's own planning docs, 32 KB. Another
+#                            project's plan, and the reason this policy sits one
+#                            level up -- see the header.
+#   tokalign-dev/            9.9 MB. A *separate* repository for that project's
+#                            agent tooling, not part of the library.
+#   dev/                     67 files, incl. a vendored clone of the same
+#                            workflow-claude plugin this repo already installs.
+#   docs/                    52 files. tokalign's own design notes. Superseded
+#                            for our purposes by PRD 1.2 and ADRs 0001-0004,
+#                            which were written *from* this library -- so where
+#                            the two disagree, ours is the later word. Worth
+#                            re-reading before the align migration, while the
+#                            tree is still on disk.
+#   Dockerfile.dev, .envrc, uv.lock
+#                            Environment for a project we are not building.
+#   CLAUDE.md.orig, AGENTS.md.orig, AGENTS.override.md.orig, .claude/
+#                            Another project's agent instructions, generated
+#                            artefacts and tool configuration. See the header.

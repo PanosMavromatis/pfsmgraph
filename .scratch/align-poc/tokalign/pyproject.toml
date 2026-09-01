@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=75", "cython>=3.0", "numpy>=2.1"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tokalign"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = ["numpy>=2.1"]
+
+[project.optional-dependencies]
+cpu = ["cython>=3.0"]
+gpu = ["numba>=0.61", "numba-cuda>=0.29"]
+bench = ["matplotlib>=3.8"]
+dev = ["pytest", "ruff", "setuptools>=75", "cython>=3.0"]

@@ -348,7 +348,7 @@ This PRD is the source for the repository's initial ADR set. Numbering starts fr
 
 > **Status: done (2026-08-29).** The initial set is authored — see [`adr/README.md`](adr/README.md) for the index. Twelve records: the seven topics below (ADRs 0005–0011), the inherited §1.2 decisions (ADRs 0001–0004), and one for the temporary hatchling deviation (ADR 0012), which postdates this document and qualifies §6.1.
 >
-> **The ADRs are now authoritative for D1–D11.** Amend decisions there, not here. Two carry a non-`Accepted` status: **ADR 0010** is `Proposed` until the encoder API reconciliation lands with the `dataseq` merge (per the prerequisite noted at the end of this section), and **ADR 0012** is `Accepted (temporary)`, expiring when the first `.pyx` lands.
+> **The ADRs are now authoritative for D1–D11.** Amend decisions there, not here. One carries a non-`Accepted` status: **ADR 0012** is `Accepted (temporary)`, expiring when the first `.pyx` lands. **ADR 0010** was `Proposed` on the same footing until 2026-09-01, when the encoder API reconciliation landed with the `dataseq` merge exactly as the prerequisite at the end of this section requires; it is now `Accepted` and records the settled API.
 
 | Decision | Proposed ADR topic | Source |
 |---|---|---|

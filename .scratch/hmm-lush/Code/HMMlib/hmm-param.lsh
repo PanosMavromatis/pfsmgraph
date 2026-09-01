@@ -1,0 +1,386 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;;  hmm-param.lsh
+;;
+
+; My code.
+(libload "../HMMlib/hmm")
+
+
+#? ** hmm-param
+;; Class representing a HMM parameter object.
+;; It is a direct subclass of gb-param.
+;; The slots state-p, transition-p, and output-p represent probabilities
+;;  for states, transitions, and outputs respectively, stored as matrices
+;;  of -double-.
+
+(defclass hmm-param object
+  ;; Here the fields are the variable parts of the model, i.e. those
+  ;;  parts that change with training.  Size and state labels need to
+  ;;  be included because of the training algorithms that change the
+  ;;  number of states.
+  ((-obj- (hmm)) model)
+  ((-int-) size)
+  
+  ((-idx1- (-float-)) state-p)
+  ((-idx1- (-float-)) state-entropies)
+  ((-float-) entropy)
+  
+  ((-idx1- (-float-)) init-state-p)
+  ((-idx2- (-float-)) transition-p)
+  ((-idx3- (-float-)) output-p)
+  ((-float-) d)
+  
+  ((-str-) training-log))
+
+
+(defmethod hmm-param hmm-param (in-hmm)
+  ((-obj- (hmm)) in-hmm)
+  (setq model in-hmm)
+  (==> this copy-from-model))
+
+
+(defmethod hmm-param copy-from-model ()
+  (setq size :model:size)
+  (setq state-p (idx-copy :model:state-p))
+  (setq state-entropies (idx-copy :model:state-entropies))
+  (setq entropy :model:entropy)
+  (setq init-state-p (idx-copy :model:init-state-p))
+  (setq transition-p (idx-copy :model:transition-p))
+  (setq output-p (idx-copy :model:output-p))
+  (setq d :model:d)
+  (setq training-log :model:training-log))
+
+(defmethod hmm-param copy-to-model ()
+  (setq :model:size size)
+  (setq :model:state-p (idx-copy state-p))
+  (setq :model:state-entropies (idx-copy state-entropies))
+  (setq :model:entropy entropy)
+  (setq :model:init-state-p (idx-copy init-state-p))
+  (setq :model:transition-p (idx-copy transition-p))
+  (setq :model:output-p (idx-copy output-p))
+  (setq :model:d d)
+  (setq :model:training-log training-log))
+
+
+(defmethod hmm-param update-entropy ()
+  
+  ;; Calculate state probabilites
+  (let ((A (float-matrix size size))
+	(B (float-matrix size)))
+    ((-idx2- (-float-)) A)
+    ((-idx1- (-float-)) B)
+    (for (state-j 0 (1- size))
+	 (A 0 state-j 1.0)
+	 (for (state-i 1 (1- size))
+	      (A state-i state-j
+		 (- (transition-p state-j state-i)
+		    (int-delta state-i state-j)))))
+    (B 0 1.0)
+    (for (state-i 1 (1- size))
+	 (B state-i 0.0))
+    (LU-solve A B state-p))
+  
+  ;; Caluclate state entropies
+  (for (state-i 0 (1- size))
+       (let ((symbol-p-i (float-matrix :model:alphabet-size)))
+	 (for (symbol-k 0 (1- :model:alphabet-size))
+	      (for (state-j 0 (1- size))
+		   (symbol-p-i symbol-k
+			       (+ (symbol-p-i symbol-k)
+				  (* (transition-p state-i state-j)
+				     (output-p state-i state-j symbol-k))))))
+	 (state-entropies state-i (calculate-entropy symbol-p-i))))
+  
+  ;; Calculate total model entropy
+  (setq entropy 0.0)
+  (for (state-i 0 (1- size))
+       (setq+ entropy
+	      (* (state-p state-i)
+		 (state-entropies state-i)))))
+
+
+(defmethod hmm-param view-string ()
+  (let ((transition-str "")
+	(output-str "")
+	(alphabet-size :model:alphabet-size)
+	(alphabet :model:alphabet))
+    (setqC transition-str
+           (sprintf "\nModel Entropy =\n   %f\n"
+		    (round-to entropy 0.0001)))
+    ; Prepare transition and output strings
+    (for (state-i 0 (1- size))
+	 (setqC transition-str
+		(sprintf "\nState %d [%f]\n  init-p = %f\n  entropy = %f\n"
+			 state-i
+			 (state-p state-i)
+			 (init-state-p state-i)
+			 (round-to (state-entropies state-i) 0.0001)))
+	 (for (state-j 0 (1- size))
+	      (let ((transition-p-ij (transition-p state-i state-j)))
+		(when (not (< transition-p-ij 1e-3))
+		  (setqC transition-str
+			 (sprintf " --> %d [%f]\n"
+				  state-j
+				  transition-p-ij))
+		  (setqC output-str
+			 (sprintf "\nTransition %d --> %d\n"
+				  state-i
+				  state-j))
+		  (for (symbol-k 0 (1- alphabet-size))
+		       (let ((output-p-ijk (output-p state-i state-j symbol-k)))
+			 (when (not (< output-p-ijk 1e-3))
+			   (setqC output-str
+				  ;; Before Patrick's hack:
+				  ;;(sprintf "  %l  [%f]\n"
+				  (sprintf "  %s  [%f]\n"
+					   (ptr-str (alphabet symbol-k))
+					   output-p-ijk)))))))))
+    (list transition-str output-str)))
+
+
+(defmethod hmm-param split-state (state-n)
+  ((-int-) state-n)
+  ;; I am giving up this check for now, otherwise it won't compile.
+  ;;    If you add it back, remember to close the parenthesis at the end!
+  ;;    (The check is currently performed by the calling method of hmm-trainer.)
+  ;;  (when (and (>= state-n 0)
+  ;;	     (< state-n 3))
+  (let* ((old-size size)
+	 (new-size (1+ size))
+	 (n-symbols (idx-dim output-p 2))
+	 (last-state old-size)
+	 (new-state-p (float-matrix new-size))
+	 (new-state-entropies (float-matrix new-size))
+	 (new-init-state-p (float-matrix new-size))
+	 (new-transition-p (float-matrix new-size new-size))
+	 (new-output-p (float-matrix new-size new-size n-symbols))
+	 (temp-out-p (float-matrix n-symbols)))
+    ((-int-) old-size)
+    ((-int-) new-size)
+    ((-int-) n-symbols)
+    ((-int-) last-state)
+    ((-idx1- (-float-)) new-state-p)
+    ((-idx1- (-float-)) new-state-entropies)
+    ((-idx1- (-float-)) new-init-state-p)
+    ((-idx2- (-float-)) new-transition-p)
+    ((-idx3- (-float-)) new-output-p)
+    ((-idx1- (-float-)) temp-out-p)
+    
+    ;; First handle generic elements.
+    (for (i 0 (1- old-size))
+	 (new-init-state-p i (state-p i))
+	 (for (j 0 (1- old-size))
+	      (new-transition-p i j (transition-p i j))
+	      (for (k 0 (1- n-symbols))
+		   (new-output-p i j k (output-p i j k)))))
+    
+    ;; Initial state probabilites for the split state
+    (new-init-state-p state-n (* 0.5 (init-state-p state-n)))
+    (new-init-state-p last-state (* 0.5 (init-state-p state-n)))
+    
+    ;; Transitions to the split state from other states
+    (for (j 0 (1- old-size))
+	 (new-transition-p j state-n (* 0.5 (transition-p j state-n)))
+	 (new-transition-p j last-state (* 0.5 (transition-p j state-n)))
+	 (for (k 0 (1- n-symbols))
+	      (new-output-p j last-state k (output-p j state-n k))))
+    
+    ;; Transitions from the split state to other states
+    (for (j 0 (1- old-size))
+	 (rand-p-vector temp-out-p 0.1)
+	 (for (k 0 (1- n-symbols))
+	      (new-output-p state-n j k (temp-out-p k)))
+	 (new-transition-p last-state j (transition-p state-n j))
+	 (rand-p-vector temp-out-p 0.1)
+	 (for (k 0 (1- n-symbols))
+	      (new-output-p last-state j k (temp-out-p k))))
+    
+    ;; Transitions from the split state to itself or its partner
+    (rand-p-vector temp-out-p 0.1)
+    (for (k 0 (1- n-symbols))
+	 (new-output-p state-n last-state k (temp-out-p k)))
+    (new-transition-p last-state state-n (* 0.5 (transition-p state-n state-n)))
+    (new-transition-p last-state last-state (* 0.5 (transition-p state-n state-n)))
+    (rand-p-vector temp-out-p 0.1)
+    (for (k 0 (1- n-symbols))
+	 (new-output-p last-state last-state k (temp-out-p k)))
+    
+    ;; Replacing the old parameters with the new ones
+    (setq size new-size)
+    (setq state-p new-state-p)
+    (setq state-entropies new-state-entropies)
+    (setq init-state-p new-init-state-p)
+    (setq transition-p new-transition-p)
+    (setq output-p new-output-p)))
+
+
+(defmethod hmm-param merge-states (state-n1 state-n2)  ;; Make compilable!
+  ((-int-) state-n1)
+  ((-int-) state-n2)
+  ;; I am giving up this check for now, otherwise it won't compile.
+  ;;    If you add it back, remember to close the parenthesis at the end!
+  ;;    (The check is currently performed by the calling method of hmm-trainer.)
+  ;;  (when (and (>= state-n1 0)
+  ;;	     (< state-n1 size)
+  ;;	     (>= state-n2 0)
+  ;;	     (< state-n2 size)
+  ;;	     (<> state-n1 state-n2))
+  (when (> state-n1 state-n2)
+    (let ((temp 0))
+      ((-int-) temp)
+      (setq temp state-n1)
+      (setq state-n1 state-n2)
+      (setq state-n2 temp)))
+  (let* ((old-size size)
+	 (new-size (1- size))
+	 (n-symbols (idx-dim output-p 2))
+	 (old-state-numbers (int-matrix new-size))
+	 (new-state-p (float-matrix new-size))
+	 (new-state-entropies (float-matrix new-size))
+	 (new-init-state-p (float-matrix new-size))
+	 (new-transition-p (float-matrix new-size new-size))
+	 (new-output-p (float-matrix new-size new-size n-symbols)))
+    ((-int-) old-size)
+    ((-int-) new-size)
+    ((-int-) n-symbols)
+    ((-idx1- (-int-)) old-state-numbers)
+    ((-idx1- (-float-)) new-state-p)
+    ((-idx1- (-float-)) new-state-entropies)
+    ((-idx1- (-float-)) new-init-state-p)
+    ((-idx2- (-float-)) new-transition-p)
+    ((-idx3- (-float-)) new-output-p)
+    
+    ;; Initialize old-state-numbers
+    (for (i 0 (1- state-n2))
+	 (old-state-numbers i i))
+    (for (i (1+ state-n2) (1- old-size))
+	 (old-state-numbers (1- i) i))
+    
+    ;; First handle generic elements
+    (for (i 0 (1- new-size))
+	 (new-init-state-p i (state-p (old-state-numbers i)))
+	 (for (j 0 (1- new-size))
+	      (new-transition-p i j (transition-p (old-state-numbers i)
+						  (old-state-numbers j)))
+	      (for (k 0 (1- n-symbols))
+		   (new-output-p i j k (output-p (old-state-numbers i)
+						 (old-state-numbers j)
+						 k)))))
+    
+    ;; Initial state probabilites for the merged state
+    (new-init-state-p state-n1 (+ (init-state-p state-n1)
+				  (init-state-p state-n2)))
+    
+    ;; Transitions to the merged state from other states
+    (for (j 0 (1- new-size))
+	 (let* ((old-j (old-state-numbers j))
+		(transition-p-j-n1 (transition-p old-j state-n1))
+		(transition-p-j-n2 (transition-p old-j state-n2))
+		(transition-p-j-sum (+ transition-p-j-n1 transition-p-j-n2)))
+	   ((-int-) old-j)
+	   ((-float-) transition-p-j-n1)
+	   ((-float-) transition-p-j-n2)
+	   ((-float-) transition-p-j-sum)
+	   (new-transition-p j state-n1
+			     (+ transition-p-j-n1
+				transition-p-j-n2))
+	   (for (k 0 (1- n-symbols))
+		(new-output-p j state-n1 k
+			      (safe-/ (+ (* transition-p-j-n1
+					    (output-p old-j state-n1 k))
+					 (* transition-p-j-n2
+					    (output-p old-j state-n2 k)))
+				      transition-p-j-sum)))))
+    
+    ;; Transitions from the merged state to other states
+    (for (j 0 (1- new-size))
+	 (let* ((old-j (old-state-numbers j))
+		(p-1 (state-p state-n1))
+		(p-2 (state-p state-n2))
+		(p-sum (+ p-1 p-2))
+		(transition-p-n1-j (transition-p state-n1 old-j))
+		(transition-p-n2-j (transition-p state-n2 old-j))
+		(transition-p-j-wsum 0.0))
+	   ((-int-) old-j)
+	   ((-float-) p-1)
+	   ((-float-) p-2)
+	   ((-float-) p-sum)
+	   ((-float-) transition-p-n1-j)
+	   ((-float-) transition-p-n2-j)
+	   ((-float-) transition-p-j-wsum)
+	   (setq p-1 (safe-/ p-1 p-sum))
+	   (setq p-2 (safe-/ p-2 p-sum))
+	   (setq transition-p-j-wsum
+		 (+ (* p-1 transition-p-n1-j)
+		    (* p-2 transition-p-n2-j)))
+	   (new-transition-p state-n1 j
+			     (+ (* p-1 transition-p-n1-j)
+				(* p-2 transition-p-n2-j)))
+	   (for (k 0 (1- n-symbols))
+		(new-output-p state-n1 j k
+			      (safe-/ (+ (* p-1 transition-p-n1-j
+					    (output-p state-n1 old-j k))
+					 (* p-2 transition-p-n2-j
+					    (output-p state-n2 old-j k)))
+				      transition-p-j-wsum)))))
+    
+    ;; Transitions from the merged state to itself
+    (let* ((p-1 (state-p state-n1))
+	   (p-2 (state-p state-n2))
+	   (p-sum (+ p-1 p-2))
+	   (t-1-1 (transition-p state-n1 state-n1))
+	   (t-1-2 (transition-p state-n1 state-n2))
+	   (t-2-1 (transition-p state-n2 state-n1))
+	   (t-2-2 (transition-p state-n2 state-n2))
+	   (wsum 0.0))
+      ((-float-) p-1)
+      ((-float-) p-2)
+      ((-float-) p-sum)
+      ((-float-) t-1-1)
+      ((-float-) t-1-2)
+      ((-float-) t-2-1)
+      ((-float-) t-2-2)
+      ((-float-) wsum)
+      (setq p-1 (safe-/ p-1 p-sum))
+      (setq p-2 (safe-/ p-2 p-sum))
+      (setq wsum (+ (* p-1 (+ t-1-1 t-1-2))
+		    (* p-2 (+ t-2-1 t-2-2))))
+      (new-transition-p state-n1 state-n1
+			wsum)
+      (for (k 0 (1- n-symbols))
+	   (new-output-p state-n1 state-n1 k
+			 (safe-/ (+ (* p-1 t-1-1
+				       (output-p state-n1 state-n1 k))
+				    (* p-1 t-1-2
+				       (output-p state-n1 state-n2 k))
+				    (* p-2 t-2-1
+				       (output-p state-n2 state-n1 k))
+				    (* p-2 t-2-2
+				       (output-p state-n2 state-n2 k)))
+				 wsum))))
+    
+    ;; Replacing the old parameters with the new ones
+    (setq size new-size)
+    (setq state-p new-state-p)
+    (setq state-entropies new-state-entropies)
+    (setq init-state-p new-init-state-p)
+    (setq transition-p new-transition-p)
+    (setq output-p new-output-p)))
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(dhc-make
+ ()
+ (hmm-param
+  copy-from-model
+  hmm-param
+  copy-to-model
+  update-entropy
+  split-state
+  merge-states
+  ))
+
+

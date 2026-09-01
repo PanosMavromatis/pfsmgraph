@@ -1,0 +1,574 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;;  util.lsh
+;;
+
+;; Various odds and ends.
+
+
+(dmd unless (condition &rest body)
+  `(when (not ,condition) ,@body))
+
+
+(de member-pos (elt lst)
+  (let ((sublst (member elt lst)))
+    (when sublst
+      (- (length lst) (length sublst)))))
+
+
+(dmd add-to (lst elt)
+  `(setq ,lst (append ,lst (list ,elt))))
+
+
+(dmd not-eof ()
+  '(<> (skip-char) "\e"))
+
+
+(dmd setq+ (lhs rhs)
+  `(setq ,lhs (+ ,lhs ,rhs)))
+
+(dmd setq- (lhs rhs)
+  `(setq ,lhs (- ,lhs ,rhs)))
+
+(dmd setq* (lhs rhs)
+  `(setq ,lhs (* ,lhs ,rhs)))
+
+(dmd setq/ (lhs rhs)
+  `(setq ,lhs (/ ,lhs ,rhs)))
+
+
+(dmd setqC (lhs rhs)
+  `(setq ,lhs (concat ,lhs ,rhs)))
+
+
+(de safe-/ (num den)
+  ((-float-) num)
+  ((-float-) den)
+  (if (= den 0)
+      0.0
+    (/ num den)))
+
+
+(de trunc-using (x d)
+  (/ (div (* x d) 1) d))
+
+(de round (x)
+  ((-float-) x)
+  (int (+ x 0.5)))
+
+(de round-using (x d)
+  ((-float-) x)
+  ((-float-) d)
+  (/ (round (* x d)) d))
+
+(de round-to (x tol)
+  ((-float-) x)
+  ((-float-) tol)
+  (* (round (/ x tol)) tol))
+
+(de int-up (x)
+  ((-float-) x)
+  (- (int (- x))))
+
+(de round-up-to (x tol)
+  (* (int-up (/ x tol)) tol)))
+
+
+(de match-sign (a b)
+  ((-float-) a)
+  ((-float-) b)
+  (if (>= b 0)
+      (abs a)
+    (- (abs a))))
+
+
+
+;; Function minimization
+
+(dmd shift-4 (a b c d)
+  `(progn
+     (setq ,a ,b)
+     (setq ,b ,c)
+     (setq ,c ,d)))
+
+
+(de minimize-from (f lx)
+  (let ((x-min 0)
+	(fx-min 1e100)
+	(fx ()))
+    (each ((x lx))
+      (setq fx (apply f (list x)))
+      (when (< fx fx-min)
+	(setq x-min x)
+	(setq fx-min fx)))
+    (list x-min fx-min)))
+
+
+
+(de minimize-int (f a x b)
+  (let* ((real-x (car (minimize f a x b 1e-2)))
+	 (x- (div real-x 1))
+	 (x+ (1+ x-))
+	 (fx- (apply f (list x-)))
+	 (fx+ (apply f (list x+))))
+    (if (< fx- fx+)
+	(list x- fx-)
+      (list x+ fx+))))
+
+
+(de minimize (f a x b tol); &optional (tol 1e-3)) ; (tol 1e-2)) ; initially 1e-4
+;  ((-gptr-) f)
+  ((-float-) a)
+  ((-float-) x)
+  ((-float-) b)
+  ((-float-) tol)
+  (let* ((CGOLD (/ (- 3 (sqrt 5)) 2))
+	 (ZEPS 1e-10)
+	 (u 0.0)
+	 (v x)
+	 (w x)
+	 (fx (apply f (list x)))
+;	 (fx (f x))
+	 (fu 0.0)
+	 (fv fx)
+	 (fw fx)
+	 (xm (/ (+ a b) 2))
+	 (tol1 (+ (* tol (abs x)) ZEPS))
+	 (tol2 (* 2 tol1))
+	 (d 0.0)
+	 (e 0.0)
+	 (etemp 0.0)
+	 (p 0.0)
+	 (q 0.0)
+	 (r 0.0))
+    ((-float-) CGOLD)
+    ((-float-) ZEPS)
+    ((-float-) u)
+    ((-float-) v)
+    ((-float-) w)
+    ((-float-) fx)
+    ((-float-) fu)
+    ((-float-) fv)
+    ((-float-) fw)
+    ((-float-) xm)
+    ((-float-) tol1)
+    ((-float-) tol2)
+    ((-float-) d)
+    ((-float-) e)
+    ((-float-) etemp)
+    ((-float-) p)
+    ((-float-) q)
+    ((-float-) r)
+    (while (> (abs (- x xm))
+	      (- tol2 (/ (- b a) 2)))
+      ; Construct a trial parabolic fit
+      (if (> (abs e) tol1)
+	  (progn
+	    (setq r (* (- x w) (- fx fv)))
+	    (setq q (* (- x v) (- fx fw)))
+	    (setq p (- (* (- x v) q)
+		       (* (- x w) r)))
+	    (setq q (* 2 (- q r)))
+	    (if (> q 0)
+		(setq p (- p)))
+	    (setq q (abs q))
+	    (setq etemp e)
+	    (setq e d)
+	    (if (or (>= (abs p) (abs (* 0.5 q etemp)))
+		    (<= p (* q (- a x)))
+		    (>= p (* q (- b x))))
+		(progn
+		  (setq e (if (>= x xm)
+			      (- a x)
+			    (- b x)))
+		  (setq d (* CGOLD e)))
+	      (setq d (/ p q))
+	      (setq u (+ x d))
+	      (if (or (< (- u a) tol2)
+		      (< (- b u) tol2))
+		  (setq d (match-sign tol1 (- xm x))))))
+	(setq e (if (>= x xm)
+		    (- a x)
+		  (- b x)))
+	(setq d (* CGOLD e)))
+      ; Function evaluation
+      (setq u (if (>= (abs d) tol1)
+		  (+ x d)
+		(+ x (match-sign tol1 d))))
+      (setq fu (apply f (list u)))
+      ; Decide what to do with new value
+      (if (<= fu fx)
+	  (progn
+	    (if (>= u x)
+		(setq a x)
+	      (setq b x))
+	    (shift-4 v w x u)
+	    (shift-4 fv fw fx fu))
+	(if (< u x)
+	    (setq a u)
+	  (setq b u))
+	(if (or (<= fu fw)
+		(= w x))
+	    (progn
+	      (setq v w)
+	      (setq w u)
+	      (setq fv fw)
+	      (setq fw fu))
+	  (if (or (<= fu fv)
+		  (= v x)
+		  (= v w))
+	      (progn
+		(setq v u)
+		(setq fv fu)))))
+      ; Prepare for next loop
+      (setq xm (/ (+ a b) 2))
+      (setq tol1 (+ (* tol (abs x)) ZEPS))
+      (setq tol2 (* 2 tol1)))
+    (list x fx)))
+
+
+;; The following is adapted from Numerical Recipes in C
+;;  Given a N x N matrix A, this routine replaces it by the LU decomposition of 
+;;  a row-wise permutation of itself.  A and N are input.  A is output, arranged
+;;  in the following form:
+;;      U00  U01  U02 ...
+;;      L10  U11  U12 ...
+;;      L20  L21  U22 ...
+;;       ...
+;;  INDX is an output vector of length N that records the row permutation 
+;;  effected by the partial pivoting.  D is returned as +1/-1 depending on
+;;  whether the number of row interchanges was even or odd, respectively.
+;; This function is used in combination with LU-back-substitution to solve
+;;  linear equations or invert a matrix.
+;;    beta_ij = a_ij - sum_{k=1,i-1} alpha_ik beta_kj                 (2.3.12)
+;;    alpha_ij = ( a_ij - sum_{k=1,j-1} alpha_ik beta_kj ) / beta_jj  (2.3.13)
+
+(de LU-decomposition (A N INDX)
+  ((-idx2- (-float-)) A)
+  ((-int-) N)
+  ((-idx1- (-float-)) INDX)
+  (let ((D 1.0)             ; No row interchanges yet.
+        (*TINY* 1e-20)
+        (I 0)
+        (IMAX 0)
+        (J 0)
+        (K 0)
+        (BIG 0.0)
+        (DUM 0.0)
+        (SUM 0.0)
+        (TEMP 0.0)
+        (VV (float-matrix (1+ N))))
+    ; VV stores the implicit scaling of each row.
+    ((-float-) D)
+    ((-float-) *TINY*)
+    ((-int-) I)
+    ((-int-) IMAX)
+    ((-int-) J)
+    ((-int-) K)
+    ((-float-) BIG)
+    ((-float-) DUM)
+    ((-float-) SUM)
+    ((-float-) TEMP)
+    ((-idx1- (-float-)) VV)
+    ; Loop over rows to get the implicit scaling information.
+    (for (I 1 N)
+	 (setq BIG 0.0)
+	 (for (J 1 N)
+	      (setq TEMP (abs (A I J)))
+	      (when (> TEMP BIG)
+		(setq BIG TEMP)))
+	 (when (= BIG 0.0)
+	   (error "Singular matrix in function LU-decomposition"))
+	 ; No non-zero largest element.  Save the scaling.
+	 (VV I (/ 1.0 BIG)))
+    ; This is the loop over columns of Crout's method.
+    (for (J 1 N)
+	 ; This is eq. 2.3.12, except for i = j.
+	 (for (I 1 (1- J))
+	      (setq SUM (A I J))
+	      (for (K 1 (1- I))
+		   (setq- SUM (* (A I K) (A K J))))
+	      (A I J SUM))
+	 ; Initialize for the search for largest pivot element.
+	 (setq BIG 0.0)
+	 ; This is i = j of equation 2.3.12 and i = j+1 ... N
+	 ;   of equation 2.3.13.
+	 (for (I J N)
+	      (setq SUM (A I J))
+	      (for (K 1 (1- J))
+		   (setq- SUM (* (A I K) (A K J))))
+	      (A I J SUM)
+	      (setq DUM (* (VV I) (abs SUM)))
+	      ; Is the figure of merit for the pivot better than the best so far?
+	      (when (>= DUM BIG)
+		(setq BIG DUM)
+		(setq IMAX I)))
+	 ; Do we need to interchange rows?
+	 (when (<> J IMAX)
+	   ; Yes, do so...
+	   (for (K 1 N)
+		(setq DUM (A IMAX K))
+		(A IMAX K (A J K))
+		(A J K DUM))
+	   ; ...and change the parity of D.
+	   (setq* D -1.0)
+	   ; Also interchange the scale factor.
+	   (VV IMAX (VV J)))
+	 (INDX J IMAX)
+	 ; If the pivot element is zero, the matrix is singular (at least to the
+	 ;   precision of the algorithm).  For some applications on singular
+	 ;   matrices, it is desirable to substitute *TINY* for zero.
+	 (when (= (A J J) 0.0)
+	   (A J J *TINY*))
+	 ; Now, finally, divide by the pivot element.
+	 (when (<> J N)
+	   (setq DUM (/ 1.0 (A J J)))
+	   (for (I (1+ J) N)
+		(A I J (* (A I J) DUM)))))
+    ; Go back for the next column in the reduction
+    D))
+
+
+;; The following is adapted from Numerical Recipes in C
+;;  Solves the set of linear equations A X = B.  Here A is input, not as the
+;;  matrix A but rather as its LU decomposition, determined by the function
+;;  LU-decomposition.  INDX is input as the permutation vector returned by 
+;;  LU-decomposition.  B is input as the right-hand side vector, and returns
+;;  with the solution vector X.  A, N, and INDX are not modified by this
+;;  function, and can be left in place for successive calls with different 
+;;  right-hand sides B.  This function takes into account the possibility
+;;  that B will begin with many zero elements, so it is efficient for use
+;;  in matrix inversion.
+;;    y_1 = b+1 / alpha_11
+;;    y_i = ( b_i - sum_{j=1,i-1} alpha_ij y_j ) / alpha_ii  (2.3.6)
+;;          i = 2,3, ... N
+;;    x_N = y_N / beta_NN
+;;    x_i = ( y_i - sum_{j=i+1,N} beta_ij x_j ) / beta_ii    (2.3.7)
+;;          i = N-1, N-2, ... 1
+
+(de LU-back-substitution (A N INDX B)
+  ((-idx2- (-float-)) A)
+  ((-int-) N)
+  ((-idx1- (-float-)) INDX)
+  ((-idx1- (-float-)) B)
+  (let ((I 0)
+	(II 0)
+	(IP 0)
+	(J 0)
+	(SUM 0.0))
+    ((-int-) I)
+    ((-int-) II)
+    ((-int-) IP)
+    ((-int-) J)
+    ((-float-) SUM)
+    ; When II is set to a positive value, it will become the index of the 
+    ;  first non-vanishing element of B.  We now do the forward substitution,
+    ;  equation 2.3.6.  The only wrinkle is to unscramble the permutation
+    ;  as we go.
+    (for (I 1 N)
+	 (setq IP (INDX I))
+	 (setq SUM (B IP))
+	 (B IP (B I))
+	 (if (<> II 0)
+	     (for (J II (1- I))
+		  (setq- SUM (* (A I J) (B J))))
+	   ; A non-zero element was encountered, so from now on we will
+	   ;  have to do the sums in the loop above.
+	   (when (<> SUM 0.0)
+	     (setq II I)))
+	 (B I SUM))
+    ; Now we do the back-substitution, equation 2.3.7.
+    (for (I N 1 -1)
+	 (setq SUM (B I))
+	 (for (J (1+ i) N)
+	      (setq- SUM (* (A I J) (B J))))
+	 ; Store a component of the solution vector X.
+	 (B I (/ SUM (A I I))))))
+
+
+(de LU-solve (A B X)
+  ((-idx2- (-float-)) A)
+  ((-idx1- (-float-)) B)
+  ((-idx1- (-float-)) X)
+  (let* ((N (idx-dim B 0))
+	 (N1 (1+ N))
+	 (A1 (float-matrix N1 N1))
+	 (B1 (float-matrix N1))
+	 (INDX (float-matrix N1))
+	 (I 0)
+	 (J 0))
+    ((-int-) N)
+    ((-int-) N1)
+    ((-idx2- (-float-)) A1)
+    ((-idx1- (-float-)) B1)
+    ((-idx1- (-float-)) INDX)
+    ((-int-) I)
+    ((-int-) J)
+    (for (I 1 N)
+	 (B1 I (B (1- I)))
+	 (for (J 1 N)
+	      (A1 I J (A (1- I) (1- J)))))
+    (LU-decomposition A1 N INDX)
+    (LU-back-substitution A1 N INDX B1)
+    (for (I 1 N)
+	 (X (1- I) (B1 I)))))
+
+
+(de int-delta (x y)
+  ((-int-) x)
+  ((-int-) y)
+  (if (= x y)
+      1.0
+    0.0))
+
+
+;; Calculating description lengths
+
+(de log2 (x)
+  ((-float-) x)
+  (/ (log x) (log 2)))
+
+(de safe-add--log2 (sum x)
+  ((-float-) sum)
+  ((-float-) x)
+  (if (or (= sum -1)
+	  (= x 0))
+      -1
+    (- sum (log2 x))))
+
+(de safe->--log (x y)
+  ((-float-) x)
+  ((-float-) y)
+  (and (<> y -1)
+       (or (= x -1)
+	   (> x y))))
+
+
+
+(de calculate-entropy (p)
+  ((-idx1- (-float-)) p)
+  (let ((p-i 0.0)
+	(result 0.0))
+    ((-float-) p-i)
+    ((-float-) result)
+    (for (i 0 (1- (idx-dim p 0)))
+	 (setq p-i (p i))
+	 (when (<> p-i 0.0)
+	   (setq- result
+		  (* p-i (log2 p-i)))))
+    result))
+
+
+
+(de int-code-length (n)
+  ((-float-) n)
+  (if (< n 0)
+      0.0
+    (setq+ n 1)
+    (let ((result (log2 2.865)))
+      ((-float-) result)
+      (while (> n 1)
+	(setq n (log2 n))
+	(setq+ result n))
+      result)))
+
+(de comb-code-length (sum m)
+  ((-float-) sum)
+  ((-int-) m)
+  (if (or (< sum 0.0)
+	  (<= m 1))
+      0.0
+    (let ((result (log2 (+ sum m))))
+      ((-float-) result)
+      (for (i 1 (1- m))
+	   (setq+ result (log2 (+ sum i)))
+	   (setq- result (log2 i)))
+      result)))
+
+
+
+;; Other stuff
+
+(de blank-str (in-str)
+  (regex-subst "." " " in-str))
+
+
+(de zero-padded (n l)
+  (let ((p (** 10 l)))
+    (if (>= n p)
+	(sprintf "%d" n)
+      (strdel (sprintf "%d" (+ n p))
+	      0 1))))
+
+
+
+;; Should have been defined in Lush!
+(de mkdir-on-need (path)
+  (if (filep path)
+      (error (concat "mkdir-on-need : " path " is a file."))
+    (when (not (dirp path))
+      (mkdir-on-need (dirname path))
+      (mkdir path))))
+
+(de idx-copy-svector (in-svector)
+  (let* ((svector-length (idx-dim in-svector 0))
+	 (out-svector (array svector-length)))
+    (for (i 0 (1- svector-length))
+	 (out-svector i (in-svector i)))
+    out-svector))
+
+
+
+;; Will try to make compilable.
+(de rand-p-vector (m noise-width)
+  ((-idx1- (-float-)) m)
+  ((-float-) noise-width)
+  (let ((m-size (idx-dim m 0)))
+    ((-int-) m-size)
+    ; Add random perturbations
+    (for (i-elt 0 (1- m-size))
+	 (m i-elt (+ 1.0 (* noise-width (rand 1.0 -1.0)))))
+; I tried the following, but it doesn't work very well.
+;	 (m i-elt (abs (+ (m i-elt)
+;			  (* noise-width (rand 1.0 -1.0))))))
+    ; Normalize
+    (let ((m-sum (idx-sum m)))
+      ((-idx0- (-float-)) m-sum)
+      (idx-dotm0 m ((float-matrix) (/ 1 (m-sum))) m)
+
+;; Above replaces below and utilizes LUSH tensor library
+;;      (for (i-elt 0 (1- m-size))
+;;	   (m i-elt (/ (m i-elt) (m-sum))))
+      ) )
+  ())
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(dhc-make
+ ()
+; setq+
+; setq-
+; setq*
+; setq/
+ safe-/
+ round
+ round-using
+ round-to
+ match-sign  ; only used in `minimize'?
+ 
+ LU-decomposition
+ LU-back-substitution
+ LU-solve
+ int-delta
+ 
+ log2
+ safe-add--log2
+ safe->--log
+ calculate-entropy
+ int-code-length
+ comb-code-length
+; minimize
+ rand-p-vector
+; idx-copy-svector
+)

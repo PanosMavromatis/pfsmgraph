@@ -1,0 +1,195 @@
+# Import of the two SegAlign trees (1.7 GB on disk, ~83% of it one virtualenv and
+# one `.venv`). Only what goal 4 argues from is wanted, so the rule is the same
+# deny-by-default used by the other two imports: nothing here is tracked unless it
+# is named below.
+#
+# This file lives in `.scratch/py-rudimentary/` rather than the repo root so that each
+# import owns its own rules -- see `.scratch/README.md`. (It originally said "so
+# that deleting `.scratch/` at the end of the merge removes the rules along with
+# what they describe". `.scratch/` is no longer deleted, as of 2026-08-31: it is
+# the migration source for `hmm` and `align` 0.1.0 too. The tracked set is now
+# re-scoped per package instead, which a per-import policy supports directly.)
+#
+# The repo-root `.gitignore` still applies underneath these rules, and is what
+# keeps `.DS_Store`, `__pycache__/`, `*.pyc`, `.venv`, and `.pytest_cache/` out
+# even inside the re-included directories. Do not restate those here; a negation
+# added below could re-admit them by accident. This matters more in this import
+# than in the other two, because `data/` below is re-included by a `**` pattern
+# that would otherwise reach into `__pycache__/`.
+#
+# BOTH renames recorded in `.scratch/README.md` were needed this time, unlike the
+# `hmm-lush` import where neither was:
+#   SegAlign-Draft/.git -> .git-disabled     embedded repo; `git add` on a path
+#   segalign/.git       -> .git-disabled     inside one silently stages nothing
+#   segalign/CLAUDE.md  -> CLAUDE.md.orig    would enter pfsmgraph sessions
+# Revisions were captured before disabling, and are in `.scratch/README.md`.
+#
+# `segalign/.claude/settings.local.json` is another project's tool configuration.
+# It is not a hazard the way the nested `CLAUDE.md` was -- Claude Code reads
+# `.claude/` from the project root, not from arbitrary subdirectories -- but it is
+# not ours and the catch-all excludes it.
+
+# --- deny everything at this level -------------------------------------------
+/*
+!/.gitignore
+
+# Our own writing about the import. This negation is easy to forget and fails
+# silently: a file written here without it is simply invisible to `git status`,
+# so the work looks committed and is not. It has now caught out two of the three
+# imports, so treat it as the default failure mode rather than a one-off.
+!/*.md
+
+!/segalign/
+!/SegAlign-Draft/
+
+# =============================================================================
+# segalign -- the third `dataseq` implementation proper
+# =============================================================================
+# `ca97809` (2025-09-05), a refactoring of SegAlign-Draft that extracts a `seq/`
+# subpackage. This is the tree goal 4 compares against; `src/segalign/seq/` is
+# the merge-relevant code and everything else here is either what it imports or
+# what tests it.
+
+/segalign/*
+!/segalign/README.md
+
+# Declared dependencies. `docs/plan/DEFERRED.md` makes `dataseq`'s own third-party
+# dependencies a function of what the merge sources actually need, and this file
+# is that evidence: `Dataset` holds `pd.DataFrame`, so unlike the Lush original
+# (whose translation is stdlib-only) this implementation cannot be read as
+# supporting `dependencies = []`.
+!/segalign/pyproject.toml
+
+!/segalign/src/
+!/segalign/tests/
+
+/segalign/src/*
+!/segalign/src/segalign/
+
+# --- the package: seq/, plus exactly what importing it requires --------------
+# `from segalign.seq import Dataset` executes `src/segalign/__init__.py`, which
+# does `from . import seq`, `from . import glob` and `from . import data`. So
+# `glob/` and `data/` are not optional context: without them the merge target
+# does not import, and the tests below do not run. This is the same criterion the
+# `hmm-lush` rules use for `Code/Utility/`.
+/segalign/src/segalign/*
+!/segalign/src/segalign/__init__.py
+!/segalign/src/segalign/seq/
+!/segalign/src/segalign/glob/
+!/segalign/src/segalign/data/
+
+# The merge target: dataset.py (the container and its encoder), alignment.py (the
+# consumer -- `dataseq`'s shape is only legible against what reads it).
+/segalign/src/segalign/seq/*
+!/segalign/src/segalign/seq/*.py
+
+# `glob/__init__.py` imports `needleman_wunsch`, which is why this is here rather
+# than in the alignment-scope set turned away below. Note that it is also the one
+# file in this tree that differs from `ca97809` -- the working copy was modified
+# and not committed, so a claim checked against GitHub will not match it.
+/segalign/src/segalign/glob/*
+!/segalign/src/segalign/glob/*.py
+
+# --- the corpus: All.csv only ------------------------------------------------
+# `Dataset.from_directories` walks this tree for `All.csv` (tab-separated, columns
+# Text/Stress/Boundary/Pitch/Token) and builds the vocabulary from one of them,
+# so these files are both the input-format specification and what makes the tests
+# below executable rather than merely readable. 50 files, 200 KB.
+#
+# Contrast the `.sds` directories in `.scratch/hmm-lush/`, which had to be tracked
+# whole because `_size` is a count the loader trusts, so a partial copy is corrupt
+# rather than small. There is no such count here: `from_directories` globs the
+# directories it finds and skips a verse whose `All.csv` is absent. Tracking a
+# subset would therefore be safe -- all 50 are kept only because they are cheap.
+#
+# The `**/` negation re-includes directories so git will descend; the root
+# `.gitignore` is what stops that from reaching `__pycache__/`.
+/segalign/src/segalign/data/**/*
+!/segalign/src/segalign/data/**/
+!/segalign/src/segalign/data/**/__init__.py
+!/segalign/src/segalign/data/**/All.csv
+
+# --- tests: the seq/ suite ---------------------------------------------------
+# Tests are evidence of intended behaviour, and they are the only place the
+# encoder's contract is written down as an assertion rather than a docstring.
+# They exercise the real corpus above via `from_directories("chant/greg/tract/m8")`
+# rather than fixtures, which is why the corpus is tracked at all.
+/segalign/tests/*
+!/segalign/tests/__init__.py
+!/segalign/tests/seq/
+/segalign/tests/seq/*
+!/segalign/tests/seq/*.py
+
+# =============================================================================
+# SegAlign-Draft -- evidence only
+# =============================================================================
+# `9dc37b9` (2025-06-30), the predecessor. It is NOT a fourth `dataseq`
+# implementation: it has no sequence abstraction at all, and that absence is the
+# finding goal 4 records. An absence is a negative claim, which a directory
+# listing evidences about as well as a file does -- so one signature is tracked
+# to make it positive, and nothing else.
+#
+# `ss2_alignment(seq1: List[Any], seq2: List[Any], ...)` is that signature:
+# sequences enter the alignment as bare Python lists, with no container, no
+# vocabulary and no encoder anywhere in the tree.
+
+/SegAlign-Draft/*
+!/SegAlign-Draft/README.md
+!/SegAlign-Draft/requirements.txt
+!/SegAlign-Draft/src/
+/SegAlign-Draft/src/*
+!/SegAlign-Draft/src/segalign/
+/SegAlign-Draft/src/segalign/*
+!/SegAlign-Draft/src/segalign/glob/
+/SegAlign-Draft/src/segalign/glob/*
+!/SegAlign-Draft/src/segalign/glob/ss2_alignment.py
+
+# --- deliberately not tracked, with reasons ----------------------------------
+# Named here rather than left to the catch-all so that the reasoning survives.
+#
+# The bar is higher for this import than for the other two, and the reason is
+# provenance. `hmm-lush` was under no version control and was irreplaceable, so
+# tracking it was preservation. Both trees here are clean checkouts of live
+# GitHub repositories at recorded revisions, so anything turned away below costs
+# one `git clone` to recover.
+#
+# NOTE (2026-08-31): this paragraph originally continued "-- and since `.scratch/`
+# is deleted by the last goal of this branch, tracking alignment code 'for the
+# `align` package later' would not survive to reach `align` in any case". That
+# premise is void: `.scratch/` is retained. The exclusions below still stand, but
+# now for a better reason than impermanence -- `.scratch/align-poc/` holds
+# `tokalign`, which is the actual ancestor of `pfsmgraph-align` and supersedes
+# this tree's alignment code as a migration source. When the `align` phase opens,
+# widen `align-poc`'s policy, not this one. Nothing here is HMM-related either, so
+# the `hmm` phase widens `.scratch/hmm-lush/`, not this one. With both settled,
+# this import is spent and its tracked set is final.
+#
+#   SegAlign-Draft/SegAlign.env/   927 MB virtualenv.
+#   segalign/.venv/                460 MB.
+#   */.git-disabled/               165 MB of history, still readable with
+#                                  `git --git-dir=<path>/.git-disabled log`.
+#   SegAlign-Draft/src/segalign/tcoffee/
+#                                  6 modules, ~1000 lines: a T-Coffee multiple
+#                                  alignment implementation with guide tree and
+#                                  extended library. Substantial, and squarely in
+#                                  `pfsmgraph-align`'s scope rather than
+#                                  `dataseq`'s. Recoverable from 9dc37b9.
+#   SegAlign-Draft/src/segalign/{util,input,loc}/, .../glob/edit_cost.py
+#                                  Same reasoning -- alignment scope.
+#   SegAlign-Draft/{notebooks,Legacy,Data,docker}/
+#                                  129 MB, 15 MB, 3.4 MB. Exploratory, superseded,
+#                                  and unreferenced by the tracked signature.
+#   segalign/notebooks/, main.py, uv.lock
+#                                  Exploratory; a lock for a project we are not
+#                                  building.
+#   segalign/src/segalign/data/**/{Input.py,input.py,input_template.py}
+#                                  50 files, 204 KB. The hand-authored sources the
+#                                  All.csv files were generated from. Not imported
+#                                  (`data/__init__.py` declares `__all__ = []` and
+#                                  imports no subpackage), and the CSVs are what
+#                                  `from_directories` actually reads.
+#   segalign/src/segalign/data/**/*.{png,svg,txt,ipynb}
+#                                  Engraved score images and LilyPond output --
+#                                  4.4 MB of the 4.6 MB under `data/`.
+#   segalign/CLAUDE.md.orig,       Another project's agent instructions and tool
+#   segalign/.claude/              configuration. See the header.

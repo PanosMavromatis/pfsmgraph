@@ -46,8 +46,10 @@ cheapest to fix and most expensive to leave:
 - **`docs/design/adr/` vs. `docs/design/PRD.md` vs. `docs/agents/core.md`.** Three documents
   describe one design. Claim drift between them is the live risk — the ADRs are authoritative
   where they overlap the PRD, and `core.md` must not contradict either. Check specifically that
-  ADR statuses (`Proposed` vs. `Accepted`) still match reality; ADR 0010 is `Proposed` pending
-  the `dataseq` encoder API.
+  ADR statuses (`Proposed` vs. `Accepted`) still match reality. As of 2026-09-01 the only
+  non-`Accepted` record is **0012**, `Accepted (temporary)` until the first `.pyx`; 0010 was
+  promoted when the encoder API landed. A document still describing 0010 as `Proposed`, or
+  `SymbolTable` as provisional, is stale and worth a finding.
 - **`packages/*/pyproject.toml` dependency bounds.** ADR 0006's workspace footgun: a
   `{ workspace = true }` source satisfies *any* constraint, so a wrong `>=` bound cannot fail
   locally and only breaks a pip user post-publish. Every intra-family bound currently reads
@@ -85,6 +87,151 @@ cheapest to fix and most expensive to leave:
 **`hseg` is deliberately absent from this list.** It has the largest design gap of the five
 packages and will get its own sidecar once that settles; do not improvise review criteria for
 it from this file in the meantime.
+
+**`.scratch/` is not a review target.** On the `feat/dataseq-merge` branch, `.scratch/` holds
+the three existing `dataseq` implementations imported for side-by-side comparison, together
+with our own account of them and a Python transliteration of the Lush original. **That
+transliteration is deliberately idiomatic rather than literal** — it reproduces the original's
+*implementation decisions* in ordinary Python instead of transliterating Lush constructs, and
+every departure carries a `DEVIATION` comment naming the original behaviour and the reason.
+So do not read a divergence from the `.lsh` as infidelity: fidelity is claimed for the
+decisions, not the constructs, and `ACCOUNT.md` is where the original is described. The
+priorities above — the encode seam most of all — generate noise when applied to any of it: a
+finding against scratch input is a finding against the thing being compared, not against
+anything that ships. Nothing in `.scratch/` is part of any
+distribution and nothing outside it may import from it. **It is no longer deleted when this
+branch merges** (changed 2026-08-31): the same imports seed `hmm` and `align` 0.1.0, so the
+tree is retained and each import's `.gitignore` is re-scoped as the migration target changes.
+`.scratch/align-poc/.gitignore` is written in explicit phases for that reason; its `dataseq`
+block is complete and the `hmm` phase is active as of 2026-09-01, empty by design because
+nothing in tokalign is HMM-related. So a file that is present on disk but untracked there is
+scoped out of the current phase, not overlooked — and an *empty* phase is a recorded finding,
+not an unfinished one.
+Review the merged result under `packages/pfsmgraph-dataseq/`, never the inputs. The directory
+states its own lifetime in `.scratch/README.md`.
+
+**What arrives there is a whole third-party working tree, not an extracted module.** The merge
+base is imported as `.scratch/dl/MelodyHPO/` — a defunct standalone project, of which
+`melody_hpo/data/` is the part being merged and the rest (models, training, evaluation,
+generation) is context. Two of the high-signal targets above will match inside it and must not:
+its `pyproject.toml` is *not* one of the `packages/*/pyproject.toml` whose dependency bounds are
+literal claims about PyPI — it belongs to a project that is not published and not built here —
+and its `tests/` is not a backend-parameterized suite under ADR 0003, so measuring it against
+that standard produces findings against code that ships nowhere. Anchor both targets on
+`packages/`, and treat any path under `.scratch/` as out of scope by default.
+
+**`packages/pfsmgraph-dataseq/` is the first real review target (2026-08-31)** — six modules and
+63 tests, where before there was nothing to review. Three things there will look like findings
+and are not.
+
+- **Its tests are not backend-parameterized, and must not be.** ADR 0003 parameterizes over
+  backends for dynamic programming; `dataseq` is a container with no DP algorithm, so it has no
+  backends, and under that ADR a lifecycle phase not yet reached contributes no parameter at all.
+  The `pytest_report_header` backend matrix is triggered by the first `.pyx`, not by this suite.
+  One skip is deliberate and narrow: `test_torch_interop.py` verifies the `DataLoader`
+  integration and skips when torch is absent, since torch is a dependency of no member.
+- **`isinstance(dataset, torch.utils.data.Dataset)` is `False` on purpose**, and is pinned by a
+  test saying so. That class is a plain class rather than a protocol or ABC, so satisfying
+  `isinstance` means inheriting from it, which means importing torch into the base layer.
+  `DataLoader` never makes that check for map-style datasets.
+- **`SymbolTable` is provisional by design.** Its constructor signature, the spelling of its
+  strictness switch, and how `align` reaches the mapping across a distribution boundary are the
+  encoder-API decisions, settled separately and recorded in ADR 0010. Reporting them as
+  unfinished API restates a known open question rather than finding one.
+
+Two invariants there *are* worth findings against, because both were defects in an imported
+source and are now load-bearing: `decode` must stay **total** over the whole code range including
+reserved codes (a partial one cannot render a padded batch), and the reserved block must stay
+unreachable from any constructor or parameter (ADR 0011 requires it fixed; the proof-of-concept
+lost this to a missing `ClassVar`). Each has a test; a change that weakens either is real.
+
+Note also that **each import carries its own deny-by-default `.gitignore`**, and each admits a
+small fraction of what is on disk: `.scratch/dl/` tracks 34 files out of 2.2 GB,
+`.scratch/hmm-lush/` 143 out of 929 MB, `.scratch/py-rudimentary/` 73 out of 1.7 GB, and
+`.scratch/align-poc/` 9 out of 194 MB, plus two documents of our own at the `.scratch/` root
+(`README.md` and `RESERVED-BLOCK.md`). The per-import counts include our own written analysis,
+which lives alongside the source it describes. *(Counts measured 2026-08-31; the previous
+figures for the first two were each high by one.)* If something in an imported tree looks conspicuously absent, that is the
+intended behaviour and not a finding — the exclusions carry their reasons inline in each of those
+files, and what they turn away is overwhelmingly not source: virtualenvs and tool caches in the
+first, saved model checkpoints from 2008–2011 training runs in the second.
+
+Two exclusions in `hmm-lush` are worth knowing before reading, because both look like gaps in the
+translation record and are not. `Code/SeqData/C/` is absent because every `.c` in it opens
+`WARNING: Automatically generated code ... by the DH compiler` — Lush's own compiler emitting C
+from the `.lsh` beside it, so it is a build artefact rather than a hand-written fast path, and
+there is no Python/C equivalence to check there. And `Code/_Old Lisp Code/` is absent because it
+is an interpreted Common Lisp predecessor that the owner has ruled out as a source; the Lush
+version under `Code/` is the original the translation must be faithful to.
+
+**`.scratch/py-rudimentary/` holds two repositories, and the asymmetry between them is
+deliberate.** `segalign/` is the third `dataseq` implementation; `SegAlign-Draft/` is the
+predecessor it was refactored from, and exactly one file of it is tracked
+(`glob/ss2_alignment.py`). That is not an incomplete import. What the draft contributes is a
+*negative* — it has no sequence abstraction at all — and one signature taking `List[Any]` is
+what makes that claim checkable after `.scratch/` is deleted. Its `tcoffee/` package (six
+modules of T-Coffee multiple alignment) is absent for the same reason `Training/` is absent
+from `hmm-lush`: it is real work, but it is `pfsmgraph-align`'s scope rather than `dataseq`'s.
+
+The tracking bar is also higher here than for `hmm-lush`, and the reason is provenance, not
+importance: `hmm-lush` was under no version control and was irreplaceable, whereas both trees
+here are clean checkouts of live GitHub repositories at revisions recorded in
+`.scratch/README.md`. Anything turned away costs one `git clone`. One caveat that file records
+and a reviewer would otherwise not see: `segalign`'s working copy is **dirty** at `ca97809` in
+`glob/needleman_wunsch.py`, so that one tracked file will not match GitHub. It is tracked only
+because `src/segalign/__init__.py` imports `glob`, without which the merge target does not
+import and its tests do not run.
+
+What *is* worth reviewing there is the written comparison rather than the code: if the semantic
+account of the Lush original and the translation beside it disagree, that is a real finding, and
+the account wins. It was written first precisely so the comparison could not be run against our
+reading of the original instead of the original.
+
+This generalises to every written analysis under `.scratch/` — `.scratch/dl/ANALYSIS.md` was
+the first, joined by `.scratch/hmm-lush/ACCOUNT.md` and `COMPARISON.md`, and by whatever
+goal 4 writes for `py-rudimentary` and `align-poc`.
+
+**One caution specific to `.scratch/align-poc/`.** It holds `tokalign`, the proof-of-concept
+alignment library that PRD §1.2 and ADRs 0001–0004 were written *from*. It is therefore not
+evidence to be weighed against those records the way the other three imports are — it is
+their source. Where it and an ADR disagree, the ADR is still the later word (`Alphabet` puts
+user symbols at 4; ADR 0011 moves them to 6), but a divergence there is a deliberate
+renumbering rather than a defect, and `Alphabet` already satisfies ADR 0011 on strictness,
+`gap_index` and `decode`. Those documents are
+load-bearing in a way the imported code is not: they decide what `packages/pfsmgraph-dataseq/`
+becomes and they are the draft of ADR 0010's decision section, so a claim in one that the code
+does not support is a real finding even though the code it describes ships nowhere. Check the
+claims, not the style.
+
+**One structural point about `COMPARISON.md`, because it governs which findings against it are
+valid.** Its §2 lists the places the `dl` base must be overridden; its §3 lists divergences that
+are deliberately *not* adopted, because an Accepted ADR settles them. The split is load-bearing:
+the ADRs outrank every imported source — the three `dataseq` implementations, the base
+included, and `align-poc/tokalign` (see `AGENTS.md` under "Invariants") — so "the merge
+ignores Lush's X" is a finding only when X falls in §2. Against §3 it is the intended
+behaviour, most visibly for the reserved block, where the implementations disagree with each
+other *and* with [ADR 0011](../design/adr/0011-fixed-reserved-symbol-block-and-strict-encoding.md),
+and the ADR wins regardless of what any of them does. If a §3 item looks wrongly classified,
+that is worth raising; that it was not adopted is not.
+
+**Two counting caveats, because both are easy to file as errors and neither is one.** First,
+there are **four imported sources but three `dataseq` implementations**: `tokalign` is an
+alignment library contributing the *encoder* half, which is why ADR 0010 is titled
+"merging-three-implementations" while its text separately requires reconciling `Alphabet`.
+A document saying "three implementations" is therefore correct, not stale. Second, the
+precedence rule reads backwards for `tokalign` specifically — ADRs 0001–0004 were written
+*from* it, so its divergences are overwhelmingly later decisions rather than defects, and it
+is the only source with a real `gap_index`, strict-by-default encoding and a `decode` at all.
+Reporting it as the most deviant of the four inverts the actual picture.
+
+That caveat protects deliberate divergences, **not** everything in the file. Goal 4 found two
+real defects there, and both are worth confirming rather than dismissing: `RESERVED_INDICES`
+is annotated as a dataclass field rather than a `ClassVar`, so the reserved block ADR 0011
+fixes is a positional constructor argument; and `decode` raises `KeyError` on every reserved
+code, because `_idx_to_sym` is built from the gap index up. Neither is a decision — one is an
+annotation slip, the other an unfinished table — which is exactly what distinguishes them
+from the divergences the caveat covers. Both are recorded in
+`.scratch/align-poc/COMPARISON.md` §3.
 
 **Lower-priority targets.** Claude Code handles these reliably; do not spend review budget
 on them unless something looks actively wrong: prose style and structure in `docs/`, ADR
