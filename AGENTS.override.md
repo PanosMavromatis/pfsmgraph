@@ -120,6 +120,13 @@ and its `tests/` is not a backend-parameterized suite under ADR 0003, so measuri
 that standard produces findings against code that ships nowhere. Anchor both targets on
 `packages/`, and treat any path under `.scratch/` as out of scope by default.
 
+**`.notebooks/` and `.data/` are out of scope for the same reason (2026-09-01).** They are a
+local workbench and its inputs; each tracks only a `.gitignore` and a `README.md`, everything
+else being ignored by design. The tracked README carries a runnable `dataseq` example, which
+is the one thing there that will attract findings -- but it is documentation of the public
+API, not code that ships, and it is verified by having been executed rather than by a test.
+Review the API it demonstrates under `packages/`, not the demonstration.
+
 **`packages/pfsmgraph-dataseq/` is the first real review target (2026-08-31)** — six modules and
 63 tests, where before there was nothing to review. Three things there will look like findings
 and are not.

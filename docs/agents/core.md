@@ -65,6 +65,21 @@ pytest` still collects zero items with those files present; and the directory si
 including why an imported repository's `.git` must be renamed before its contents can be
 committed here.
 
+**`.notebooks/` and `.data/` are a local workbench, and are not migration source.** Added
+2026-09-01, they exist so a new feature can be exercised by hand against real data before
+release -- `uv sync` installs all five members editable, so `pfsmgraph.dataseq` resolves to
+`packages/*/src/` and there is nothing to publish or reinstall. Each owns a deny-by-default
+`.gitignore` negating only itself and a `README.md`, so *everything else written there is
+ignored*; the two tracked files are what make the directories survive a clone, since git
+tracks no empty directory. That is also why the policies are not root `.gitignore` entries:
+git never descends into an ignored directory, so a nested policy there would be dead text.
+They take the leading dot for the same reason `.scratch/` does -- `.*` is pytest's default
+`norecursedirs`, so a scratch `test_*.py` cannot join the suite (verified: 74 passed with one
+on disk) -- and sit outside `packages/`, so the workspace glob never claims them. **Nothing
+under `packages/` may import or read from either**: their contents exist on one machine only,
+so a distribution reaching in passes locally and fails in every clone. Unlike `.scratch/`,
+neither is evidence about anything; do not add negations to commit data through them.
+
 Still to do, in PRD order (§11): `hmm` (Lush translation), then `align`, then `hseg`. `dataseq` is finished, documentation included. The container half of the merge (three existing implementations, `dl` version as base — §3.5) has landed.
 
 ## Commands

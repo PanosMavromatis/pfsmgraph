@@ -1,0 +1,36 @@
+# Local scratch area for exercising the workspace packages by hand -- the place
+# to write a throwaway script against `pfsmgraph.dataseq` and see what it does,
+# without publishing to PyPI or waiting for a release.
+#
+# Deny-by-default, like the four import policies under `.scratch/`: nothing here
+# is tracked unless it is named below. Everything you write in this directory is
+# ignored, which is the point -- it is a workbench, not a source tree.
+#
+# The policy lives *here* rather than as a `/.notebooks/` line in the repo-root
+# `.gitignore`, and that is load-bearing rather than stylistic. A directory
+# ignored at the root is one git never descends into, so a nested `.gitignore`
+# would never be consulted and the directory itself could not survive a clone --
+# git tracks no empty directories. Tracking this file and the README is what
+# makes the directory exist for anyone who checks the repo out.
+#
+# The repo-root `.gitignore` still applies underneath these rules, and is what
+# keeps `__pycache__/`, `*.pyc`, `.ipynb_checkpoints`, `.DS_Store` and `.venv`
+# out. Do not restate those here; a negation added below could re-admit them.
+#
+# The leading dot is deliberate, for the same reason `.scratch/` has one: it
+# matches pytest's default `norecursedirs` entry `.*`, so `uv run pytest` does
+# not collect anything written here. A directory named `notebooks/` would be
+# walked, and a scratch file named `test_*.py` would join the real suite.
+# The directory also sits outside `packages/`, so the `[tool.uv.workspace]`
+# glob `packages/*` never claims it as a member.
+
+# --- deny everything at this level -------------------------------------------
+*
+
+# The policy itself, and our own writing about the workbench. This negation is
+# easy to forget and fails silently: a file written here without it is simply
+# invisible to `git status`, so work looks committed and is not. That failure
+# mode has caught out three of the four `.scratch/` imports -- see
+# `docs/design/adr/0014-scratch-retention-and-per-package-scoping.md`.
+!/.gitignore
+!/README.md
