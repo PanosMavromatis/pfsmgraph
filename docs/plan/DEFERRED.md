@@ -131,6 +131,28 @@ and several of these must land *as part of* the merge rather than after it.
   omit their shared setup, which reads better for a human and does not run: a doctest pass
   needs that setup restored or supplied by a fixture. Neither is hard; both are decisions,
   and making them badly would produce a check that passes while proving nothing.
+- **Check documented repo-state *counts* against the tree.** A recurring rot has a
+  mechanical half worth automating. Prose in `README.md`, `docs/agents/core.md`,
+  `docs/design/PRD.md` and the ADR index makes assertions about the repository that are
+  true when written and silently false later. Observed so far, all of them caught by hand
+  and none by a test: "63 tests" after the count reached 74; "the twelve initial ADRs"
+  after 0013 landed; "Two carry a non-`Accepted` status" after 0010 was promoted; "every
+  package is an empty namespace subpackage" for two commits after `dataseq` shipped; and
+  the ADR index's reading-order and PRD-coverage notes, which enumerated up to 0012 and
+  quietly stopped being exhaustive.
+  **The tractable subset is counts and existence claims**, each checkable in a line or
+  two: test count from a pytest run; ADR count from the file list; ADR statuses by
+  grepping each record's `**Status:**` against its index row; per-package implementation
+  status from whether `src/pfsmgraph/<pkg>/` holds anything but `__init__.py`; tag
+  existence from `git tag`. The shape to copy is `check-agents-md.sh` — assert, diff,
+  exit non-zero — and it inherits that script's blocker verbatim: it lives in the
+  workflow-claude plugin under the untracked `.claude/`, so wiring it up means vendoring,
+  installing the plugin in the job, or reimplementing in shell.
+  **What this does not cover, and must not be claimed to:** semantic claims. "`SymbolTable`
+  is the provisional encoder implementation" was false in exactly the same way and no
+  count-checker would have found it. Those need the reading sweep filed under "the first
+  real release"; the two entries are halves of one problem and neither substitutes for the
+  other.
 
 ## Trigger: the first real release
 
@@ -158,6 +180,29 @@ and several of these must land *as part of* the merge rather than after it.
   `.dev0` until that commit is deliberate: a bare `0.1.0` on an incomplete package means an
   accidental `uv build` + publish burns `0.1.0` on PyPI permanently, since versions are
   immutable and deleting a release does not free the number.
+- **Sweep the prose claims about repository state, semantically.** The release is when
+  `README.md`, the PRD, and the ADR index are first read by people with no other source of
+  truth, so it is the deadline for a class of rot that has recurred on every branch so far:
+  a sentence describing the state of the repo, true when written, falsified by later work,
+  and caught only when someone happens to reread it. The front page carried "No algorithms
+  are implemented yet — every package is an empty namespace subpackage" for two commits
+  after the container landed.
+  **This is the half no script can do.** Its companion under "CI existing" covers counts
+  and existence claims; what remains is meaning — a surface described as provisional after
+  it was settled, an ADR called `Proposed` after promotion, a reviewer instruction whose
+  reference example has gone stale and now teaches the reviewer to file the correct state
+  as a defect (`docs/agents/codex.md` did exactly this), a future-tense promise stranded
+  after it was kept ("at which point 0010 is promoted"), and a dated header made internally
+  false by updating a number inside it.
+  **Read for claims, not for prose quality**, over `README.md`, `docs/agents/*.md`,
+  `docs/design/PRD.md`, `docs/design/adr/README.md` and each ADR's `Status`, and
+  `docs/api/`. The question for each sentence is only "was this true when written, and is
+  it true now" — the two differ, and where they do the fix usually preserves the history
+  rather than erasing it, as 0010's index footnote does.
+  **Why the release rather than sooner:** the cost of a stale internal note is an agent
+  briefly misled, and it is corrected on contact; the cost of a stale README at release is
+  paid by readers who cannot tell. If a second repo-hygiene item appears before then, this
+  is better promoted to its own revision via `/open-revision` than left waiting.
 
 ## Trigger: `align` acquiring a backend-selection API
 
