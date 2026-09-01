@@ -78,6 +78,7 @@ edit becomes a data migration.
   > hook did not** — there are no backends to enumerate until the first `.pyx`, and no
   > `conftest.py` exists yet. Left `[~]` rather than `[x]` so this revision cannot close
   > while the hook is still owed — PR #2
+  > **Branch:** feat/backend-matrix-header
 - [ ] Release `pfsmgraph-dataseq` 0.1.0, replacing the `0.0.0` placeholder, and set honest lower bounds on the intra-family dependencies that name it.
 
 ## Closed revisions
