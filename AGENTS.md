@@ -11,6 +11,23 @@ Shared project knowledge for any coding agent working in this repository.
 
 **What `dataseq` now contains.** Six modules under `packages/pfsmgraph-dataseq/src/pfsmgraph/dataseq/` (the container landed 2026-08-31, the encoder API 2026-09-01) and 74 tests — the first tests in this repository. `_reserved.py` hard-codes the ADR 0011 block as module constants, with no class or parameter that could relocate it; `_vocabulary.py` holds the `Vocabulary` protocol and `SymbolTable`, a frozen first-appearance-ordered implementation that encodes strictly and decodes *totally*, reserved codes included; `_record.py` and `_dataset.py` are the ragged container, whose records carry true lengths and never padding; `_collate.py` is `pad_collate`, where padding is introduced and always returned with its mask. The container imports neither torch nor pandas — verified in a subprocess — and its one runtime dependency is `numpy`.
 
+**The ADR 0003 reporting mechanism is complete as of 2026-09-01, and it lives at the repo
+root.** `conftest.py` carries `pytest_report_header` and nothing else; `_backends.py`
+beside it holds the registry, the import probe and the `PFSMGRAPH_REQUIRE_BACKENDS`
+escalation; the repo-root `tests/` covers both. **The conftest must stay at the rootdir** —
+`pytest_report_header` is a *startup* hook while conftest files under `packages/*/tests/`
+are loaded during collection, so a hook sited there is registered too late and discarded
+with no warning at all (measured on pytest 9.1.1: of two conftests each defining it, only
+the root one printed). `tests/test_backends.py` asserts the placement precisely because
+that failure is silent. The registry is an **empty tuple**, and that is the steady state
+rather than a placeholder: ADR 0002 scopes backends to wherever dynamic programming
+appears, `dataseq` has none, so the matrix fills only when `align` or `hmm` lands a
+recurrence — until then every run opens with
+`backends: none registered — no DP kernel has reached ADR 0002 phase 1`. Backend
+enumeration is deliberately test-only and reaches no shipped artifact, because enumerating
+backends is most of what a runtime backend-selection API needs and ADR 0003 leaves that
+question explicitly open.
+
 **The API documentation lives in a repo-level `docs/api/`, and that layout is now binding on all five members.** [ADR 0013](../design/adr/0013-api-documentation-layout-and-tooling.md) settles it: one subdirectory per distribution (`docs/api/dataseq/` is the only one so far — a member gets its subdirectory when it gets code), hand-written Markdown rather than a generator, no build step and no addition to the `dev` group. Two rules divide the labour and are the reason the choice is sustainable: **docstrings are normative for signatures**, since that is where an editor and `help()` look, while **`docs/api/` is normative for contracts** — the invariants, the reasons behind them, and the seams between distributions, which are contracts even when stated nowhere else. And **every code block is executed and its output pasted from the run**, error messages and tracebacks included; it is the only guard against drift that a hand-written layout has. Sphinx is deferred rather than refused (the docstrings already speak reST, so the migration is mostly configuration), and mkdocstrings is refused outright, because its Google/NumPy style expectation would force rewriting all six modules' docstrings to satisfy a tool.
 
 **The encoder API is settled (2026-09-01), and three parts of it are contracts rather than choices.** `SymbolTable(symbols)` builds a frozen, first-appearance-ordered table, with `from_sequences(sequences)` for a corpus; the name is deliberate, since `Alphabet` implies single characters and this family's symbols are words. Encoding is strict by default and the opt-in is spelled per call — `encode(symbols, on_unknown="raise" | "unk")` — so one mapping serves curated training data and uncurated inference without needing two tables; the value is validated *before* the loop, so a misspelled policy cannot behave as `"raise"` until the first unseen symbol shows up in production. Decoding is total over `range(size)`, reserved codes included, because a padded batch is the array most likely to be decoded. And the symbol→code mapping is **public**: `code(symbol)` plus a `sym_to_code` property returning a `MappingProxyType` — a live read-only view, not a copy — because `pfsmgraph-align` builds an `(size, size)` scoring matrix from the whole mapping at construction and must not reach into a private attribute across a distribution boundary. Persistence and a frequency reordering were deliberately left out; see `docs/plan/DEFERRED.md` for both triggers.
@@ -96,7 +113,7 @@ Still to do, in PRD order (§11): `hmm` (Lush translation), then `align`, then `
 Toolchain: **uv** (workspace) + **pytest**. Requires `uv` and Python ≥ 3.10.
 
 - `uv sync` — create/refresh the venv; installs all five members editable (plain `.pth`) plus the `dev` group (`pytest`).
-- `uv run pytest` — run the suite (74 tests, all in `packages/pfsmgraph-dataseq/tests/`). One narrow skip is by design: `test_torch_interop.py` verifies the `DataLoader` integration and skips when torch is absent, since torch is a dependency of no member.
+- `uv run pytest` — run the suite (87 tests: 74 in `packages/pfsmgraph-dataseq/tests/`, 13 in the repo-root `tests/` covering the ADR 0003 backend matrix). Every run opens with the backend header. One narrow skip is by design: `test_torch_interop.py` verifies the `DataLoader` integration and skips when torch is absent, since torch is a dependency of no member.
 - `uv build --package pfsmgraph-<pkg>` — build one member's sdist + wheel.
 - `uv lock` — refresh `uv.lock` (committed; one lockfile for the whole family).
 

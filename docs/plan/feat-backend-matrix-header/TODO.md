@@ -43,18 +43,80 @@ Markers: `[ ]` not started · `[~]` in progress · `[x]` complete · `[!]` block
   > make the first `.pyx` read as *its* phase 2. Phase 1, not phase 2, is the threshold
   > for a non-empty matrix -- a pure-Python DP kernel is already a backend parameter.
 
-- [ ] Write the shared availability fixture and site the `conftest.py`
-  - [ ] Choose the location: root `conftest.py` versus one per package, given that ADR 0003 requires availability be determined **once** so every suite reports identically
-  - [ ] Define how a backend registers itself, so that adding one later is adding a parameter value and not editing the hook
-  - [ ] Confirm the choice does not make `packages/` depend on repo-root files that no wheel ships
+- [x] Write the shared availability fixture and site the `conftest.py`
+  - [x] Choose the location: root `conftest.py` versus one per package, given that ADR 0003 requires availability be determined **once** so every suite reports identically
+  - [x] Define how a backend registers itself, so that adding one later is adding a parameter value and not editing the hook
+  - [x] Confirm the choice does not make `packages/` depend on repo-root files that no wheel ships
+  > **Measured:** the siting was not a matter of taste. `pytest_report_header` is a
+  > *startup* hook and nested conftests are loaded during collection, so a hook defined
+  > in `packages/*/tests/conftest.py` is registered too late and discarded **silently**.
+  > Probed directly (pytest 9.1.1, Python 3.14.7): two conftests each defining the hook,
+  > only the root one printed. The failure mode is the nasty kind -- "hook in the wrong
+  > directory" and "no backends to report" produce identical output -- which is a second,
+  > independent argument for goal 1's always-print rule, since it makes the mistake
+  > self-diagnosing.
+  > **Q:** Given the hook must sit at the repo root, how should the code be organised --
+  > one root `conftest.py`, a root `conftest.py` over a helper module, or a dev-only
+  > pytest plugin?
+  > **A:** Root `conftest.py` holding only the hook, over a `_backends.py` beside it
+  > carrying the registry, the probe and the `PFSMGRAPH_REQUIRE_BACKENDS` logic. Goal 3
+  > requires the hook itself be tested, and a plain importable module is testable where a
+  > conftest is not; a plugin was rejected as a whole distribution's worth of structure
+  > for one header line.
+  > **Q:** How should a backend become visible to the matrix once kernels exist --
+  > a probe table in the test infra, a declaration module shipped by each distribution,
+  > or entry points?
+  > **A:** A probe table in the test infra. Both alternatives put backend enumeration
+  > into *shipped* source or metadata, which is most of what a runtime backend-selection
+  > API needs -- and ADR 0003 leaves that question explicitly open, so shipping the
+  > enumeration now would prejudge it. Adding a backend stays a one-line table edit.
+  > **Found (subgoal 3, and it is worse than the subgoal asked):** nothing under
+  > `packages/` depends on a repo-root file, because no shipped artifact contains a test
+  > at all -- the wheel packages only `src/pfsmgraph`, verified by building it. But the
+  > **sdist does ship `tests/`**, and ships them with neither half of the ADR 0003
+  > mechanism: the sdist's `pyproject.toml` is the member's own 39-line file whose only
+  > `[tool.*]` table is `hatch.build.targets.wheel`, so `addopts = "-ra"` -- which lives
+  > in the workspace-root `pyproject.toml` -- does not travel. A packager running pytest
+  > from the sdist gets bare `s` for skips and no header. ADR 0003's Open section guesses
+  > the opposite ("if they do, distro packagers ... inherit this policy"); both halves of
+  > that guess are now measured false. Filed as a goal-4 record fix.
+  > **Done:** this goal produced the design and the two measurements behind it, but wrote
+  > no code. `_backends.py` cannot be written in two halves -- its registry is inseparable
+  > from the escalation rules goal 3 owns -- so splitting the file across two goals would
+  > leave `main` reachable at a half-written module if the branch were interrupted. Goal 3
+  > creates both files.
 
-- [ ] Implement `pytest_report_header` and the two availability rules
-  - [ ] The header line, in ADR 0003's exact format
-  - [ ] Implemented-but-not-importable is a hard failure, never a skip (the stale-`.so` case)
-  - [ ] `PFSMGRAPH_REQUIRE_BACKENDS` escalates an absent-hardware skip to a failure for the named backends
-  - [ ] Test the hook itself -- the reporting mechanism is the one thing no other test covers
+- [x] Implement `pytest_report_header` and the two availability rules
+  - [x] The header line, in ADR 0003's exact format
+  - [x] Implemented-but-not-importable is a hard failure, never a skip (the stale-`.so` case)
+  - [x] `PFSMGRAPH_REQUIRE_BACKENDS` escalates an absent-hardware skip to a failure for the named backends
+  - [x] Test the hook itself -- the reporting mechanism is the one thing no other test covers
+  > **Done:** three files -- `_backends.py` (127 lines, the registry, probe and
+  > escalation), `conftest.py` (41, the hook and nothing else), and
+  > `tests/test_backends.py` (126, 13 tests). The suite goes 74 -> 87.
+  > The three-way split ADR 0003 requires is expressed by the shape of a registry row,
+  > not by probing the filesystem: a row that imports is `✓`, a row that fails to import
+  > but names its `hardware` is a reported skip, a row that fails with `hardware=None` is
+  > a hard failure, and a phase not yet reached is *no row at all*. Probing for build
+  > products was rejected for a specific reason -- a Cython backend whose `.so` was never
+  > built would then read as "not written yet" rather than "broken", silently downgrading
+  > the one case ADR 0003 insists must be a hard failure.
+  > `check_required` validates the names in `PFSMGRAPH_REQUIRE_BACKENDS` *before* testing
+  > availability, the same shape as ADR 0011's encoder validating `on_unknown` before the
+  > loop. Without it, CI setting `=cuda` against today's empty matrix would pass, because
+  > nothing named `cuda` was missing.
+  > **Ran:** `uv run pytest` -> 87 passed, header line present:
+  > `backends: none registered — no DP kernel has reached ADR 0002 phase 1`.
+  > `PFSMGRAPH_REQUIRE_BACKENDS=cuda uv run pytest` -> exit **4** (pytest's UsageError),
+  > `ERROR: PFSMGRAPH_REQUIRE_BACKENDS names ['cuda'], which are not in the matrix
+  > (registered: none).` -- one clean line, no traceback, and non-zero so CI fails.
+  > Two of the 13 tests guard the wiring rather than the logic, because goal 2 measured
+  > that misplacing the conftest fails silently: one asserts `conftest.py` and
+  > `_backends.py` are at the repo root, the other copies both into a `pytester` temp
+  > rootdir, runs pytest in a subprocess and asserts the line appears in the output.
 
 - [ ] Record the outcome
   - [ ] Close the master-plan subgoal, or say why it stays `[~]`
   - [ ] Fix the root `pyproject.toml` comment promising the hook "lands with the first test suite"
   - [ ] Update `core.md` if any claim it makes about the suite has moved
+  - [ ] Correct ADR 0003's Open bullet on sdist/wheel: tests *do* ship in the sdist and the policy does *not* travel with them (measured in goal 2)

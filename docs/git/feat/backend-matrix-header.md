@@ -66,3 +66,11 @@ is reading it.
 - `docs/plan/refactor-reserved-block-renumber/` is still unfiled at the top level of
   `docs/plan/`. `/file-plans` sweeps it into `01-dataseq-v0.1.0/` and makes its own
   `chore/file-plans` branch; it is independent of this work and can run at any time.
+- 2026-09-01: goals 1-3 done. The open question was answered by printing an explicit empty
+  line; the siting question answered itself under measurement -- a nested conftest's
+  `pytest_report_header` is discarded silently, so the hook had to go to the rootdir. Three
+  files landed (`_backends.py`, `conftest.py`, `tests/test_backends.py`), suite 74 -> 87,
+  and `PFSMGRAPH_REQUIRE_BACKENDS=cuda` now exits 4 against the empty matrix. One finding
+  outruns this branch's scope: the **sdist ships `tests/` without either half of the ADR
+  0003 mechanism**, since `addopts = "-ra"` lives in the workspace-root `pyproject.toml`
+  which no sdist contains. ADR 0003's Open section guesses the opposite. Goal 4 corrects it.
