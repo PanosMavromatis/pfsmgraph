@@ -1,6 +1,6 @@
 # refactor/reserved-block-renumber
 
-**Status**: active
+**Status**: merged — PR #5 — 2026-09-01
 **Created**: 2026-09-01
 **Subgoal**: Renumber the proof-of-concept alignment code to the reserved block
 (user symbols from 6, new gap index), auditing every hard-coded index assumption.

@@ -67,7 +67,7 @@ edit becomes a data migration.
   > `ScoringMatrix.identity` zeroing `range(RESERVED_INDICES + 1)`, which after the move
   > would have silently blanked the first user symbol's scores. 62 `tokalign` tests pass,
   > matching the pre-change baseline exactly. Making `decode` total was carved out to
-  > `DEFERRED.md` under the `align` migration
+  > `DEFERRED.md` under the `align` migration — PR #5
 - [x] Fix `dataseq`'s third-party runtime dependencies — `dependencies = []` is a placeholder — and confirm its build backend stays hatchling ([ADR 0008](../design/adr/0008-per-package-build-backends.md)).
   > **Done:** `dependencies = ["numpy>=1.24"]`, replacing the `[]` placeholder;
   > `build-backend = "hatchling.build"` confirmed and recorded in ADR 0010 §Resolved,
