@@ -28,9 +28,24 @@ Markers: `[ ]` not started · `[~]` in progress · `[x]` complete · `[!]` block
   > moved `Open` -> `Resolved`; `DEFERRED.md` closes the release-trigger entry and opens
   > a replacement under the `align` migration.
 
-- [ ] Sweep the prose claims about repository state, semantically
-  - [ ] `README.md` — the front page, and the surface with no other source of truth
-  - [ ] `docs/agents/core.md` and `codex.md`, then regenerate the `AGENTS.*` artifacts
+- [~] Sweep the prose claims about repository state, semantically
+  - [x] `README.md` — the front page, and the surface with no other source of truth
+  > **README:** clean as of 2026-09-01. Dependency table verified against all five
+  > `pyproject.toml` files, test count (87) and root `LICENSE` confirmed. Two claims are
+  > true now and will be falsified by this branch's own publish -- the `0.0.0`-placeholder
+  > sentences at lines 5 and 67 -- so they are filed under the release goal, to change in
+  > the commit that makes them false rather than before it.
+  - [x] `docs/agents/core.md` and `codex.md`, then regenerate the `AGENTS.*` artifacts
+  > **Agent docs:** nine edits. `codex.md` carried the worst of it -- "the repo is
+  > scaffolding: no algorithms, no tests" (false since 2026-08-31), a 63-test count that
+  > should read 74, and a bullet calling `SymbolTable` provisional, which the same file
+  > tells a reviewer to *report* as staleness 100 lines earlier. Also two stale
+  > `feat/dataseq-merge` branch framings. `core.md` had a broken ADR-index link
+  > (`](docs/design/adr/README.md)` resolves under `docs/agents/`), a pre-merge
+  > future-tense framing of the completed merge, an undated 74-test measurement, and a
+  > total-vs-package test count. All numeric claims verified and correct: the four
+  > `.scratch/` tracked-file counts (34/143/73/11), the ADR count, `/agents-docs-check`.
+  > `AGENTS.md` and `AGENTS.override.md` regenerated; `check-agents-md.sh` reports in sync.
   - [ ] `docs/design/PRD.md` and each ADR's `Status`, plus `docs/design/adr/README.md`
   - [ ] `docs/api/dataseq/` — every executed code block still matching its pasted output
 
@@ -43,6 +58,7 @@ Markers: `[ ]` not started · `[~]` in progress · `[x]` complete · `[!]` block
   - [ ] Drop `.dev0` from `pfsmgraph-dataseq` alone, leaving the other four untouched
   - [ ] Add a README and a LICENSE file to `pfsmgraph-dataseq` and make the sdist carry them, not `.gitignore`
   - [ ] `uv build --package pfsmgraph-dataseq` and inspect both artifacts before anything leaves the machine
+  - [ ] Update the two `0.0.0`-placeholder claims in `README.md` (lines 5 and 67) in the publishing commit itself
   - [ ] Publish to PyPI — the user runs this; it is irreversible
   - [ ] Tag `pfsmgraph-dataseq-v0.1.0` by hand and push the tag
   - [ ] Close the `DEFERRED.md` entries this branch discharged, leaving the recurring lower-bounds one open

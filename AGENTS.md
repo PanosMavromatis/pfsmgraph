@@ -9,7 +9,7 @@ Shared project knowledge for any coding agent working in this repository.
 
 **`dataseq` is implemented and tested; the other four members are still empty scaffolding.** In place: the uv workspace root `pyproject.toml` (virtual — no `[project]` table), `uv.lock`, all five `packages/*` members with their own `pyproject.toml`, the (currently dormant) `meson.build` files for `align` and `hmm`, and an empty `pfsmgraph/<pkg>/__init__.py` for the four members that have no code yet (plus `dl/rnn/` and `dl/transformer/`). The ADRs in `docs/design/adr/` are authoritative for the decisions they cover — the twelve initial records from the PRD, plus 0013 (how this family documents its public surfaces) and 0014 (how imported migration source is retained), both added 2026-09-01; the PRD remains the narrative design document.
 
-**What `dataseq` now contains.** Six modules under `packages/pfsmgraph-dataseq/src/pfsmgraph/dataseq/` (the container landed 2026-08-31, the encoder API 2026-09-01) and 74 tests — the first tests in this repository. `_reserved.py` hard-codes the ADR 0011 block as module constants, with no class or parameter that could relocate it; `_vocabulary.py` holds the `Vocabulary` protocol and `SymbolTable`, a frozen first-appearance-ordered implementation that encodes strictly and decodes *totally*, reserved codes included; `_record.py` and `_dataset.py` are the ragged container, whose records carry true lengths and never padding; `_collate.py` is `pad_collate`, where padding is introduced and always returned with its mask. The container imports neither torch nor pandas — verified in a subprocess — and its one runtime dependency is `numpy`.
+**What `dataseq` now contains.** Six modules under `packages/pfsmgraph-dataseq/src/pfsmgraph/dataseq/` (the container landed 2026-08-31, the encoder API 2026-09-01) and 74 tests — the first tests in this repository, and 74 of the suite's 87 today; the remaining 13 are the repo-root backend-matrix tests. `_reserved.py` hard-codes the ADR 0011 block as module constants, with no class or parameter that could relocate it; `_vocabulary.py` holds the `Vocabulary` protocol and `SymbolTable`, a frozen first-appearance-ordered implementation that encodes strictly and decodes *totally*, reserved codes included; `_record.py` and `_dataset.py` are the ragged container, whose records carry true lengths and never padding; `_collate.py` is `pad_collate`, where padding is introduced and always returned with its mask. The container imports neither torch nor pandas — verified in a subprocess — and its one runtime dependency is `numpy`.
 
 **The ADR 0003 reporting mechanism is complete as of 2026-09-01, and it lives at the repo
 root.** `conftest.py` carries `pytest_report_header` and nothing else; `_backends.py`
@@ -35,8 +35,8 @@ question explicitly open.
 **`align` and `hmm` are temporarily on hatchling, not meson-python.** meson-python's editable-install import hook injects a `sys.meta_path` finder that claims the entire `pfsmgraph` PEP 420 namespace and shadows the other distributions, so `import pfsmgraph.dataseq` (and `hseg`, `dl`) fails after `uv sync`. Neither package has compiled code yet — the `meson.build` extension blocks are dormant `if fs.exists()` guards — so the switch to meson-python is deferred to when the first `.pyx` lands, at which point the namespace/editable interaction must be solved (non-editable install of the compiled members, a single combined compiled distribution, or an upstream fix). The `meson.build` files and the revert recipe are kept in `packages/pfsmgraph-{align,hmm}/pyproject.toml`. This qualifies the PRD §6.1 note, whose "namespace is fine" evidence was gathered with *setuptools* editable, which composes; meson-python's finder does not.
 
 **`.scratch/` holds imported source that is not ours, together with our own writing about
-it.** It is where the three existing `dataseq` implementations are read side by side before
-anything is merged into `packages/pfsmgraph-dataseq/`, together with the proof-of-concept
+it.** It is where the three existing `dataseq` implementations were read side by side before
+the merge into `packages/pfsmgraph-dataseq/`, together with the proof-of-concept
 alignment library whose `Alphabet` is the *encoder* ancestor. That distinction is why ADR
 0010 still says "three implementations" while also requiring the `Alphabet` reconciliation:
 four imported sources, three of them containers. So the scaffolding note above is a
@@ -100,13 +100,13 @@ ignored*; the two tracked files are what make the directories survive a clone, s
 tracks no empty directory. That is also why the policies are not root `.gitignore` entries:
 git never descends into an ignored directory, so a nested policy there would be dead text.
 They take the leading dot for the same reason `.scratch/` does -- `.*` is pytest's default
-`norecursedirs`, so a scratch `test_*.py` cannot join the suite (verified: 74 passed with one
+`norecursedirs`, so a scratch `test_*.py` cannot join the suite (verified 2026-09-01, when the suite stood at 74: it passed with one
 on disk) -- and sit outside `packages/`, so the workspace glob never claims them. **Nothing
 under `packages/` may import or read from either**: their contents exist on one machine only,
 so a distribution reaching in passes locally and fails in every clone. Unlike `.scratch/`,
 neither is evidence about anything; do not add negations to commit data through them.
 
-Still to do, in PRD order (§11): `hmm` (Lush translation), then `align`, then `hseg`. `dataseq` is finished, documentation included. The container half of the merge (three existing implementations, `dl` version as base — §3.5) has landed.
+Still to do, in PRD order (§11): `hmm` (Lush translation), then `align`, then `hseg`. `dataseq` is finished bar its 0.1.0 release, documentation included. The container half of the merge (three existing implementations, `dl` version as base — §3.5) has landed.
 
 ## Commands
 
@@ -201,4 +201,4 @@ The `.dev0` suffix stays until that release commit. `uv build` stamps whatever `
 
 - `docs/design/PRD.md` — packaging, naming, and distribution architecture; the source for the initial ADR set (§9).
 - `docs/plan/DEFERRED.md` — decided-but-not-yet-actionable work, indexed by the trigger that unblocks it (the `dataseq` merge, the first `.pyx`, CI existing, the `align` migration, the first real release — an illustrative list, not the full set; the file's `## Trigger:` headings are). Check it when starting any of those; several items must land *as part of* their trigger rather than after it.
-- `docs/design/adr/` — fourteen records: the twelve initial ADRs from the PRD plus 0013 and 0014, authoritative for the decisions they cover; [`adr/README.md`](docs/design/adr/README.md) indexes them. Add new records with the next unused number and a row in that index; numbers are never reused.
+- `docs/design/adr/` — fourteen records: the twelve initial ADRs from the PRD plus 0013 and 0014, authoritative for the decisions they cover; [`adr/README.md`](../design/adr/README.md) indexes them. Add new records with the next unused number and a row in that index; numbers are never reused.
