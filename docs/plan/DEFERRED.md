@@ -178,6 +178,15 @@ and several of these must land *as part of* the merge rather than after it.
   The record now states the measurement and the three candidate remedies; what it cannot
   do is pick one. Publishing an sdist is what makes the choice visible, which is why it
   is filed here rather than left to be noticed.
+  **Settled (2026-09-01), and the entry is closed.** The mechanism is repo-local by
+  decision: tests keep shipping in the sdist, and ADR 0003 §Resolved now states that
+  neither `addopts = "-ra"` nor `pytest_report_header` travels with them, together with
+  what that costs. Both self-sufficiency remedies were rejected in the record — excluding
+  `tests/` removes the run exactly where a distro packager most wants it, and duplicating
+  the mechanism five ways is this ADR's own drift failure committed on the policy instead
+  of on the tests. The obligation to revisit is re-filed under the `align` migration,
+  because `align` is the first member whose matrix will have a row in it. The Q&A is
+  recorded under goal 1 in `docs/plan/chore-release-dataseq-0.1.0/TODO.md`.
 - **Set honest version lower bounds.** Every intra-family dependency currently reads
   `>=0.1`, against distributions whose only published version is a `0.0.0` placeholder.
   This is the workspace footgun of
@@ -241,6 +250,17 @@ and several of these must land *as part of* the merge rather than after it.
   renumbering did not — what the reserved codes decode *to*. `dataseq` answers that with
   `RESERVED_SYMBOLS`; whether `tokalign` should mirror those strings or use its own is
   the open part.
+
+- **Revisit whether the ADR 0003 mechanism should travel in the sdist.** Settled
+  2026-09-01 as repo-local ([ADR 0003](../design/adr/0003-one-parameterized-test-suite-per-algorithm.md)
+  §Resolved), on the grounds that `dataseq` registers no backend, so a suite run from its
+  sdist has an empty matrix to not-print and loses nothing by not printing it. `align` is
+  where that stops being true: the first DP kernel to reach ADR 0002 phase 1 puts a real
+  row in the matrix, and from then on an sdist run can pass green while a backend that is
+  implemented but not importable is simply absent — the case the root `_backends.py`
+  turns into a hard failure. Re-open the choice then, with both rejected remedies on the
+  table — exclude `tests/`, or duplicate the mechanism per member — alongside whatever
+  `align`'s shape suggests. Nothing is owed before that.
 
 ## Trigger: `align` acquiring a backend-selection API
 

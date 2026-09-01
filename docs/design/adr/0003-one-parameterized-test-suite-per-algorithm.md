@@ -143,19 +143,6 @@ reports it identically:
   grounds that silently absorbing a problem produces work that merely looks fine —
   and "silently ran on the CPU path" is that same failure in another guise. Settle this
   when `align` acquires a backend-selection API; it warrants its own record.
-- **Tests ship in the sdist and not the wheel, and the policy does not travel with
-  them.** Measured 2026-09-01 against `pfsmgraph-dataseq`: the wheel packages only
-  `src/pfsmgraph`, so it contains no test at all and `pytest --pyargs` has nothing to
-  collect; the sdist *does* carry `tests/`, but the `pyproject.toml` beside them is the
-  member's own, whose sole `[tool.*]` table is `hatch.build.targets.wheel`. Neither half
-  of *Mechanism* is present — `addopts = "-ra"` lives in the workspace-root
-  `pyproject.toml` and `pytest_report_header` in the root `conftest.py`, and no sdist
-  contains either. A distro packager running pytest from an sdist therefore gets a bare
-  `s` for every skip and no header: precisely the silence this policy forbids, in the one
-  context this record originally guessed would inherit it. What stays open is the remedy —
-  ship the policy inside each member (duplicating it five ways), stop shipping tests in
-  the sdist, or accept that the policy is repo-local and say so in the record. Settle it
-  before the first sdist reaches PyPI, which is when it becomes user-visible.
 
 ## Resolved
 
@@ -167,3 +154,30 @@ reports it identically:
   first in the repository, in `packages/pfsmgraph-dataseq/tests/`. The two halves of
   *Mechanism* followed separately — `addopts = "-ra"` with those tests, and
   `pytest_report_header` on 2026-09-01.
+
+- **The mechanism is repo-local, and no sdist inherits it.** Measured 2026-09-01 against
+  `pfsmgraph-dataseq` and reproduced at the 0.1.0 release: the wheel packages only
+  `src/pfsmgraph`, so it contains no test at all and `pytest --pyargs` has nothing to
+  collect; the sdist *does* carry `tests/`, but the `pyproject.toml` beside them is the
+  member's own, whose sole `[tool.*]` table is `hatch.build.targets.wheel`. Neither half
+  of *Mechanism* is present — `addopts = "-ra"` lives in the workspace-root
+  `pyproject.toml` and `pytest_report_header` in the root `conftest.py`, and no sdist
+  contains either. **Settled 2026-09-01: tests keep shipping, and the policy is
+  repo-local by decision rather than by accident.**
+
+  Both remedies that would make an sdist self-sufficient were rejected. Excluding
+  `tests/` from the sdist buys the guarantee by removing the run, and it costs most
+  exactly where the run is worth most: distro packagers build from the sdist and execute
+  the suite to validate the build, which for the compiled members is the single most
+  valuable place a test can run. Duplicating the mechanism into all five members makes it
+  five things that can disagree — the drift failure this record exists to prevent,
+  committed one level up, on the policy instead of on the tests.
+
+  What that costs is stated here rather than left to be discovered: someone running
+  pytest from an sdist gets a bare `s` for every skip and no header. Today it costs
+  nothing, because `dataseq` registers no backend at any maturity and its matrix is
+  empty. It starts costing something at the first member that registers one, where a
+  green run could conceal a backend that is implemented but not importable — the case
+  *Policy* makes a hard failure. That member is `align`, and the obligation to revisit is
+  filed in `docs/plan/DEFERRED.md` under the `align` migration rather than left to
+  memory.
