@@ -172,6 +172,12 @@ and several of these must land *as part of* the merge rather than after it.
 
 ## Trigger: the first real release
 
+- **Settle ADR 0003's sdist/wheel question before the first sdist publishes.** Measured
+  during the backend-header branch: sdists ship `tests/` without either half of the ADR
+  0003 mechanism, so a packager's run is silent in exactly the way the policy forbids.
+  The record now states the measurement and the three candidate remedies; what it cannot
+  do is pick one. Publishing an sdist is what makes the choice visible, which is why it
+  is filed here rather than left to be noticed.
 - **Set honest version lower bounds.** Every intra-family dependency currently reads
   `>=0.1`, against distributions whose only published version is a `0.0.0` placeholder.
   This is the workspace footgun of

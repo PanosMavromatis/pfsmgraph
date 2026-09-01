@@ -74,3 +74,9 @@ is reading it.
   outruns this branch's scope: the **sdist ships `tests/` without either half of the ADR
   0003 mechanism**, since `addopts = "-ra"` lives in the workspace-root `pyproject.toml`
   which no sdist contains. ADR 0003's Open section guesses the opposite. Goal 4 corrects it.
+- 2026-09-01: goal 4 done, and the branch's work is complete. Three of the four records
+  were falsified by completion rather than by a code change. The sdist finding is filed in
+  both ADR 0003's *Open* and `DEFERRED.md` under *the first real release*, matching how the
+  same record already handles its runtime-backend-selection question. The master-plan
+  subgoal is `[x]` with a second `> **Done:**` under the backlink, so `/smart-merge` step 7
+  should add only the PR number.

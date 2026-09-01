@@ -143,10 +143,19 @@ reports it identically:
   grounds that silently absorbing a problem produces work that merely looks fine —
   and "silently ran on the CPU path" is that same failure in another guise. Settle this
   when `align` acquires a backend-selection API; it warrants its own record.
-- **Whether tests ship in the sdist or wheel is undecided.** If they do, distro
-  packagers and anyone running `pytest --pyargs` post-install inherit this policy, and it
-  becomes weakly user-visible. That would not change the policy, but it would change who
-  is affected by it.
+- **Tests ship in the sdist and not the wheel, and the policy does not travel with
+  them.** Measured 2026-09-01 against `pfsmgraph-dataseq`: the wheel packages only
+  `src/pfsmgraph`, so it contains no test at all and `pytest --pyargs` has nothing to
+  collect; the sdist *does* carry `tests/`, but the `pyproject.toml` beside them is the
+  member's own, whose sole `[tool.*]` table is `hatch.build.targets.wheel`. Neither half
+  of *Mechanism* is present — `addopts = "-ra"` lives in the workspace-root
+  `pyproject.toml` and `pytest_report_header` in the root `conftest.py`, and no sdist
+  contains either. A distro packager running pytest from an sdist therefore gets a bare
+  `s` for every skip and no header: precisely the silence this policy forbids, in the one
+  context this record originally guessed would inherit it. What stays open is the remedy —
+  ship the policy inside each member (duplicating it five ways), stop shipping tests in
+  the sdist, or accept that the policy is repo-local and say so in the record. Settle it
+  before the first sdist reaches PyPI, which is when it becomes user-visible.
 
 ## Resolved
 

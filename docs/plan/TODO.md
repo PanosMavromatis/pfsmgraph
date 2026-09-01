@@ -73,12 +73,16 @@ edit becomes a data migration.
   > `build-backend = "hatchling.build"` confirmed and recorded in ADR 0010 §Resolved,
   > after reading all four imported sources for a compiled inner loop belonging to
   > `dataseq`. There is none — PR #2
-- [~] Write the first test suite to the ADR 0003 standard, including the `pytest_report_header` hook that prints the backend matrix and names every excluded backend with its reason.
+- [x] Write the first test suite to the ADR 0003 standard, including the `pytest_report_header` hook that prints the backend matrix and names every excluded backend with its reason.
   > **Done:** 74 tests landed, the first in this repository. **The `pytest_report_header`
   > hook did not** — there are no backends to enumerate until the first `.pyx`, and no
   > `conftest.py` exists yet. Left `[~]` rather than `[x]` so this revision cannot close
   > while the hook is still owed — PR #2
   > **Branch:** feat/backend-matrix-header
+  > **Done:** the hook landed too, so the `[~]` closes. Root `conftest.py` over
+  > `_backends.py`, 13 tests, suite 74 -> 87; the matrix is empty by design and says so
+  > rather than printing nothing. Sited at the rootdir by measurement, not taste -- a
+  > nested conftest's `pytest_report_header` is discarded silently.
 - [ ] Release `pfsmgraph-dataseq` 0.1.0, replacing the `0.0.0` placeholder, and set honest lower bounds on the intra-family dependencies that name it.
 
 ## Closed revisions

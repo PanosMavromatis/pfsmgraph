@@ -115,8 +115,26 @@ Markers: `[ ]` not started · `[~]` in progress · `[x]` complete · `[!]` block
   > `_backends.py` are at the repo root, the other copies both into a `pytester` temp
   > rootdir, runs pytest in a subprocess and asserts the line appears in the output.
 
-- [ ] Record the outcome
-  - [ ] Close the master-plan subgoal, or say why it stays `[~]`
-  - [ ] Fix the root `pyproject.toml` comment promising the hook "lands with the first test suite"
-  - [ ] Update `core.md` if any claim it makes about the suite has moved
-  - [ ] Correct ADR 0003's Open bullet on sdist/wheel: tests *do* ship in the sdist and the policy does *not* travel with them (measured in goal 2)
+- [x] Record the outcome
+  - [x] Close the master-plan subgoal, or say why it stays `[~]`
+  - [x] Fix the root `pyproject.toml` comment promising the hook "lands with the first test suite"
+  - [x] Update `core.md` if any claim it makes about the suite has moved
+  - [x] Correct ADR 0003's Open bullet on sdist/wheel: tests *do* ship in the sdist and the policy does *not* travel with them (measured in goal 2)
+  > **Done:** four records, three of them falsified by *completion* rather than by a code
+  > change -- the direction that goes unnoticed, since nothing fails. The root
+  > `pyproject.toml` comment promising the hook "lands with the first test suite" is an
+  > instance of the exact class `DEFERRED.md`'s release trigger already names, "a
+  > future-tense promise stranded after it was kept"; it outlived the tests it predicted
+  > by three commits. `core.md` was discharged early inside `/smart-commit`, whose
+  > docs pass reached it from the staged diff.
+  > The sdist finding is filed in **two** places, following the pattern ADR 0003's other
+  > open question already sets: the record states the question and the measurement, and
+  > `DEFERRED.md` carries the trigger that surfaces it. ADR 0003 says runtime backend
+  > selection is settled "when `align` acquires a backend-selection API" and `DEFERRED.md`
+  > has a trigger heading of that name; the sdist question now sits under *the first real
+  > release* for the same reason. An ADR's *Open* section alone is not read on a schedule.
+  > **Ran:** `uv run pytest` -> 87 passed after the `pyproject.toml` edit, confirming the
+  > comment change did not disturb `[tool.pytest.ini_options]`.
+  > **Note for `/smart-merge`:** its step 7 closes the master-plan subgoal itself. That is
+  > already done -- the item is `[x]` with a second `> **Done:**` beneath the backlink --
+  > so it should append only the PR number rather than write a third note.
