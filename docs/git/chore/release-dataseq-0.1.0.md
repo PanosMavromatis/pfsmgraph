@@ -37,6 +37,13 @@ yanking does not free the number.
   migration, since `align` is the first member whose backend matrix will have a row in it.
   No packaging change was made, which is stated in the record so it does not read as an
   oversight.
+- **2026-09-01 — semantic sweep done.** `README.md` was clean; the agent docs took nine
+  edits (`codex.md` claimed "no algorithms, no tests" and called the settled `SymbolTable`
+  provisional, which the same file tells a reviewer to report); the PRD was annotated in
+  §9's existing style rather than tense-corrected, so it stays readable as a June 2026
+  snapshot, with §8's two closed questions rewritten because that heading asserts the
+  present. `docs/api/dataseq/` had not drifted at all — 44 of 44 examples matched — but
+  nothing was checking it, so `tests/test_api_docs.py` now does. Suite 87 -> 91.
 - **2026-09-01 — found while re-measuring: the sdist ships `.gitignore` and no README or
   LICENSE file**, though `license = "MIT"` is declared as metadata. The PyPI page would be
   blank on first publish, and `0.1.0` cannot be re-cut to fix it. Added as a subgoal to

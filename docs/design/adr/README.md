@@ -36,7 +36,8 @@ merge itself; it was, and 0010 records the settled API.
 
 - **0001–0004** are inherited from the proof-of-concept and predate the packaging work.
   They are the most pervasive constraints in the codebase and are summarized as hard
-  rules in [`CLAUDE.md`](../../../CLAUDE.md).
+  rules in [`docs/agents/core.md`](../../agents/core.md), which the root `CLAUDE.md`
+  imports and `AGENTS.md` is generated from.
 - **0005–0011** are the packaging, namespace, and base-layer decisions, in the order the
   PRD settled them.
 - **0012** records where the repository currently deviates from 0008, and why.

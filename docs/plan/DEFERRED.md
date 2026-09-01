@@ -147,6 +147,15 @@ and several of these must land *as part of* the merge rather than after it.
   omit their shared setup, which reads better for a human and does not run: a doctest pass
   needs that setup restored or supplied by a fixture. Neither is hard; both are decisions,
   and making them badly would produce a check that passes while proving nothing.
+  **Settled (2026-09-01), and the entry is closed — but not as a doctest run.** Both
+  obstacles above turned out to be the answer rather than details to configure around:
+  satisfying doctest would have meant restoring the setup and the traceback headers, which
+  makes the pages worse to read, and the pages are the artifact. `tests/test_api_docs.py`
+  instead reads the documents' own convention; it is standard library only, adds no build
+  step and nothing to the `dev` group, and so landed ahead of CI rather than with it. See
+  [ADR 0013](../design/adr/0013-api-documentation-layout-and-tooling.md) §Resolved. All 44
+  examples passed unmodified, and the guard itself was verified by breaking the docs three
+  ways and confirming each failure.
 - **Check documented repo-state *counts* against the tree.** A recurring rot has a
   mechanical half worth automating. Prose in `README.md`, `docs/agents/core.md`,
   `docs/design/PRD.md` and the ADR index makes assertions about the repository that are

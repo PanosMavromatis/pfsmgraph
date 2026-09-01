@@ -28,7 +28,7 @@ Markers: `[ ]` not started · `[~]` in progress · `[x]` complete · `[!]` block
   > moved `Open` -> `Resolved`; `DEFERRED.md` closes the release-trigger entry and opens
   > a replacement under the `align` migration.
 
-- [~] Sweep the prose claims about repository state, semantically
+- [x] Sweep the prose claims about repository state, semantically
   - [x] `README.md` — the front page, and the surface with no other source of truth
   > **README:** clean as of 2026-09-01. Dependency table verified against all five
   > `pyproject.toml` files, test count (87) and root `LICENSE` confirmed. Two claims are
@@ -46,8 +46,36 @@ Markers: `[ ]` not started · `[~]` in progress · `[x]` complete · `[!]` block
   > total-vs-package test count. All numeric claims verified and correct: the four
   > `.scratch/` tracked-file counts (34/143/73/11), the ADR count, `/agents-docs-check`.
   > `AGENTS.md` and `AGENTS.override.md` regenerated; `check-agents-md.sh` reports in sync.
-  - [ ] `docs/design/PRD.md` and each ADR's `Status`, plus `docs/design/adr/README.md`
-  - [ ] `docs/api/dataseq/` — every executed code block still matching its pasted output
+  - [x] `docs/design/PRD.md` and each ADR's `Status`, plus `docs/design/adr/README.md`
+  > **Q:** The PRD is a dated snapshot ("threads still open at the time of writing"), yet
+  > parts of it now read as false. Annotate it, rewrite its tenses, or supersede §8?
+  > **A:** Annotate, following the pattern §9 already set -- narrative tense untouched,
+  > dated `> **Status:**` blockquotes over discharged items, and §8 rewritten because a
+  > section titled "Open questions" asserts the present every time it is read.
+  > **PRD/ADRs:** all fourteen ADR `Status` lines match their index rows exactly; no ADR
+  > body carries a stale state claim (four future-tense hits, all genuine design
+  > consequences). Fixed: §8's two closed entries (the encoder API, settled by ADR 0010;
+  > the build backend, settled as hatchling), dated blockquotes over §1.5 and §11, and the
+  > "twelve records" count clarified as the initial set against an index of fourteen. The
+  > ADR index pointed the reader at `CLAUDE.md` for the inherited hard rules -- true when
+  > written, but `CLAUDE.md` is now an `@import` dispatcher, so it points at
+  > `docs/agents/core.md` instead.
+  - [x] `docs/api/dataseq/` — every executed code block still matching its pasted output
+  > **Q:** The API docs are drift-free, but ADR 0013's "executed and pasted" rule has no
+  > mechanism behind it. Keep the verifier written to check them?
+  > **A:** Land it as a repo-root test.
+  > **API docs:** 44 of 44 examples match, pasted exception messages included -- zero
+  > drift. The finding is the *absence of a guard*, not a defect. Stock doctest fails 39
+  > of the 44 for harness reasons alone: setup lives in plain blocks with no `>>>` so the
+  > namespace is empty, and errors are pasted as the readable last line without doctest's
+  > `Traceback` header. Both make the pages better and doctest inapplicable, so
+  > `tests/test_api_docs.py` reads the documents' own convention instead -- stdlib only,
+  > no build step, nothing added to `dev`, so ADR 0013's decision is unchanged. Verified
+  > by breaking the docs three ways (wrong value, wrong exception message, truncated setup
+  > block) and confirming each fails. ADR 0013's `## Open` is now `## Resolved` and the
+  > `DEFERRED.md` entry under "CI existing" is closed, ahead of CI rather than with it.
+  > Suite 87 -> 91; the counts in `README.md` and `core.md` that this falsified were
+  > updated in the same change.
 
 - [ ] Set honest version lower bounds
   - [ ] List every intra-family dependency naming `pfsmgraph-dataseq` and what it currently declares

@@ -89,6 +89,18 @@ targets, which is where errors are cheapest to fix and most expensive to leave:
   `pytest_report_header` is a startup hook, and a conftest loaded during collection has its
   hook discarded with no warning. `tests/test_backends.py` pins the placement for that
   reason; treat a change that deletes those wiring tests as the same finding.
+- **`docs/api/` and the test that executes it** (ADR 0013). The pages are hand-written, so
+  their examples are the only guard against prose drifting from the code they describe;
+  `tests/test_api_docs.py` executes every block and compares its output — pasted exception
+  messages included — against the live result. Two things there look wrong and are not: the
+  setup blocks carry no `>>>` prompts, and errors are pasted as a bare last line without
+  doctest's `Traceback (most recent call last):` header. Both are deliberate, so the pages
+  read as clean scripts; stock `pytest --doctest-glob` fails 39 of the 44 examples on those
+  two facts alone and would prove nothing. **A change that replaces the runner with a
+  doctest pass, or that widens its signature-block exemption, is a finding** — that
+  exemption exists for lines like `pad_collate(batch: Sequence[SequenceRecord]) -> ...`,
+  which are not valid call expressions, and a truncated setup block is what would disappear
+  into a looser one.
 - **`meson.build` / editable-install interaction** when `align` and `hmm` return to
   meson-python (ADR 0012). meson-python's import hook claims the whole `pfsmgraph` PEP 420
   namespace and shadows its siblings. Any change here must be verified by actually importing
