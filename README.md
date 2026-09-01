@@ -53,12 +53,14 @@ Requires [uv](https://docs.astral.sh/uv/) and Python ≥ 3.10.
 
 ```bash
 uv sync                             # venv + all five members editable + dev tools
-uv run pytest                       # run the test suite (none yet)
+uv run pytest                       # run the test suite (74 tests, all in dataseq)
 uv build --package pfsmgraph-align  # build one distribution
 uv lock                             # refresh uv.lock (committed; one per family)
 ```
 
 Once `align`/`hmm` return to meson-python, a C compiler and `ninja` (for rebuild-on-import) are also needed; `uv sync` will provide `ninja` via the dev group.
+
+Because `uv sync` installs every member **editable**, imports resolve to `packages/*/src/` — so a feature can be exercised locally the moment it is written, with nothing to publish or reinstall. Two gitignored directories exist for that: [`.notebooks/`](.notebooks/README.md) is the workbench and [`.data/`](.data/README.md) holds its inputs. Each tracks only a `.gitignore` and a `README.md`; everything else written there is ignored. Nothing under `packages/` may import or read from either.
 
 ## Publishing
 
