@@ -372,13 +372,19 @@ collate_fn=pad_collate)` yields correctly padded batches, and `tests/test_torch_
   > outstanding; and the `DEFERRED.md` entry was closed. The index footnote was rewritten from a
   > promise ("at which point 0010 is promoted") into a record of when it was.
 
-- [ ] Write the API documentation for `dataseq`
-  - [ ] Location settled: repo-level `docs/api/`, one subdirectory per distribution (`docs/api/dataseq/`), with an index at `docs/api/README.md` naming all five members and marking the four not yet implemented
-  - [ ] Tooling decided — hand-written Markdown, or generated from docstrings (Sphinx/MkDocs) — and recorded as an ADR if the choice binds the other four members, which it does the moment a second package documents anything
-  - [ ] The public surface documented is exactly `pfsmgraph.dataseq.__all__` (15 names); anything underscore-prefixed is named as private and out of contract
-  - [ ] The invariants a caller can rely on are stated, not just the signatures: reserved block fixed and not configurable per ADR 0011, `encode` strict with `UNK` explicit opt-in, `decode` **total** over every code including reserved ones, records carrying true lengths and never padding, `pad_collate` as the single place padding is introduced and always returned with its mask
-  - [ ] The two boundaries a user will otherwise trip on are documented: `isinstance(ds, torch.utils.data.Dataset)` is `False` by design and a stock `DataLoader` still works, and `default_collate` raises `TypeError` on ragged items — which is why `pad_collate` ships
-  - [ ] Every code example in the docs is executed and its output checked, rather than transcribed from memory
+- [x] Write the API documentation for `dataseq`
+  - [x] Location settled: repo-level `docs/api/`, one subdirectory per distribution (`docs/api/dataseq/`), with an index at `docs/api/README.md` naming all five members and marking the four not yet implemented
+  - [x] Tooling decided — hand-written Markdown, or generated from docstrings (Sphinx/MkDocs) — and recorded as an ADR if the choice binds the other four members, which it does the moment a second package documents anything
+  - [x] The public surface documented is exactly `pfsmgraph.dataseq.__all__` (15 names); anything underscore-prefixed is named as private and out of contract
+  - [x] The invariants a caller can rely on are stated, not just the signatures: reserved block fixed and not configurable per ADR 0011, `encode` strict with `UNK` explicit opt-in, `decode` **total** over every code including reserved ones, records carrying true lengths and never padding, `pad_collate` as the single place padding is introduced and always returned with its mask
+  - [x] The two boundaries a user will otherwise trip on are documented: `isinstance(ds, torch.utils.data.Dataset)` is `False` by design and a stock `DataLoader` still works, and `default_collate` raises `TypeError` on ragged items — which is why `pad_collate` ships
+  - [x] Every code example in the docs is executed and its output checked, rather than transcribed from memory
+  > **Q:** How should `docs/api/` be produced — hand-written Markdown, Sphinx + autodoc, or MkDocs + mkdocstrings?
+  > **A:** Hand-written Markdown now. `docs/api/dataseq/` split into `README.md` (overview and invariants), `encoder.md` and `container.md`; no dev dependency, no build step, renders on GitHub today. A generator is deferred to a trigger.
+  > **Q:** Does the layout and tooling choice get its own ADR, or a section in `docs/api/README.md`?
+  > **A:** Its own ADR, 0013 — the subgoal's own test is met, since the moment `align` documents anything it inherits this layout.
+  > **Q:** The `pfsmgraph.dataseq` module docstring still calls `SymbolTable` "the provisional encoder implementation". Fix it in this goal, or leave it to a separate commit?
+  > **A:** Fix it here. It is the first thing a reader sees and it contradicts ADR 0010, which this branch accepted yesterday.
     > **Placement:** after the encoder goal and the ADR promotion, deliberately. `SymbolTable`
     > is provisional until the encoder API is settled — `docs/agents/core.md` says so — and
     > documenting a surface that is flagged as unsettled would publish a contract this branch
@@ -387,6 +393,25 @@ collate_fn=pad_collate)` yields correctly padded batches, and `tests/test_torch_
     > **Scope:** this goal documents `dataseq` only. The `docs/api/` layout and the tooling
     > choice are family-wide and are settled here because this is the first member to need
     > them; the other four get their own subdirectory when they get code.
+    > **Done:** `docs/api/` created with the index and `dataseq/` split three ways —
+    > `README.md` (contracts, the 15-name surface, the two boundaries), `encoder.md`,
+    > `container.md`. [ADR 0013](../../design/adr/0013-api-documentation-layout-and-tooling.md)
+    > records the layout, the hand-written-Markdown choice, and the executed-examples rule,
+    > with Sphinx deferred (the docstrings already speak reST) and mkdocstrings refused
+    > outright (it would force rewriting six modules' docstrings to satisfy a tool).
+    > **Executing the examples earned its keep immediately.** Two errors it caught: the
+    > `pfsmgraph.dataseq` module docstring still called the settled encoder API
+    > "provisional", contradicting an ADR this branch accepted the day before; and the
+    > `KeyError` examples as first written showed a message Python does not print, because
+    > `KeyError.__str__` is `repr(args[0])` and re-escapes the quotes the message contains.
+    > Both are now correct, and the second is documented — a caller matching on `str(e)`
+    > will not find a substring plainly visible in the traceback.
+    > **Enforcement is deferred, not assumed.** Nothing checks the executed-examples rule
+    > automatically; `DEFERRED.md` gains an entry under "CI existing" naming the two things
+    > a doctest run must settle first (exception-detail flags, and the shared setup the
+    > blocks currently omit for readability).
+    > **Two pre-existing defects repaired in passing:** `DEFERRED.md` carried a garbled
+    > half-edited sentence in the ADR 0010 entry and a stale "63 tests".
 
 - [ ] Clean up once the merge is completed
   - [ ] All migration decisions are recorded in [ADR 0010](../../design/adr/0010-dataseq-composition-merging-three-implementations.md), which is the merge's record; anything the encoder API decision does not cover gets a new ADR with the next free number and a row in `docs/design/adr/README.md`

@@ -26,10 +26,9 @@ and several of these must land *as part of* the merge rather than after it.
   implemented: `SymbolTable(symbols)` with `from_sequences`; per-call
   `encode(..., on_unknown="raise" | "unk")`; and `code()` plus a `sym_to_code` read-only
   mapping published as cross-distribution API. The Q&A is recorded under goal 6 in
-  `docs/plan/feat-dataseq-merge/TODO.md`. What remains is the clerical half — writing the
-  settled API is now written into the ADR's decision section, its `## Open` section has
-  become `## Resolved`, and the index row and its footnote in `docs/design/adr/README.md`
-  read `Accepted`.
+  `docs/plan/feat-dataseq-merge/TODO.md`. The settled API is written into the ADR's
+  decision section, its `## Open` section has become `## Resolved`, and the index row and
+  its footnote in `docs/design/adr/README.md` read `Accepted`.
 - **Renumber the proof-of-concept alignment code to the reserved block.** The
   proof-of-concept allocates user symbols from 4, with a different gap index;
   [ADR 0011](../design/adr/0011-fixed-reserved-symbol-block-and-strict-encoding.md)
@@ -65,7 +64,7 @@ and several of these must land *as part of* the merge rather than after it.
   `pytest_report_header` hook that prints the backend matrix. `addopts = "-ra"` is
   already configured in the root `pyproject.toml`; the header hook is the half that
   still has nowhere to live.
-  **Partly done, and the remainder re-triggered (2026-08-31).** `dataseq` now has 63 tests,
+  **Partly done, and the remainder re-triggered (2026-08-31).** `dataseq` now has 74 tests,
   the first in this repository. The backend-matrix half is **not** done and should not be:
   ADR 0003 parameterises over backends for dynamic programming, and `dataseq` is a container
   with no DP algorithm and so no backends — under that ADR a lifecycle phase not yet reached
@@ -119,6 +118,19 @@ and several of these must land *as part of* the merge rather than after it.
   script, installing the plugin in the job, or reimplementing the regenerate-and-diff in a
   few lines of shell. Decide which when the workflow exists; the entry is here so the
   question is not rediscovered by a confusing review months later.
+- **Turn the executed-examples rule in `docs/api/` into a doctest run.**
+  [ADR 0013](../design/adr/0013-api-documentation-layout-and-tooling.md) requires every
+  code block in `docs/api/` to be executed and its output pasted from the run, and that
+  rule is currently a discipline with nothing enforcing it — which is the single largest
+  cost of choosing hand-written Markdown over a generator. The examples are already
+  written as `>>>` blocks, so `pytest --doctest-glob='*.md'` is most of the way there.
+  **Two things must be settled first.** Several blocks show tracebacks, and one in
+  `encoder.md` deliberately shows the *escaped* form of a `KeyError` message — because
+  `KeyError.__str__` is `repr(args[0])` — so `IGNORE_EXCEPTION_DETAIL` and the other
+  doctest option flags have to be chosen rather than defaulted. And the blocks currently
+  omit their shared setup, which reads better for a human and does not run: a doctest pass
+  needs that setup restored or supplied by a fixture. Neither is hard; both are decisions,
+  and making them badly would produce a check that passes while proving nothing.
 
 ## Trigger: the first real release
 

@@ -433,3 +433,68 @@ stored outside the ADR directory: `PRD.md` §9 counted *two* non-`Accepted` reco
 `codex.md` — the one with teeth — told a Codex reviewer that 0010 is `Proposed`, which would
 have taught the reviewer to file the correct state as drift. The index footnote was rewritten
 from a promise ("at which point 0010 is promoted") into a record of when it happened.
+
+### 2026-09-01 — goal 8: `dataseq` documented, and a documentation policy for the family
+
+`docs/api/` now exists: an index naming all five members, and `docs/api/dataseq/` split
+three ways — `README.md` (the contracts, the public surface, the two boundaries),
+`encoder.md`, and `container.md`. [ADR 0013](../../design/adr/0013-api-documentation-layout-and-tooling.md)
+records the decision, which binds all five members rather than only this one.
+
+**Three questions were settled, and the interesting one was the third.**
+
+*Where.* Repo-level `docs/api/<package>/`, not `packages/*/docs/`. The usual argument for
+per-package documentation is shipping it in the wheel, and that argument does not apply —
+`docs/` is in no wheel under either layout, which is what makes this a filing decision
+rather than a packaging one. What decided it is that the sharpest thing `dataseq` has to
+document is a *cross-package* fact: `pfsmgraph-align` reads `Vocabulary.sym_to_code` across
+a distribution boundary. That belongs to neither package alone, and a per-package tree
+would force it into one or duplicate it into both. The per-distribution subdirectory keeps
+a future split to a `git mv`.
+
+*How.* Hand-written Markdown, no generator, no build step, nothing added to the `dev`
+group. Sphinx is **deferred rather than refused** — the existing docstrings already speak
+reStructuredText (`Typical use::`, `:class:`, `:mod:` roles), so that migration is mostly
+configuration, and the thing ruling it out today is simply that it emits HTML with nowhere
+to be served, replacing pages that render on GitHub with `.rst` sources that do not.
+mkdocstrings was refused outright, on different grounds: it expects Google/NumPy-style
+docstrings, so adopting it would mean rewriting all six modules to satisfy a tool and
+discarding the reST commitment already made.
+
+*What stops it going stale.* This is the question that usually goes unstated and then
+decides the outcome anyway, so it became a rule with the same standing as the other two:
+**every code block is executed and its output pasted from the run**, error messages and
+tracebacks included.
+
+**That rule earned its keep on its first application, catching two errors reading would
+not have.** The `pfsmgraph.dataseq` module docstring still described the encoder API as
+"provisional" — contradicting ADR 0010, accepted on this branch the day before, and sitting
+in the first place any reader or future generator looks. And the `KeyError` examples as
+first drafted showed text Python does not print: `KeyError.__str__` is `repr(args[0])`, so
+the real traceback carries escaped inner quotes. The pages now show the true text, and
+`encoder.md` documents the consequence for callers — `e.args[0]` is the message, `str(e)`
+is a repr of it, so matching on `str(e)` will not find a substring plainly visible in the
+traceback. This is the second time that quirk has cost something on this branch; it
+produced a failing test during goal 6, which is why it now gets a callout rather than a
+footnote.
+
+**The rule's limits are recorded, not glossed.** The ADR's costs section says plainly that
+an executed example does not prove the paragraph above it is still true, and that a
+generator would have made signature drift impossible where this does not. Nothing enforces
+even the executed-examples rule automatically: `DEFERRED.md` gains an entry under "CI
+existing" for a doctest run, naming the two things that must be settled first — the
+exception-detail option flags, given the tracebacks and the deliberately escaped
+`KeyError`, and the shared setup the blocks currently omit because it reads better without.
+
+**Falsified elsewhere.** The root `README.md` still opened with "No algorithms are
+implemented yet — every package is an empty namespace subpackage", which stopped being true
+when the container landed on 2026-08-31 and was simply missed then. It is the most visible
+page in the repository, so it is worth noting that the branch went two commits with a
+front-page claim that contradicted its own work. Now: one package implemented, four
+scaffolded, with the release status stated so the correction cannot be read as a release
+announcement. `docs/agents/core.md` also described the ADR directory as "the twelve initial
+ADRs", a count that 0013 falsified.
+
+Two pre-existing defects in `DEFERRED.md` were repaired in passing: a garbled half-edited
+sentence in the ADR 0010 entry, and a stale "63 tests" left from before the encoder tests
+landed.

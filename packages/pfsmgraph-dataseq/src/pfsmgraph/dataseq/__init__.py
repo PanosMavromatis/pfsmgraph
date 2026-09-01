@@ -20,8 +20,12 @@ Encoding is strict: an unseen symbol raises rather than silently becoming
 padding or a NaN. The reserved block is fixed and not configurable
 (:mod:`pfsmgraph.dataseq._reserved`).
 
-Note that :class:`SymbolTable` is the provisional encoder implementation; the
-encoder API is settled separately and recorded in ADR 0010.
+The encoder API is settled and recorded in ADR 0010: encoding is strict by
+default with ``on_unknown="unk"`` as the per-call opt-in, decoding is total
+over every code including the reserved ones, and the symbol-to-code mapping is
+public because ``pfsmgraph-align`` reads it across a distribution boundary.
+
+See ``docs/api/dataseq/`` for the contracts a caller may rely on.
 """
 
 from ._collate import pad_collate
