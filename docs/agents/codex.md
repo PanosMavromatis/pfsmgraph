@@ -72,6 +72,19 @@ targets, which is where errors are cheapest to fix and most expensive to leave:
   importable package — never at the `pfsmgraph/` namespace level, which no one distribution
   owns. `dataseq` has all four as of 2026-09-02; the other four members have none, correctly,
   until they release. A release commit missing any of them is a finding.
+  Two further silent variants, both measured 2026-09-02: the wheel ships the **member's**
+  `LICENSE`, not the repo-root one, so editing only the root file changes nothing a consumer
+  sees and the two silently diverge; and package metadata — `authors`, `maintainers`, the
+  copyright holder — passes `twine check` and the whole suite whatever it says, so a wrong
+  address or name is caught by a human reading the diff or not at all.
+- **The repo-root `justfile`'s guard ordering.** `just` runs every recipe body line *after*
+  every prerequisite, `publish` included, so a check written into the body of `release`
+  executes after the irreversible upload. Guards therefore live in the `preflight` recipe,
+  positioned left of `publish` in the prerequisite list. A proposed guard added to
+  `release`'s body is a finding even though it reads correctly and passes: the failure is
+  that it can only fail too late. `clean` as a prerequisite of `build` is load-bearing for a
+  related reason — `dist/` is shared by all five members and the publish glob carries no
+  version, so dropping it lets a stale version of the same package be uploaded.
 - **`docs/plan/DEFERRED.md` trigger integrity.** Several entries must land *as part of* their
   trigger, not after. A change that fires a trigger without discharging its entries is a
   finding. The example this rule was written from -- the reserved-block renumbering with the

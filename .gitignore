@@ -232,5 +232,8 @@ __marimo__/
 .com.apple.timemachine.donotpresent
 .apdisk
 
+# Local repo housekeeping
+tmp/
+
 # Codex working-tree review output (see docs/agents/codex.md)
 REVIEW.md

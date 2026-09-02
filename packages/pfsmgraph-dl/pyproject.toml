@@ -10,7 +10,8 @@ version = "0.1.0.dev0"
 description = "PyTorch models (rnn, transformer) for interpretable modeling of symbolic sequences in the pfsmgraph family."
 requires-python = ">=3.10"
 license = "MIT"
-authors = [{ name = "Panos Mavromatis", email = "panos.mav.ai@gmail.com" }]
+authors = [{ name = "Panos Mavromatis", email = "ai.labs@panos-mav.dev" }]
+maintainers = [{ name = "Mavromatis AI Labs", email = "ai.labs@panos-mav.dev" }]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "Intended Audience :: Science/Research",

@@ -110,9 +110,20 @@ Still to do, in PRD order (§11): `hmm` (Lush translation), then `align`, then `
 Toolchain: **uv** (workspace) + **pytest**. Requires `uv` and Python ≥ 3.10.
 
 - `uv sync` — create/refresh the venv; installs all five members editable (plain `.pth`) plus the `dev` group (`pytest`).
-- `uv run pytest` — run the suite (92 tests: 74 in `packages/pfsmgraph-dataseq/tests/` and 18 in the repo-root `tests/` — 13 covering the ADR 0003 backend matrix, 5 executing documented code blocks against their pasted output per ADR 0013). That verifier reads `docs/api/*/*.md` **and `packages/*/README.md`**: a member README becomes a PyPI long description under an immutable version, so it is the one documentation surface where drift cannot be corrected in place. Every run opens with the backend header. One narrow skip is by design: `test_torch_interop.py` verifies the `DataLoader` integration and skips when torch is absent, since torch is a dependency of no member.
+- `uv run pytest` — run the suite (94 tests: 74 in `packages/pfsmgraph-dataseq/tests/` and 20 in the repo-root `tests/` — 13 covering the ADR 0003 backend matrix, 5 executing documented code blocks against their pasted output per ADR 0013, 2 checking that `docs/ops/release.md` names only recipes the root `justfile` defines). That verifier reads `docs/api/*/*.md` **and `packages/*/README.md`**: a member README becomes a PyPI long description under an immutable version, so it is the one documentation surface where drift cannot be corrected in place. Every run opens with the backend header. One narrow skip is by design: `test_torch_interop.py` verifies the `DataLoader` integration and skips when torch is absent, since torch is a dependency of no member.
 - `uv build --package pfsmgraph-<pkg>` — build one member's sdist + wheel.
 - `uv lock` — refresh `uv.lock` (committed; one lockfile for the whole family).
+
+The repo-root `justfile` wraps the release path — `just release <version> [package]` runs
+test → build → `twine check` → preflight → upload → tag, defaulting to `pfsmgraph-dataseq`
+and taking any member as its second argument. It requires `just` (`brew install just`) and
+is the only place per-package release tags are formed. `just` alone lists every recipe;
+[`docs/ops/release.md`](../ops/release.md) is the runbook. Two properties of it are
+deliberate and easy to break: a guard must be a *prerequisite* of `release`, never a body
+line, because every body line runs after `publish` — the irreversible step; and `clean` is
+a prerequisite of `build` because `dist/` is shared by all five members while the publish
+glob carries no version, so removing it lets a stale version of the same package be
+uploaded.
 
 When `align`/`hmm` move back to meson-python: re-add `meson-python`, `cython`, and `ninja` to the root `dev` group (`ninja` must be on `PATH` for rebuild-on-import), and the compiled members will additionally need a C compiler.
 
@@ -157,7 +168,11 @@ These constrain any code written here. They are inherited from the proof-of-conc
   `src/pfsmgraph/<pkg>/py.typed`. Two of these fail *silently* if placed wrong, which is why
   they are an invariant rather than a checklist. A `LICENSE` symlinked to the repo-root one
   builds a valid-looking sdist and then fails on **unpack** — a symlink escaping the sdist
-  root is refused — so it must be a real copy. A `py.typed` at the distribution root instead
+  root is refused — so it must be a real copy. The copy is also a
+  **silent drift surface**: the wheel ships the member's copy, not the root one, so editing
+  the repo-root `LICENSE` alone changes nothing a consumer sees. Keep the two byte-identical
+  — both carry the copyright line `Copyright (c) 2026 Panayotis Mavromatis`, the legal name
+  rather than the professional one, because a license is read by lawyers. A `py.typed` at the distribution root instead
   of inside the importable package reaches no wheel at all, with no error and no warning, and
   a type checker then discards every annotation in the package (measured on `dataseq`: a
   deliberate `bad: str = vocab.size` was *accepted*). It cannot go at the `pfsmgraph/`
@@ -212,6 +227,10 @@ The `.dev0` suffix stays until that release commit. `uv build` stamps whatever `
 
 ## Design docs
 
+- `docs/ops/release.md` — the release runbook: what a member ships, how the `justfile` recipes
+  compose, and the token/Trusted-Publishing posture. `tests/test_release_runbook.py` checks that
+  every recipe it names exists, and nothing more — the boundary against ADR 0013 is argued in
+  that test's docstring.
 - `docs/design/PRD.md` — packaging, naming, and distribution architecture; the source for the initial ADR set (§9).
 - `docs/plan/DEFERRED.md` — decided-but-not-yet-actionable work, indexed by the trigger that unblocks it (the `dataseq` merge, the first `.pyx`, CI existing, the `align` migration, the first real release — an illustrative list, not the full set; the file's `## Trigger:` headings are). Check it when starting any of those; several items must land *as part of* their trigger rather than after it.
 - `docs/design/adr/` — fourteen records: the twelve initial ADRs from the PRD plus 0013 and 0014, authoritative for the decisions they cover; [`adr/README.md`](../design/adr/README.md) indexes them. Add new records with the next unused number and a row in that index; numbers are never reused.

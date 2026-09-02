@@ -21,7 +21,9 @@ command; both are places where a single-component assumption meets a five-packag
   keeps that step dormant, which makes it an invariant rather than a preference.
 - **It will not tag releases here.** It only ever forms `v<VERSION>` from a root
   `VERSION`, so it cannot produce the `pfsmgraph-<pkg>-v<version>` tags this project uses,
-  under any configuration. Per-package tags are created by hand in the release commit.
+  under any configuration. Those tags come from `just release` at the repo root instead
+  (see [`core.md`](core.md) under "Commands"), which is why `/smart-commit` reporting "no
+  tag created" on a release commit is the correct outcome rather than a gap to fill.
 
 Its Step 3 also specifies conventional-commit subjects (`feat(scope): …`). This repository
 does not use them: every commit is an imperative subject with no prefix and a substantial

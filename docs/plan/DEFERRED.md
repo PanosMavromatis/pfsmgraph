@@ -213,6 +213,14 @@ and several of these must land *as part of* the merge rather than after it.
   with no version specifier at all. So the committed artifact that normally makes
   dependency drift reviewable is structurally blind here, and review is the only
   mechanism there is.
+  **An upper cap is the open half of this, raised 2026-09-02 and not yet decided.** All
+  four dependents read `pfsmgraph-dataseq>=0.1.0` with no ceiling, and in 0.x it is `0.2.0`
+  rather than `1.0.0` where breaking changes conventionally land — so `>=0.1.0` accepts an
+  incompatible base silently, with no signal until import time. `>=0.1.0,<0.2` states the
+  actual claim. It is cheaper now than as a coordinated four-package bump later, but it is
+  a policy question (caps propagate into every consumer's resolution) rather than a
+  correction, so it is filed rather than applied. Decide it when `align` first publishes,
+  which is the first moment a cap could bind on anything real.
 - **Replace the `0.0.0` placeholders within a reasonable window.** PEP 541 treats
   content-free projects as somewhat more reclaimable, and the account email must stay
   reachable. Release order is forced by the dependency graph: `dataseq` → `align` →
@@ -223,6 +231,17 @@ and several of these must land *as part of* the merge rather than after it.
   depends on the account email alone.
 - **Do not add dependency declarations to the placeholders** before then. A stub
   declaring `pfsmgraph-dataseq>=0.1` cannot resolve, because no such version exists.
+- **Keep the repo-root `.gitignore` out of published sdists.** Measured 2026-09-02 on
+  `pfsmgraph-dataseq` 0.1.0: hatchling finds no `.gitignore` in the member directory, walks
+  up to the VCS root, and ships the repo-root file inside the sdist. The content is inert
+  -- tool ignores, no secrets, and the repo is public -- so this is noise rather than a
+  leak, and it is **not** worth holding a release for. It matters only because it makes the
+  sdist a function of repo housekeeping instead of of the member: an edit to a root ignore
+  rule changes the artifact, which is a confusing signal when comparing two builds. The
+  obvious fix does not work -- `exclude = ["/.gitignore"]` under
+  `[tool.hatch.build.targets.sdist]` leaves the file in place, tried and measured the same
+  day -- so this needs a real look at hatchling's sdist file selection rather than a
+  one-line patch. Revisit at the next member release, where the same behaviour will repeat.
 - **Drop the `.dev0` suffix and tag the release, per package.** All five members declare
   `0.1.0.dev0`; the release commit for a package changes only that package's version to
   `0.1.0` and is tagged `pfsmgraph-<pkg>-v<version>` — `pfsmgraph-dataseq-v0.1.0`. Hyphen,

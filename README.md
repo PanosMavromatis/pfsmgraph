@@ -53,7 +53,7 @@ Requires [uv](https://docs.astral.sh/uv/) and Python ≥ 3.10.
 
 ```bash
 uv sync                             # venv + all five members editable + dev tools
-uv run pytest                       # run the test suite (92: 74 dataseq, 18 root)
+uv run pytest                       # run the test suite (94: 74 dataseq, 20 root)
 uv build --package pfsmgraph-align  # build one distribution
 uv lock                             # refresh uv.lock (committed; one per family)
 ```
@@ -65,6 +65,8 @@ Because `uv sync` installs every member **editable**, imports resolve to `packag
 ## Publishing
 
 Release order follows the dependency graph: `dataseq` → `align` → {`hseg`, `hmm`, `dl`}; a package cannot publish before its dependencies exist on PyPI. `pfsmgraph-dataseq` is released at 0.1.0; the other five names — the four remaining packages plus the bare `pfsmgraph` umbrella — are still dependency-free `0.0.0` placeholders. See PRD §4 and §11.
+
+Releases run through the repo-root `justfile`, which requires [just](https://just.systems) (`brew install just`): `just release <version> [package]` runs test → build → `twine check` → preflight → upload → tag, defaulting to `pfsmgraph-dataseq`. `just` alone lists every recipe, and [`docs/ops/release.md`](docs/ops/release.md) is the runbook.
 
 ## License
 

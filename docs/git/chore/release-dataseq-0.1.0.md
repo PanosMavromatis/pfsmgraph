@@ -129,3 +129,54 @@ the endpoint — verified by `--dry-run` — so uv uses its default
 `https://upload.pypi.org/legacy/`. Credentials are likewise unconfigured and must be passed
 at the call: uv attempts trusted publishing (OIDC) first, which resolves only inside CI, so
 that failure on a development machine is expected rather than a fault.
+
+### 2026-09-02 — the release path becomes a recipe, and an identity audit
+
+The publish step was going to be typed by hand once and forgotten. It is now the repo-root
+`justfile` plus `docs/ops/release.md`, reviewed against a draft written in a session that
+did not have the repo context loaded.
+
+**What the review changed.** Five fixes, of which one matters structurally: `just` runs
+every recipe body line *after* every prerequisite, `publish` included. Guards written into
+the body of `release` — the obvious place, and where the first draft of my own suggestion
+put them — would have executed after the irreversible upload. They live in a `preflight`
+recipe positioned left of `publish` instead. The others: `release`'s `version` argument was
+inert (`build` reads `pyproject.toml`, the publish glob carries no version), so
+`just release 0.2.0` would have published 0.1.0 and tagged it `v0.2.0`; `release` neither
+ran the suite nor checked the tree was committed; a missing keychain entry produced an empty
+`UV_PUBLISH_TOKEN`, which `uv publish` treats as "try OIDC" rather than as an error; and
+four recipes' `just --list` descriptions were mid-sentence fragments, because `just` takes
+the *last contiguous* comment line above a recipe.
+
+**The rebuild question, measured.** `just release` runs `clean` first, so it discards the
+artifacts that were clean-venv verified. Rebuilding from an unchanged tree gives a
+**byte-identical wheel** — hatchling normalises member timestamps to `02-02-2020 00:00` —
+but a differing sdist, and the reason is not timestamps: with no `.gitignore` in the member
+directory, hatchling walks up to the VCS root and ships **the repo-root `.gitignore`** in
+the sdist. A root housekeeping edit therefore changes the artifact. `exclude = ["/.gitignore"]`
+under `[tool.hatch.build.targets.sdist]` does not remove it — tried — so it is filed rather
+than fixed. The finding retires the question: the wheel is reproducible, so rebuilding
+through the guarded path beats preserving bytes by hand.
+
+**Documentation scope.** `docs/ops/release.md` is deliberately outside the ADR 0013
+verifier. That ADR governs API documentation and its guard is *pasted output*; the runbook
+pastes none, and its blocks publish to PyPI, prompt the Keychain, and hit the network.
+Widening the ADR to name a document its mechanism cannot check would make its central claim
+false. `tests/test_release_runbook.py` asserts the smaller thing that *is* checkable —
+every `just <recipe>` the runbook names exists — and its docstring records the boundary.
+
+**The identity audit, which is the part that nearly shipped wrong.** All five members
+carried `panos.mav.ai@gmail.com` in `authors`, which I had filled in from session context
+without asking. It is the maintainer's Anthropic account address, an inbox they do not
+answer from. Corrected to `ai.labs@panos-mav.dev`, with `Mavromatis AI Labs` added as
+`maintainers` — PEP 621 has no organization field, so that is the slot. The LICENSE
+copyright line moved from the professional name to the legal one,
+`Copyright (c) 2026 Panayotis Mavromatis`, in both the root file and the member copy the
+wheel ships. Repo-local `git config user.email` set to the same professional address; the
+machine-global identity is untouched.
+
+None of this was catchable by machine: `twine check` passes, the suite passes, and a clean
+venv installs happily whatever the metadata says. It held only because the diff was read
+before the upload, and the built artifacts in `dist/` are stale on three counts because of
+it. That is the argument for the identity fields being a pre-publish conversation rather
+than a build step.
