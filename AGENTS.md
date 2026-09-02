@@ -9,7 +9,7 @@ Shared project knowledge for any coding agent working in this repository.
 
 **`dataseq` is implemented and tested; the other four members are still empty scaffolding.** In place: the uv workspace root `pyproject.toml` (virtual — no `[project]` table), `uv.lock`, all five `packages/*` members with their own `pyproject.toml`, the (currently dormant) `meson.build` files for `align` and `hmm`, and an empty `pfsmgraph/<pkg>/__init__.py` for the four members that have no code yet (plus `dl/rnn/` and `dl/transformer/`). The ADRs in `docs/design/adr/` are authoritative for the decisions they cover — the twelve initial records from the PRD, plus 0013 (how this family documents its public surfaces) and 0014 (how imported migration source is retained), both added 2026-09-01; the PRD remains the narrative design document.
 
-**What `dataseq` now contains.** Six modules under `packages/pfsmgraph-dataseq/src/pfsmgraph/dataseq/` (the container landed 2026-08-31, the encoder API 2026-09-01) and 74 tests — the first tests in this repository, and 74 of the suite's 91 today; the remaining 17 are the repo-root backend-matrix and API-docs tests. `_reserved.py` hard-codes the ADR 0011 block as module constants, with no class or parameter that could relocate it; `_vocabulary.py` holds the `Vocabulary` protocol and `SymbolTable`, a frozen first-appearance-ordered implementation that encodes strictly and decodes *totally*, reserved codes included; `_record.py` and `_dataset.py` are the ragged container, whose records carry true lengths and never padding; `_collate.py` is `pad_collate`, where padding is introduced and always returned with its mask. The container imports neither torch nor pandas — verified in a subprocess — and its one runtime dependency is `numpy`.
+**What `dataseq` now contains.** Six modules under `packages/pfsmgraph-dataseq/src/pfsmgraph/dataseq/` (the container landed 2026-08-31, the encoder API 2026-09-01) and 74 tests — the first tests in this repository, and 74 of the suite's 92 today; the remaining 18 are the repo-root backend-matrix and API-docs tests. `_reserved.py` hard-codes the ADR 0011 block as module constants, with no class or parameter that could relocate it; `_vocabulary.py` holds the `Vocabulary` protocol and `SymbolTable`, a frozen first-appearance-ordered implementation that encodes strictly and decodes *totally*, reserved codes included; `_record.py` and `_dataset.py` are the ragged container, whose records carry true lengths and never padding; `_collate.py` is `pad_collate`, where padding is introduced and always returned with its mask. The container imports neither torch nor pandas — verified in a subprocess — and its one runtime dependency is `numpy`.
 
 **The ADR 0003 reporting mechanism is complete as of 2026-09-01, and it lives at the repo
 root.** `conftest.py` carries `pytest_report_header` and nothing else; `_backends.py`
@@ -106,14 +106,14 @@ under `packages/` may import or read from either**: their contents exist on one 
 so a distribution reaching in passes locally and fails in every clone. Unlike `.scratch/`,
 neither is evidence about anything; do not add negations to commit data through them.
 
-Still to do, in PRD order (§11): `hmm` (Lush translation), then `align`, then `hseg`. `dataseq` is finished bar its 0.1.0 release, documentation included. The container half of the merge (three existing implementations, `dl` version as base — §3.5) has landed.
+Still to do, in PRD order (§11): `hmm` (Lush translation), then `align`, then `hseg`. `dataseq` is finished: its 0.1.0 release artifacts are built and verified as of 2026-09-02, awaiting only the PyPI upload and its tag. The container half of the merge (three existing implementations, `dl` version as base — §3.5) has landed.
 
 ## Commands
 
 Toolchain: **uv** (workspace) + **pytest**. Requires `uv` and Python ≥ 3.10.
 
 - `uv sync` — create/refresh the venv; installs all five members editable (plain `.pth`) plus the `dev` group (`pytest`).
-- `uv run pytest` — run the suite (91 tests: 74 in `packages/pfsmgraph-dataseq/tests/` and 17 in the repo-root `tests/` — 13 covering the ADR 0003 backend matrix, 4 executing every `docs/api/` code block against its pasted output per ADR 0013). Every run opens with the backend header. One narrow skip is by design: `test_torch_interop.py` verifies the `DataLoader` integration and skips when torch is absent, since torch is a dependency of no member.
+- `uv run pytest` — run the suite (92 tests: 74 in `packages/pfsmgraph-dataseq/tests/` and 18 in the repo-root `tests/` — 13 covering the ADR 0003 backend matrix, 5 executing documented code blocks against their pasted output per ADR 0013). That verifier reads `docs/api/*/*.md` **and `packages/*/README.md`**: a member README becomes a PyPI long description under an immutable version, so it is the one documentation surface where drift cannot be corrected in place. Every run opens with the backend header. One narrow skip is by design: `test_torch_interop.py` verifies the `DataLoader` integration and skips when torch is absent, since torch is a dependency of no member.
 - `uv build --package pfsmgraph-<pkg>` — build one member's sdist + wheel.
 - `uv lock` — refresh `uv.lock` (committed; one lockfile for the whole family).
 
@@ -153,6 +153,22 @@ These constrain any code written here. They are inherited from the proof-of-conc
 - **Three-phase algorithm lifecycle**, applied in order wherever dynamic programming appears: pure Python (correctness) → Cython (performance) → Numba CUDA anti-diagonal wavefront (scale).
 - **One parameterized test suite per algorithm**, run automatically against every available backend, so backend equivalence is enforced rather than assumed. Absent hardware (no CUDA device) skips, but *loudly* — the session header names every backend excluded and why; a backend that is implemented but not importable (missing or stale Cython build) is a hard failure, never a skip; a lifecycle phase not yet reached contributes no parameter at all. `PFSMGRAPH_REQUIRE_BACKENDS` escalates skips to failures for CI. See ADR 0003.
 - **Build backends are per-package, not family-wide.** meson-python for compiled members (`align`, the Baum-Welch core of `hmm`); hatchling for pure-Python members. meson-python editable installs need `ninja` present for rebuild-on-import. *(Currently `align`/`hmm` are on hatchling too, pending their first `.pyx` — see "Current state".)*
+- **A released member ships four files the version bump does not imply**, all inside
+  `packages/pfsmgraph-<pkg>/`: a `README.md` (its PyPI long description — the root one is
+  about the workspace and every relative link in it 404s there), a `LICENSE` **file**, the
+  `Typing :: Typed` classifier, and a PEP 561 marker at
+  `src/pfsmgraph/<pkg>/py.typed`. Two of these fail *silently* if placed wrong, which is why
+  they are an invariant rather than a checklist. A `LICENSE` symlinked to the repo-root one
+  builds a valid-looking sdist and then fails on **unpack** — a symlink escaping the sdist
+  root is refused — so it must be a real copy. A `py.typed` at the distribution root instead
+  of inside the importable package reaches no wheel at all, with no error and no warning, and
+  a type checker then discards every annotation in the package (measured on `dataseq`: a
+  deliberate `bad: str = vocab.size` was *accepted*). It cannot go at the `pfsmgraph/`
+  namespace level either, for the same reason no `__init__.py` may: no single distribution
+  owns that level. Verify by installing the built wheel into a clean venv outside the
+  workspace — a file listing shows what went into the box, not what a consumer gets out.
+  All four land **in the release commit**, since they are wheel content and adding them later
+  leaves a published version standing as the broken one.
 - **"GPU" means two unrelated things.** `numba-cuda` for the DP packages, `torch` for `dl`. Do not unify these into one `[gpu]` extra.
 - **The ADRs outrank the imported implementations.** The `dataseq` merge takes the `dl`
   (MelodyHPO) version as its *base* because it is the most mature of the three, but base
@@ -187,13 +203,13 @@ During development a `{ workspace = true }` path source satisfies *any* version 
 
 The `0.0.0` placeholder releases already on PyPI are intentionally dependency-free; do not add dependency declarations to them.
 
-A live instance of the footgun, worth recognising: all five members declare `0.1.0.dev0`, and `0.1.0.dev0` does **not** satisfy `>=0.1` under PEP 440 — a `.devN` release sorts strictly before the final, and is excluded even with `prereleases=True`. So `align`'s declared `pfsmgraph-dataseq>=0.1.0` (reviewed and spelled in full on 2026-09-01; the `pfsmgraph-align>=0.1` bounds are deliberately left unreviewed, and the divergent spelling is what records that) is satisfiable by nothing that exists today: PyPI has only `0.0.0`, and local is `0.1.0.dev0`. It never fails because the workspace source satisfies any constraint, and **`uv.lock` cannot catch it either** — a workspace member's `requires-dist` entry records no version specifier at all, so changing all four declared bounds left the lockfile byte-identical (measured 2026-09-01). Review is the only mechanism there is. This resolves itself when a real `0.1.0` publishes.
+A live instance of the footgun, worth recognising: the four members still in development declare `0.1.0.dev0` (`dataseq` moved to `0.1.0` at its release commit, 2026-09-02), and `0.1.0.dev0` does **not** satisfy `>=0.1` under PEP 440 — a `.devN` release sorts strictly before the final, and is excluded even with `prereleases=True`. So `align`'s declared `pfsmgraph-dataseq>=0.1.0` (reviewed and spelled in full on 2026-09-01; the `pfsmgraph-align>=0.1` bounds are deliberately left unreviewed, and the divergent spelling is what records that) is satisfiable by nothing that exists today: PyPI has only `0.0.0`, and local is `0.1.0.dev0`. It never fails because the workspace source satisfies any constraint, and **`uv.lock` cannot catch it either** — a workspace member's `requires-dist` entry records no version specifier at all, so changing all four declared bounds left the lockfile byte-identical (measured 2026-09-01). Review is the only mechanism there is. The `pfsmgraph-dataseq` half of this resolves as soon as `0.1.0` is on PyPI; the three `pfsmgraph-align>=0.1` bounds stay unsatisfiable until `align` releases.
 
 ## Versioning
 
-**Versions are per-package, and there is deliberately no `VERSION` file at the repo root.** Release order is forced by the dependency graph — `dataseq` must publish before `align` can — so the five members can never share a version, and a repo-wide version number would be a claim about nothing. Each member owns the `version` field in its own `pyproject.toml`; all five currently read `0.1.0.dev0`.
+**Versions are per-package, and there is deliberately no `VERSION` file at the repo root.** Release order is forced by the dependency graph — `dataseq` must publish before `align` can — so the five members can never share a version, and a repo-wide version number would be a claim about nothing. Each member owns the `version` field in its own `pyproject.toml`: `pfsmgraph-dataseq` reads `0.1.0` as of its release commit (2026-09-02) and the other four still read `0.1.0.dev0` — the scheme working as intended rather than drift.
 
-Release tags are per-package too: `pfsmgraph-<pkg>-v<version>`, e.g. `pfsmgraph-dataseq-v0.1.0`. Hyphen rather than slash, because git refs are paths and a `pfsmgraph-dataseq/v0.1.0` tag cannot coexist with a plain `pfsmgraph-dataseq` one. No tags exist yet; the first is created by the release commit (`docs/plan/DEFERRED.md`, trigger "the first real release").
+Release tags are per-package too: `pfsmgraph-<pkg>-v<version>`, e.g. `pfsmgraph-dataseq-v0.1.0`. Hyphen rather than slash, because git refs are paths and a `pfsmgraph-dataseq/v0.1.0` tag cannot coexist with a plain `pfsmgraph-dataseq` one. The first is `pfsmgraph-dataseq-v0.1.0`, cut by hand at the release commit (`docs/plan/DEFERRED.md`, trigger "the first real release"); no command in use here creates a per-package tag.
 
 The `.dev0` suffix stays until that release commit. `uv build` stamps whatever `pyproject.toml` declares onto the wheel, so a bare `0.1.0` on an incomplete package means one accidental publish burns `0.1.0` on PyPI permanently — versions are immutable, and yanking or deleting a release does not free the number. A burnt `0.1.0.dev0` costs nothing by comparison, and pip will not install a pre-release by default.
 

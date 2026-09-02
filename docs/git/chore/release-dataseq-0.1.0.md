@@ -59,3 +59,73 @@ yanking does not free the number.
   pre-release policy. **The lockfile is blind to all of it**: `uv.lock` came out
   byte-identical, because a workspace member's `requires-dist` entry carries no version
   specifier at all. Recorded in `DEFERRED.md` as the reason that entry recurs forever.
+
+### 2026-09-02 — the release artifacts
+
+`pfsmgraph-dataseq` moves to `0.1.0`; the other four members stay at `0.1.0.dev0`.
+
+Two files the version bump does not imply had to land with it. The member shipped **no
+README and no LICENSE file**, so its PyPI page would have been blank and its wheel would
+have carried no license text despite declaring `license = "MIT"`. Both are now in the
+member directory, and the license needed no `license-files` configuration at all —
+hatchling's PEP 639 default glob finds a `LICENSE` in the project root unaided.
+
+**The LICENSE cannot be a symlink to the repo-root one, and the failure mode is the
+interesting part.** Hatchling writes the symlink verbatim into the sdist and the build
+*succeeds*; `uv build` then dies unpacking that sdist to build the wheel from it —
+*"symlink destination for ../../LICENSE is outside of the target directory"*. That is a
+consumer-side failure, caught here only because `uv build` routes wheel-building through
+the sdist. A backend building both from the source tree would have shipped a permanently
+broken sdist under an immutable version number. Real copies, then, and the drift between
+the five copies is a cost accepted rather than avoided.
+
+The README is member-specific rather than a copy of the root one: the root README is about
+the workspace, and every relative link in it is a 404 on PyPI. `[project.urls]` was added
+alongside, since a page with a body but no link off it is the same blankness one layer down.
+
+`tests/test_api_docs.py` now discovers `packages/*/README.md` as well as `docs/api/*/*.md`.
+The reason is that a member README becomes a PyPI long description under an immutable
+version — the one documentation surface where drift cannot be corrected in place, and until
+now the only one with no guard on it. It earned the change immediately, failing the draft
+twice where examples had been transcribed from `print()` output rather than the `>>>` repr.
+Suite 91 → 92.
+
+Verification is a clean-venv install of the wheel, not a listing of its contents: outside
+the workspace it pulls only numpy, reports `0.1.0`, reproduces every README example byte for
+byte, imports neither torch nor pandas, and leaves `pfsmgraph.__file__` as `None` — the PEP
+420 namespace invariant holding in the shipped artifact rather than only in the source tree.
+Both artifacts pass `twine check`.
+
+`.gitignore` still ships in the sdist. That is the repo-root file, which hatchling includes
+so the exclusion rules travel with the sdist; it is left alone.
+
+### 2026-09-02 — the PEP 561 marker, and how `uv publish` is actually addressed
+
+`src/pfsmgraph/dataseq/py.typed` was added before publishing, with the `Typing :: Typed`
+classifier alongside. The source has been fully annotated since the merge — a `Vocabulary`
+`Protocol`, `-> list[str]`, `frozenset[str]` throughout — and without the marker a type
+checker discards all of it. Measured against the wheel in a clean venv: `vocab.size`
+revealed as `Any`, `vocab.decode(...)` as `Any`, and a deliberate `bad: str = vocab.size`
+**accepted silently**. With the marker: `int`, `list[str]`, and the bad assignment reported.
+
+The suggestion that prompted this named `packages/pfsmgraph-dataseq/py.typed`, the
+distribution root. Built that way the wheel contains no `py.typed` at all — no error, no
+warning — because the file belongs to no package and `packages = ["src/pfsmgraph"]` never
+sees it. Inside the importable package it ships with no `pyproject.toml` change, hatchling
+including every file under that tree rather than only `.py`.
+
+PEP 420 makes the placement load-bearing rather than conventional. No single distribution
+owns the `pfsmgraph/` level, which is why no `__init__.py` may sit there; a marker there
+would be one member asserting typedness for four it does not ship. Each member marks its own
+regular subpackage, and the obligation for the other four is filed in `DEFERRED.md` under
+the release trigger — in the release commit, since `py.typed` is wheel content and adding it
+later leaves a published version standing as the one whose types do not work.
+
+**On publishing.** `uv publish` has no `--package` flag; it takes file globs defaulting to
+`dist/*`, and `dist/` is one directory shared by all five members, so the files are named
+explicitly and a project-scoped PyPI token is the backstop that turns a stray glob into a
+403 rather than a burnt version. Nothing in this repository or the user configuration sets
+the endpoint — verified by `--dry-run` — so uv uses its default
+`https://upload.pypi.org/legacy/`. Credentials are likewise unconfigured and must be passed
+at the call: uv attempts trusted publishing (OIDC) first, which resolves only inside CI, so
+that failure on a development machine is expected rather than a fault.

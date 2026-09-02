@@ -58,11 +58,23 @@ targets, which is where errors are cheapest to fix and most expensive to leave:
   `pfsmgraph-dataseq` read `>=0.1.0` and were reviewed on 2026-09-01; the three naming
   `pfsmgraph-align` still read `>=0.1` and were not, and that divergent spelling is the
   record of which is which -- do not "fix" it into uniformity, which would destroy the
-  distinction at no gain. Both are declared against `0.0.0` placeholders. Local green proves
+  distinction at no gain. `pfsmgraph-align` is still only a `0.0.0` placeholder on PyPI;
+  `pfsmgraph-dataseq` publishes at `0.1.0` on 2026-09-02, which is what makes its four
+  bounds satisfiable for the first time. Local green proves
   nothing here — read the bounds as literal claims about PyPI. **Nor does `uv.lock`**:
   measured 2026-09-01, changing all four bounds left it byte-identical, because a workspace
   member's `requires-dist` entry carries no version specifier at all. A clean lockfile diff
   is not evidence that a bound is right.
+- **Release packaging in a member's `packages/pfsmgraph-<pkg>/`.** Two defects here build
+  cleanly and produce a broken artifact, so a green build is not evidence. A `LICENSE`
+  symlinked to the repo-root one yields an sdist that fails on *unpack*; a `py.typed` at the
+  distribution root rather than at `src/pfsmgraph/<pkg>/py.typed` reaches no wheel at all,
+  silently, and a type checker then discards every annotation in the package. Check for a
+  real-file `LICENSE`, a member-specific `README.md` with absolute links only (a relative
+  link 404s on PyPI), the `Typing :: Typed` classifier, and the marker at the path inside the
+  importable package — never at the `pfsmgraph/` namespace level, which no one distribution
+  owns. `dataseq` has all four as of 2026-09-02; the other four members have none, correctly,
+  until they release. A release commit missing any of them is a finding.
 - **`docs/plan/DEFERRED.md` trigger integrity.** Several entries must land *as part of* their
   trigger, not after. A change that fires a trigger without discharging its entries is a
   finding. The example this rule was written from -- the reserved-block renumbering with the

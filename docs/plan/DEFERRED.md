@@ -217,6 +217,10 @@ and several of these must land *as part of* the merge rather than after it.
   content-free projects as somewhat more reclaimable, and the account email must stay
   reachable. Release order is forced by the dependency graph: `dataseq` → `align` →
   {`hseg`, `hmm`, `dl`}.
+  **Partially discharged 2026-09-02:** `pfsmgraph-dataseq` 0.1.0 replaces its placeholder.
+  The entry stays open for the remaining five names — `align`, `hseg`, `hmm`, `dl`, and the
+  bare `pfsmgraph` umbrella, which holds a placeholder no package will ever replace and so
+  depends on the account email alone.
 - **Do not add dependency declarations to the placeholders** before then. A stub
   declaring `pfsmgraph-dataseq>=0.1` cannot resolve, because no such version exists.
 - **Drop the `.dev0` suffix and tag the release, per package.** All five members declare
@@ -229,6 +233,31 @@ and several of these must land *as part of* the merge rather than after it.
   `.dev0` until that commit is deliberate: a bare `0.1.0` on an incomplete package means an
   accidental `uv build` + publish burns `0.1.0` on PyPI permanently, since versions are
   immutable and deleting a release does not free the number.
+  **Partially discharged 2026-09-02**, and the mechanics are recorded because four members
+  still owe them: `pfsmgraph-dataseq` alone moved to `0.1.0`, the other four still read
+  `0.1.0.dev0`, and the tag was cut by hand at the release commit. Two things the member
+  needed that the version bump does not imply — a `README.md` and a `LICENSE` **file** in the
+  member directory. Without them the PyPI page is blank and the wheel carries no license
+  text, though `license = "MIT"` is declared as metadata. The LICENSE must be a real copy:
+  a symlink to the repo-root one builds fine and then fails on *unpack*, since a symlink
+  escaping the sdist root is refused — a consumer-side failure under an immutable version.
+- **Ship a `py.typed` marker with every member that has code, in the same commit that
+  releases it.** PEP 561: without the marker a type checker discards a package's inline
+  annotations entirely, however thorough they are. Measured on `dataseq` 2026-09-02 against
+  the built wheel in a clean venv — `SymbolTable.size` revealed as `Any`, and a deliberate
+  `bad: str = vocab.size` was accepted silently; with the marker, `int`, and the assignment
+  is caught. `dataseq` now ships one and carries the `Typing :: Typed` classifier; `align`,
+  `hseg`, `hmm` and `dl` each still owe theirs.
+  **The path is the whole of it**, and getting it wrong fails silently. The marker goes at
+  `packages/pfsmgraph-<pkg>/src/pfsmgraph/<pkg>/py.typed` — *inside* the importable package.
+  At the distribution root it lands in no package, hatchling's `packages = ["src/pfsmgraph"]`
+  never sees it, and the wheel is built with no marker and no warning. At the `pfsmgraph/`
+  namespace level it would be one distribution claiming typedness for four it does not ship,
+  which is the same reason no `__init__.py` may sit there. Placed correctly it needs no
+  `pyproject.toml` change: hatchling ships every file under the packages tree, not only `.py`.
+  **In the release commit, not after**, because `py.typed` is wheel content: added later it
+  reaches users only in the next patch release, leaving a published version standing as the
+  one whose types do not work.
 - **Sweep the prose claims about repository state, semantically.** The release is when
   `README.md`, the PRD, and the ADR index are first read by people with no other source of
   truth, so it is the deadline for a class of rot that has recurred on every branch so far:
@@ -252,6 +281,14 @@ and several of these must land *as part of* the merge rather than after it.
   briefly misled, and it is corrected on contact; the cost of a stale README at release is
   paid by readers who cannot tell. If a second repo-hygiene item appears before then, this
   is better promoted to its own revision via `/open-revision` than left waiting.
+  **Done (2026-09-01), and the entry is closed.** Swept on `chore/release-dataseq-0.1.0`:
+  `README.md`, both agent docs and their regenerated artifacts, the PRD, all fourteen ADR
+  `Status` lines against their index rows, and `docs/api/`. `codex.md` carried the worst of
+  it — "the repo is scaffolding: no algorithms, no tests", and a bullet calling `SymbolTable`
+  provisional a hundred lines after telling a reviewer to report exactly that as staleness.
+  The two `0.0.0` claims the sweep found true were left for the publishing commit that
+  falsifies them, per this entry's own rule, and changed there. Goal 2 of that branch's plan
+  holds the per-surface record.
 
 ## Trigger: the `align` migration
 

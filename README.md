@@ -2,7 +2,7 @@
 
 A composable ecosystem of Python packages for modeling symbolic data sequences. Probabilistic finite-state models (PFSMs) are the unifying core, bridging sequence alignment, hierarchical segmentation, HMMs (Baum-Welch), deep learning (RNNs, Transformers), interpretability, and graph operations.
 
-> **Status: one package implemented, four scaffolded.** The workspace layout, package boundaries, and build backends are in place. `pfsmgraph-dataseq` — the base layer every other member depends on — is implemented, tested, and documented at [`docs/api/dataseq/`](docs/api/dataseq/README.md); the other four are still empty namespace subpackages. Nothing has been released beyond the `0.0.0` name placeholders. See [`docs/design/PRD.md`](docs/design/PRD.md) for the design and [`docs/design/adr/`](docs/design/adr/README.md) for the decision records, which are authoritative.
+> **Status: one package implemented, four scaffolded.** The workspace layout, package boundaries, and build backends are in place. `pfsmgraph-dataseq` — the base layer every other member depends on — is implemented, tested, documented at [`docs/api/dataseq/`](docs/api/dataseq/README.md), and released at 0.1.0. The other four are still empty namespace subpackages, and their names still hold dependency-free `0.0.0` placeholders. See [`docs/design/PRD.md`](docs/design/PRD.md) for the design and [`docs/design/adr/`](docs/design/adr/README.md) for the decision records, which are authoritative.
 
 ## Packages
 
@@ -53,7 +53,7 @@ Requires [uv](https://docs.astral.sh/uv/) and Python ≥ 3.10.
 
 ```bash
 uv sync                             # venv + all five members editable + dev tools
-uv run pytest                       # run the test suite (91: 74 dataseq, 17 root)
+uv run pytest                       # run the test suite (92: 74 dataseq, 18 root)
 uv build --package pfsmgraph-align  # build one distribution
 uv lock                             # refresh uv.lock (committed; one per family)
 ```
@@ -64,7 +64,7 @@ Because `uv sync` installs every member **editable**, imports resolve to `packag
 
 ## Publishing
 
-Release order follows the dependency graph: `dataseq` → `align` → {`hseg`, `hmm`, `dl`}; a package cannot publish before its dependencies exist on PyPI. All six names — the five packages plus the bare `pfsmgraph` umbrella — are claimed with dependency-free `0.0.0` placeholders. See PRD §4 and §11.
+Release order follows the dependency graph: `dataseq` → `align` → {`hseg`, `hmm`, `dl`}; a package cannot publish before its dependencies exist on PyPI. `pfsmgraph-dataseq` is released at 0.1.0; the other five names — the four remaining packages plus the bare `pfsmgraph` umbrella — are still dependency-free `0.0.0` placeholders. See PRD §4 and §11.
 
 ## License
 

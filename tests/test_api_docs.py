@@ -37,7 +37,12 @@ from contextlib import redirect_stdout
 import pytest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
-API_DOCS = sorted((REPO_ROOT / "docs" / "api").glob("*/*.md"))
+# Member READMEs are included because each one becomes a PyPI long description under an
+# immutable version number -- the single surface where drift cannot be corrected in
+# place. They follow the same convention as ``docs/api/``, so the same runner reads them.
+API_DOCS = sorted((REPO_ROOT / "docs" / "api").glob("*/*.md")) + sorted(
+    (REPO_ROOT / "packages").glob("*/README.md")
+)
 
 _FENCE = re.compile(r"^```python\n(.*?)^```", re.S | re.M)
 _ERROR_LINE = re.compile(
