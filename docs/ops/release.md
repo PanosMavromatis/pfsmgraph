@@ -188,6 +188,13 @@ at a commit that declares 0.1.0. Both halves are irreversible, and both exit 0.
 the working tree is committed (a tag on a dirty tree names a state that exists nowhere
 else), and pushes `HEAD` so the published commit exists on the remote before the upload.
 
+**Do not run it standalone.** The version check matches the *filename* in `dist/`, so it
+cannot distinguish a current artifact from a stale one carrying the same version number:
+against an old build it passes, and reads as verification. Inside `release` the gap does not
+exist, since `clean` and `build` run first and it only ever sees an artifact built moments
+earlier. Observed 2026-09-02, when it passed against a wheel whose metadata three commits
+had since changed.
+
 ---
 
 ## 2. Create the project-scoped token

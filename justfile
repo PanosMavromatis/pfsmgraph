@@ -112,6 +112,14 @@ publish-test package=default_package:
 # pyproject.toml and the publish glob carries no version at all, so without this
 # assertion `just release 0.2.0` would publish 0.1.0 and tag it v0.2.0. Both
 # halves of that are irreversible.
+#
+# ONLY MEANINGFUL AS A PREREQUISITE OF `release`, never on its own. The version
+# check matches the *filename* in dist/, so it cannot tell a current artifact
+# from a stale one carrying the same version number -- run standalone against an
+# old build it passes and reads as verification. Inside `release` that gap does
+# not exist, because `clean` and `build` run first and it only ever sees an
+# artifact built moments earlier. Observed 2026-09-02: it passed against a wheel
+# whose metadata three commits had since changed.
 
 # Assert the requested version was built and the tree is committed and pushed.
 preflight version package=default_package:
