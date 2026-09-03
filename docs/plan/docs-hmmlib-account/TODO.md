@@ -84,6 +84,28 @@ does not hold" is a finding, while silence is indistinguishable from not having 
   - [x] Revise `docs/plan/TODO.md` for any falsifier that holds, and amend the affected `planned/` draft if the consequence reaches 03 or 04
     > **Done:** Appended the three verdicts above, in place, to revision 02's falsifier bullets in `docs/plan/TODO.md`. Falsifier 3's consequence stays inside revision 02 — 03's draft already treats "the trainer" as something *it* introduces (e.g. "Batch the trainer over sequences"), so nothing there needed amending on this account. A second, unrelated correction surfaced while reading §8-9 for this check: the region map both this branch's own goal-1 annotation and `03-hmm-v0.2.0.md`'s falsifier text inherited from the structural survey — "`257-346` M-step" — is wrong; `HMMLIB-ACCOUNT.md` §8-9 (and its own "Corrected region map" appendix table) establish `257-346` as quantization + `update-dl`, and the real M-step is `run-add` at `483-652`. Corrected `03-hmm-v0.2.0.md`'s citations; see the correction note under goal 1 below for this branch's own copy of the mislabeling.
 
-- [ ] Record what the account changes for the subgoals downstream of it
-  - [ ] Note anything subgoal 2 (the public surface) now has evidence for that it previously had only a survey of
-  - [ ] Note anything subgoal 3 (the `Utility` migration) should expect, without doing it here
+- [x] Record what the account changes for the subgoals downstream of it
+  - [x] Note anything subgoal 2 (the public surface) now has evidence for that it previously had only a survey of
+    > **Verdict:** Two constraints, added to subgoal 2 in place. Lush's model reads its
+    > alphabet directly out of the corpus's `.sds` directory rather than taking a
+    > vocabulary object (`HMMLIB-ACCOUNT.md` §4) — the file-coupled seam `ACCOUNT.md` §1
+    > already found on the container side, not to be reproduced; take a `SymbolTable`
+    > explicitly instead. And Lush's Viterbi always decodes one sequence, since batching
+    > belongs to a trainer that does not exist in 0.1.0 — so `pad_collate` is plausibly out
+    > of scope for this subgoal entirely, deferred to revision 03's batched training.
+  - [x] Note anything subgoal 3 (the `Utility` migration) should expect, without doing it here
+    > **Verdict:** One naming gap and one implementation gotcha, added to subgoal 3 in
+    > place. `safe-add--log2` — the log₂-domain accumulator Viterbi's inner loop actually
+    > calls, and home of the `-1` sentinel (§3) — was previously named only by allusion
+    > ("the log-zero sentinel `safe->--log` implies"), naming the comparator but not the
+    > accumulator; now named directly. And the stationary solve needs its row-replacement
+    > trick reproduced, not just its numerical result: `(Pᵀ - I)π = 0` is singular by
+    > construction, so handing the homogeneous system as stated to `numpy.linalg.solve`
+    > fails outright (§4).
+  > **Done:** Beyond this goal's two named sub-items, one more finding from goal 1's own
+  > reading surfaced while re-checking the account for this goal and was added, with the
+  > user's explicit go-ahead, to the "Implement Viterbi at ADR 0002 phase 1" subgoal rather
+  > than left to be rediscovered there: `update-viterbi-path` seeds δ with a raw probability
+  > into the bit-domain accumulator (§7), inverting the start-state preference and turning
+  > an exact zero into the *best* possible δ rather than impossible. That subgoal now
+  > requires deciding, and recording, whether the bug is fixed or faithfully reproduced.
