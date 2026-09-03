@@ -212,12 +212,33 @@ member: all five hold `0.0.0` placeholders. There is no bootstrap-token step.
 Store it in the Keychain, never in `.env`, `~/.zshrc`, `~/.pypirc`, or the repo tree:
 
 ```bash
-just token-set             # or: just token-set pfsmgraph-align
+just token-set                          # stores it for pfsmgraph-dataseq, the default
+just token-set pfsmgraph-align          # any other member, by name
 ```
+
+Both forms are shown because every recipe here takes the package as an optional argument
+defaulting to `default_package` at the top of the `justfile`. Naming the default explicitly
+(`just token-set pfsmgraph-dataseq`) is therefore identical to the bare form, not a
+different operation.
 
 That prompts without echoing, so nothing lands in zsh history. `uv` does not read
 `.pypirc` at all -- verified against the binary -- so a token placed there would appear to
 be configured and do nothing.
+
+**Rotation reuses the same command.** `token-set` passes `-U`, so it overwrites an existing
+Keychain entry rather than refusing; revoke the old token on PyPI and re-run it. Without
+`-U` -- how it shipped on 2026-09-02 -- `security` errors with `The specified item already
+exists in the keychain` and the entry has to be deleted by hand first.
+
+**Never run `just token` on its own.** It exists to be consumed by `$(...)` inside
+`publish`, and standalone it prints a live credential into your scrollback. If it happens,
+revoke the token and re-run `token-set`.
+
+The `-a`/`-s` pair the recipes pass to `security` is an arbitrary lookup key -- `$USER`
+namespaces the entry to your local login, and the service string is a name this `justfile`
+invents. Neither is a PyPI identity. `uv publish` supplies the literal `__token__` username
+itself whenever it is handed a token rather than a username/password pair, so your PyPI
+account name never enters the flow.
 
 ---
 

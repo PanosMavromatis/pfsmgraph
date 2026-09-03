@@ -54,14 +54,26 @@ test:
 #
 # Tokens live in the macOS Keychain, never in a dotfile or the repo tree.
 # `token-set` prompts without echoing, so nothing lands in zsh history.
+#
+# `-U` is what makes `token-set` idempotent, and it is required rather than
+# tidy: without it `security add-generic-password` REFUSES when the item
+# already exists, so rotating a token would fail with "The specified item
+# already exists in the keychain" and force a manual delete first. Rotation is
+# the common case for a setter that outlives one release.
+#
+# `-a`/`-s` are an arbitrary composite lookup key, not credentials. $USER is
+# the local login name and namespaces the entry; the service string is a name
+# this file invents and only has to match between `token-set` and `token`.
+# Neither is a PyPI identity: `uv publish` supplies the literal `__token__`
+# username itself whenever it is given a token rather than a user/password.
 
 # Store a PyPI token for a package (prompts for the value).
 token-set package=default_package:
-    security add-generic-password -a "$USER" -s pypi-{{ package }} -w
+    security add-generic-password -U -a "$USER" -s pypi-{{ package }} -w
 
 # Store a TestPyPI token for a package (prompts for the value).
 token-set-test package=default_package:
-    security add-generic-password -a "$USER" -s testpypi-{{ package }} -w
+    security add-generic-password -U -a "$USER" -s testpypi-{{ package }} -w
 
 # A missing keychain entry must fail loudly. An empty UV_PUBLISH_TOKEN is not an
 # error to `uv publish`: it falls through to trusted-publishing discovery, which
