@@ -14,12 +14,58 @@ does not hold" is a finding, while silence is indistinguishable from not having 
 
 ## Goals
 
-- [ ] Read the four `HMMlib` files and write `HMMLIB-ACCOUNT.md`
-  - [ ] Read `hmm.lsh` (319) and `hmm-param.lsh` (386) — the model and its parameters — before the trainer, so the trainer is read against a model that is already understood
-  - [ ] Read `hmm-trainer.lsh` (1102), noting which of its regions belong to which revision: `21-126` scaffolding, `126-188` forward, `188-257` Viterbi, `257-346` M-step, `738-1073` topology search
-  - [ ] Read `hmm-trainer-view.lsh` (237) far enough to say whether it is presentation only, and therefore whether it migrates at all
-  - [ ] Follow `HMMlib`'s calls into `Code/Utility/` only as far as they go; the migration itself is subgoal 3, not this branch
-  - [ ] Write the account to `ACCOUNT.md`'s conventions — **Sources** block with line counts and dates, structure before behaviour, an appendix collecting every measurement, and **provenance unknown** where the code admits a behaviour that may never have run
+- [x] Read the four `HMMlib` files and write `HMMLIB-ACCOUNT.md`
+  - [x] Read `hmm.lsh` (319) and `hmm-param.lsh` (386) — the model and its parameters — before the trainer, so the trainer is read against a model that is already understood
+  - [x] Read `hmm-trainer.lsh` (1102), noting which of its regions belong to which revision: `21-126` scaffolding, `126-188` forward, `188-257` Viterbi, `257-346` M-step, `738-1073` topology search
+  - [x] Read `hmm-trainer-view.lsh` (237) far enough to say whether it is presentation only, and therefore whether it migrates at all
+  - [x] Follow `HMMlib`'s calls into `Code/Utility/` only as far as they go; the migration itself is subgoal 3, not this branch
+  - [x] Write the account to `ACCOUNT.md`'s conventions — **Sources** block with line counts and dates, structure before behaviour, an appendix collecting every measurement, and **provenance unknown** where the code admits a behaviour that may never have run
+  > **Done:** `.scratch/hmm-lush/HMMLIB-ACCOUNT.md`, 600 lines, 15 sections and an
+  > appendix. Tracked-file check done first, not after: `git check-ignore -v` named
+  > `.gitignore:42`'s `!/*.md`, and `git status` shows the file as `??` rather than
+  > swallowing it. Compile dates for the **Sources** block came from `Code/HMMlib/C/`,
+  > whose mtimes the import did not reset -- `hmm.c` and `hmm_param.c` 2009-07-20,
+  > `hmm_trainer.c` 2011-02-01 -- so the block dates the last *compile* of each source
+  > rather than claiming an edit date it cannot evidence.
+  > **Found:** the model is **Mealy**, not Moore. `output-p` is
+  > `(size, size, alphabet-size)` and every read is `(output-p state-i state-j symbol-k)`:
+  > symbols are emitted on transitions, not in states. Nothing in the PRD, the ADRs or any
+  > of the three revision plans anticipates this. It is the same design decision as
+  > `seq-state`'s `+1` that `ACCOUNT.md` §6 already documented -- a path emitting *N*
+  > symbols visits *N+1* states -- seen from the other side. Two consequences reach the
+  > kernel: the emission factor cannot be hoisted out of the inner loop, since it depends
+  > on both endpoints; and the emission tensor is `S²·A` rather than `S·A`, which at
+  > `set11a_dInt`'s alphabet of 25 is 62,500 parameters for a 50-state model against 1,250
+  > for the Moore equivalent.
+  > **Found:** the arithmetic is **description length in bits**, not probability.
+  > `safe-add--log2` accumulates `sum - log2(x)` and `-1` is an absorbing log-zero
+  > sentinel, unreachable because a real DL is non-negative. `safe->--log x y` reads
+  > backwards until the sentinel handling is worked through: it means "*y* beats *x*".
+  > So Viterbi is **min-sum over bits** and a port reaching for `max` inverts every
+  > comparison. The MDL framing is not a layer above the kernel; it is the kernel's
+  > number system. Corollary trap: the slot `data-p` and the local `result-p` hold DLs
+  > despite the `-p` suffix that means "probability" everywhere else in the library.
+  > **Found:** three defects, all **provenance unknown**. (1) `update-viterbi-path:216-218`
+  > seeds δ with raw `init-state-p` into that bit-domain accumulator; since smaller is
+  > better the preference *inverts*, biasing the decode toward improbable start states,
+  > and an exactly-zero initial probability becomes the best possible value rather than
+  > the sentinel. The identical line in `update-data-p` is correct, because α is a raw
+  > probability throughout -- it reads as a line copied between methods that do not share
+  > a numeric domain. (2) `hmm.lsh:186` reads `data-seq-name`, which is not a slot; it
+  > resolves only through Lush's dynamic scoping from the one surviving call path.
+  > (3) `hmm-param.lsh:172` and `:262` fill the new *initial* distribution from the
+  > *stationary* one, while `split-state` uses `init-state-p` four lines later --
+  > one method disagreeing with itself.
+  > **Found:** the trainer has **no batch dimension**. `fprop-all` flattens the corpus to
+  > one stream and `data-seq-size` is its element count, so the 100-sequence and
+  > 1-sequence specimens are the same kind of object to it -- no masking, no padding, no
+  > per-sequence likelihood, and cross-sequence transitions are ordinary modelled
+  > transitions. And there is **no headless entry point**: both `Training/` scripts end in
+  > `(new HMMtrainerWindow trainer)`, so topology search was driven by hand from a GUI and
+  > anything in revision 04 that reads as "the search strategy" is a decision being made
+  > for the first time, not a translation.
+  > **Commit:** the five sub-items were one continuous reading, so they were taken as a
+  > unit rather than pausing for a commit checkpoint between each.
 
 - [ ] Check the three falsifiers the master plan names, and record each verdict
   - [ ] **Does Viterbi read the forward variables?** The 02/03 split assumes `update-viterbi-path` (`hmm-trainer.lsh:188-257`) computes δ independently of the α that `update-data-p` (`126-188`) builds. If it reads α, the boundary moves and Viterbi drags the forward pass into 02 with it
