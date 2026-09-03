@@ -130,6 +130,18 @@ uploaded.
 
 When `align`/`hmm` move back to meson-python: re-add `meson-python`, `cython`, and `ninja` to the root `dev` group (`ninja` must be on `PATH` for rebuild-on-import), and the compiled members will additionally need a C compiler.
 
+## Branches and pull requests
+
+**A branch and a PR are for substantial work — a revision subgoal — not for a cleanup.**
+Reformatting, a typo, a stale sentence, a link fix: commit those straight to `main` and
+push. `main` is not protected, so the direct path is always available, and routing a
+two-line fix through a branch, a PR body, a merge and two branch deletions costs more
+attention than the change is worth and buries the substantial PRs among trivial ones.
+
+The line is the work, not the file count: a change that a reviewer would have an opinion
+about wants a PR, and a change whose whole content is visible in its diff does not.
+Recorded 2026-09-03, after three trivial PRs in one session.
+
 ## Architecture
 
 `pfsmgraph` is a family of five independently publishable Python packages sharing one PEP 420 namespace, developed in a single repo as a **uv workspace** under `packages/`.
