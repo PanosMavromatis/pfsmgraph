@@ -309,7 +309,31 @@ and several of these must land *as part of* the merge rather than after it.
   falsifies them, per this entry's own rule, and changed there. Goal 2 of that branch's plan
   holds the per-surface record.
 
+## Trigger: revision 03 or 04 opening
+
+- **Reconsider where `docs-hmm-migration-plan` files.** Filed into
+  `docs/plan/02-hmm-v0.1.0/docs-hmm-migration-plan/` on 2026-09-03 (`/file-plans`, a
+  judgment call rather than a script decision, since the plan has no master-plan
+  backlink) because `02-hmm-v0.1.0` was the only one of the three hmm revisions it
+  drafted that had actually opened. It also drafted 03 and 04's still-unopened drafts in
+  `docs/plan/planned/`, so filing it under 02 alone slightly overstates its scope —
+  it planned the whole migration, not just the first third of it. When either 03 or 04
+  opens, decide whether the plan moves, splits across the revisions it touches, or stays
+  put with the scope note left as-is. Nothing is owed before then.
+
 ## Trigger: the `align` migration
+
+- **Reconsider where `docs-cpu-parallel-phase` files.** Filed into
+  `docs/plan/02-hmm-v0.1.0/docs-cpu-parallel-phase/` on 2026-09-03 (`/file-plans`, a
+  judgment call — no master-plan backlink, since it produced
+  [ADR 0016](../design/adr/0016-numba-cpu-parallel-phase.md) rather than a revision
+  subgoal), on the strength of its own branch doc naming revision 02's Viterbi work as
+  what it unblocks. But ADR 0016 governs `align`'s DP-kernel lifecycle exactly as much as
+  `hmm`'s — the two packages share [ADR 0002](../design/adr/0002-three-phase-algorithm-lifecycle.md)
+  outright — so filing it under `hmm` alone is an accident of which revision happened to
+  need it first, not a scope claim. When `align`'s migration begins, decide whether the
+  plan moves, or whether a cross-cutting plan like this one should live somewhere that
+  does not imply single-revision ownership at all.
 
 - **Make `tokalign`'s `decode` total.** It raises `KeyError` on every reserved code,
   because `_idx_to_sym` is built from the gap index up and never populates `PAD`, `UNK`,
