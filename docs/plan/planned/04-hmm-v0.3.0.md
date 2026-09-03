@@ -4,17 +4,11 @@
 It lives in `planned/`, not in `docs/plan/04-hmm-v0.3.0/`, because `/open-revision` refuses a
 label whose directory already exists.
 
-**Drafted before the source was read.** What would falsify the shape below:
-
-- **The MDL criterion not being the whole story.** `int-code-length` and
-  `comb-code-length` are called only from `update-model-dl` (`hmm-trainer.lsh:402-430`),
-  which reads as the model cost in a description-length score. If `suggest-move`
-  (`952-1073`) applies further criteria — a likelihood-ratio gate, a trial budget — the
-  scoring subgoal widens.
-- **`*min-split-trials*` and `*split-trials-per-state-p*` (`hmm-trainer.lsh:17-18`)**
-  suggest split is *stochastic and retried*, not deterministic. If so, reproducibility
-  becomes a first-class concern of this revision and `rand-p-vector`'s seeding is part of
-  the public contract rather than an implementation detail.
+**Only metadata is above the heading, and deliberately so.** The falsifiers sit *below*
+`## Subgoals` because the splice boundary would otherwise leave them here to be deleted
+with this file — which is what happened when revision 02 was opened, and had to be
+repaired by hand. Do not tidy them back up here: everything that must survive the
+splice belongs under the heading.
 
 ## Subgoals — revision 04-hmm-v0.3.0
 
@@ -36,6 +30,18 @@ Settled on the planning branch: `_mdl.py` is private to `pfsmgraph.hmm`. If `hse
 scores segmentations by description length, `DEFERRED.md`'s
 `## Trigger: hseg needing description lengths` promotes it to a shared home; inventing a
 sixth distribution before a second consumer exists is not warranted.
+
+**Drafted before the source was read.** What would falsify the shape below:
+
+- **The MDL criterion not being the whole story.** `int-code-length` and
+  `comb-code-length` are called only from `update-model-dl` (`hmm-trainer.lsh:402-430`),
+  which reads as the model cost in a description-length score. If `suggest-move`
+  (`952-1073`) applies further criteria — a likelihood-ratio gate, a trial budget — the
+  scoring subgoal widens.
+- **`*min-split-trials*` and `*split-trials-per-state-p*` (`hmm-trainer.lsh:17-18`)**
+  suggest split is *stochastic and retried*, not deterministic. If so, reproducibility
+  becomes a first-class concern of this revision and `rand-p-vector`'s seeding is part of
+  the public contract rather than an implementation detail.
 
 - [ ] Implement `_mdl.py`: `int_code_length`, `comb_code_length`, `entropy`, and the model description length. Document *which* universal code for integers the original uses — the choice is a research decision, and reproducing the search behaviour depends on it.
 - [ ] Implement state split (`try-split`, `suggest-split`, `hmm-trainer.lsh:738-843`), including the trial budget the `*min-split-trials*` and `*split-trials-per-state-p*` parameters imply, and settle the reproducibility contract if the search is stochastic.
