@@ -42,8 +42,9 @@ code actually does, say so — that divergence is worth more than a style commen
 **`dataseq` is implemented and released; `hmm` has begun; the other three members are still
 scaffolding (2026-09-03).** There is real code to review in two packages now.
 `packages/pfsmgraph-dataseq/` is six modules and 74 tests, covered further down.
-`packages/pfsmgraph-hmm/` is one private module and 66 tests — the numeric Utility code
-migrated from the Lush original, with no public API yet. Review it against
+`packages/pfsmgraph-hmm/` is two modules and 110 tests — the numeric Utility code migrated
+from the Lush original, plus `HMMParams`, which is the package's first public name. Review it
+against
 `.scratch/hmm-lush/Code/Utility/util.lsh`, `Code/HMMlib/hmm.lsh:228-262`, and
 `HMMLIB-ACCOUNT.md` §3 and §4, and know the one fact
 that makes or breaks the reading: the quantities there are **description lengths in bits,
@@ -76,6 +77,22 @@ keeps a *negative* input reaching `log2` and going `nan` loudly, matching `bits`
 `invalid` is deliberately unsuppressed. And `rand_p_vector`'s required `rng` parameter is not
 a missing default: reproducibility is structural on purpose (ADR 0017's frozen value, ADR
 0002's `prange`/CUDA phases), so "add `rng=None`" reverses a recorded decision.
+
+**`_params.py` carries four of its own, and the first is the one a reviewer will reach for.**
+Six of `output_p`'s symbol fibres are structurally zero, so "the symbol axis wastes
+`6·S²` entries — size it to the user symbols and offset by `USER_BASE`" is the obvious
+finding and it is a correctness regression. `encode(..., on_unknown="unk")` is a documented
+`dataseq` path that puts `UNK` (code 1) into a record; under the offset scheme `1 -
+USER_BASE` is `-5`, which numpy accepts as a valid index into the tail, so the decode returns
+a confident wrong path. Sized to the whole vocabulary it reaches a zero, and `bits(0)` is
+`+inf`. **The dead-arc exemption is not an incomplete check** — an emission fibre on an arc
+of probability zero cannot reach the recurrence, and the original's own saved models are full
+of them, so a blanket "every fibre sums to 1" rule rejects the fixtures. **A zero
+`transition_p` row is rejected on purpose**, not by omission of a special case: revision 04's
+`merge-states` can produce one, and construction is where that has to be decided.
+And **`SUM_TOL = 1e-5` is not slack** — an earlier `1e-6` was below float32 normalisation
+drift and would have rejected the output of the `torch` backend ADR 0017's own Negative
+section anticipates; the test asserts the bound's justification, not just its value.
 
 Real findings would look different. Worth checking rather than assuming: that no migrated
 function has silently acquired a `_p` suffix (the original's `data-p`/`result-p` hold bits,

@@ -74,3 +74,28 @@ already decided by the master plan: harmless below 2²⁴ states, not reproduced
 ## Notes
 
 <!-- Running log. Append as work progresses. -->
+
+**2026-09-03 — goal 1, `HMMParams`.** `_params.py` and 44 tests; suite 160 → 204. The
+package exports a public name for the first time.
+
+The `A` axis is `vocab.size` with the reserved fibres enforced zero. The argument that
+settled it was not the memory cost but a silent-failure asymmetry: `UNK` is the one reserved
+code a record acquires on a documented `dataseq` path, and under the user-symbols-only
+alternative `1 - USER_BASE = -5` indexes the tail without error.
+
+Two of my own choices were corrected by measurement rather than by argument, and both are
+worth remembering as a pattern:
+
+- **`SUM_TOL` was `1e-6` and is `1e-5`.** The bound was *below* the float32 normalisation
+  drift its own comment cited as the reason for it. Caught only because the test asserted
+  the justification rather than the value.
+- **The differential tolerance was `1e-4` and is `5e-4`**, at `1.27e-4` observed. The
+  binding error is not the four-decimal print but the *relative* error it implies on a
+  small probability, amplified by `d(entropy)/dp ≈ 1.9`. `test_numeric.py` had already
+  derived `5e-4` for the same quantity in PR #16, so this is consistency, not slack.
+
+Unplanned but load-bearing: the tracked `.hmm` fixtures cannot be loaded without the ADR
+0011 renumbering (their `(S, S, 6)` becomes `(S, S, 12)`), and their `_alphabet` holds Lush
+pointer addresses rather than names, so the symbol identities are gone. `_lush_fixtures.py`
+was extracted to hold `load_params` — the reader's own docstring named revision 03 as the
+trigger for sharing it, and the second consumer arrived here in 02.

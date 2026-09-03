@@ -13,7 +13,6 @@ replacement cannot be "simplified" away without a failure.
 from __future__ import annotations
 
 import warnings
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -27,6 +26,8 @@ from pfsmgraph.hmm._numeric import (
     safe_divide,
     stationary_distribution,
 )
+
+from _lush_fixtures import FIXTURES, SAVED_MODELS, read_ascii_matrix
 
 
 # --- bits: the description length ------------------------------------------
@@ -223,17 +224,6 @@ def test_a_zero_denominator_never_produces_a_non_finite_value():
 # they were tracked for exactly this purpose. `tests/` never ships either --
 # the wheel packages only `src/pfsmgraph` -- so "the fixture is absent in an
 # installed wheel" is not a scenario this repo has.
-_FIXTURES = (
-    Path(__file__).resolve().parents[3]
-    / ".scratch"
-    / "hmm-lush"
-    / "Training"
-    / "set02a"
-    / "set02a_200"
-)
-
-_SAVED_MODELS = ("m001_0001_001.hmm", "m001_0005_005.hmm", "m008_0001_008.hmm")
-
 # Two closed communicating classes, {0,1} and {2,3}, so the stationary space is
 # two-dimensional and one replaced row cannot pin it down.
 _REDUCIBLE = np.array(
@@ -246,29 +236,13 @@ _REDUCIBLE = np.array(
 )
 
 
-def _read_ascii_matrix(path):
-    """Read Lush's `save-ascii-matrix` format: `.MAT <ndim> <dims...>`, then values.
-
-    Written here rather than in a `conftest.py` for the reason `_numeric.py` is
-    one module: there is one consumer. When revision 03's differential tests
-    want it too, that is the moment a shared fixture earns itself.
-    """
-    tokens = path.read_text().split()
-    if tokens[0] != ".MAT":
-        raise ValueError(f"{path} is not a Lush ASCII matrix")
-    ndim = int(tokens[1])
-    dims = [int(t) for t in tokens[2 : 2 + ndim]]
-    values = np.array([float(t) for t in tokens[2 + ndim :]], dtype=np.float64)
-    return values.reshape(dims)
-
-
 def _irreducible_chain(size=6, seed=20260903):
     rng = np.random.default_rng(seed)
     transition_p = rng.random((size, size)) + 0.1
     return transition_p / transition_p.sum(axis=1, keepdims=True)
 
 
-@pytest.mark.parametrize("model", _SAVED_MODELS)
+@pytest.mark.parametrize("model", SAVED_MODELS)
 def test_reproduces_the_originals_own_state_p(model):
     """A differential test against the Lush implementation's saved output.
 
@@ -294,14 +268,14 @@ def test_reproduces_the_originals_own_state_p(model):
     tracked, so their absence means a broken checkout, not a configuration this
     repository supports.
     """
-    directory = _FIXTURES / model
-    transition_p = _read_ascii_matrix(directory / "transition_p")
-    saved = _read_ascii_matrix(directory / "state_p")
+    directory = FIXTURES / model
+    transition_p = read_ascii_matrix(directory / "transition_p")
+    saved = read_ascii_matrix(directory / "state_p")
 
     assert stationary_distribution(transition_p) == pytest.approx(saved, abs=1e-4)
 
 
-@pytest.mark.parametrize("model", _SAVED_MODELS)
+@pytest.mark.parametrize("model", SAVED_MODELS)
 def test_the_homogeneous_system_needs_the_replacement(model):
     """Why the trick is the algorithm: without it there is nothing to solve.
 
@@ -318,7 +292,7 @@ def test_the_homogeneous_system_needs_the_replacement(model):
     reports full rank. Testing the conclusion on data that breaks the hypothesis
     would test nothing at all.
     """
-    saved = _read_ascii_matrix(_FIXTURES / model / "transition_p")
+    saved = read_ascii_matrix(FIXTURES / model / "transition_p")
     transition_p = saved / saved.sum(axis=1, keepdims=True)
     size = transition_p.shape[0]
 
@@ -489,7 +463,7 @@ def test_the_last_axis_is_reduced_by_default():
     assert result == pytest.approx([1.0, 0.0, entropy(np.array([0.25, 0.75]))])
 
 
-@pytest.mark.parametrize("model", _SAVED_MODELS)
+@pytest.mark.parametrize("model", SAVED_MODELS)
 def test_reproduces_the_originals_own_state_entropies(model):
     """A differential test against the saved `state_entropies`.
 
@@ -504,10 +478,10 @@ def test_reproduces_the_originals_own_state_entropies(model):
     four-decimal arrays before taking a logarithm, where the solve combined one.
     Observed worst case is 1.44e-4.
     """
-    directory = _FIXTURES / model
-    transition_p = _read_ascii_matrix(directory / "transition_p")
-    output_p = _read_ascii_matrix(directory / "output_p")
-    saved = _read_ascii_matrix(directory / "state_entropies")
+    directory = FIXTURES / model
+    transition_p = read_ascii_matrix(directory / "transition_p")
+    output_p = read_ascii_matrix(directory / "output_p")
+    saved = read_ascii_matrix(directory / "state_entropies")
 
     marginal = np.einsum("ij,ijk->ik", transition_p, output_p)
 
