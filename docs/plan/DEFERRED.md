@@ -195,7 +195,7 @@ and several of these must land *as part of* the merge rather than after it.
   the mechanism five ways is this ADR's own drift failure committed on the policy instead
   of on the tests. The obligation to revisit is re-filed under the `align` migration,
   because `align` is the first member whose matrix will have a row in it. The Q&A is
-  recorded under goal 1 in `docs/plan/chore-release-dataseq-0.1.0/TODO.md`.
+  recorded under goal 1 of the `chore-release-dataseq-0.1.0` plan under `docs/plan/`.
 - **Set honest version lower bounds.** Every intra-family dependency naming
   `pfsmgraph-dataseq` reads `>=0.1.0` as of 2026-09-01 (reviewed on
   `chore/release-dataseq-0.1.0`); the three naming `pfsmgraph-align` still read `>=0.1`
