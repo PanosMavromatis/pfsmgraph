@@ -4,19 +4,11 @@
 It lives in `planned/`, not in `docs/plan/03-hmm-v0.2.0/`, because `/open-revision` refuses a
 label whose directory already exists.
 
-**Drafted before the source was read.** What would falsify the shape below:
-
-- **The M-step not being separable from the search.** `update-approx-*`
-  (`hmm-trainer.lsh:257-346`) is assumed to be plain expected-count accumulation. If it
-  already anticipates state merge/split, part of it belongs to revision 04.
-- **`run-add` (173 lines, `477-656`) not being the EM loop.** Its name suggests adding
-  states, which would make it topology search and move it to 04, leaving `run-converge`
-  (`656-677`) as this revision's only driver.
-- **The autograd identity not surviving the log₂ base.** The Lush code accumulates in
-  base 2 throughout because its description lengths are in bits. Nothing about the
-  gradient identity depends on the base, but the sentinel arithmetic in `safe-add--log2`
-  might not be expressible as a differentiable op, which would weaken subgoal 3 from an
-  equivalence test to a numerical-tolerance comparison.
+**Only metadata is above the heading, and deliberately so.** The falsifiers sit *below*
+`## Subgoals` because the splice boundary would otherwise leave them here to be deleted
+with this file — which is what happened when revision 02 was opened, and had to be
+repaired by hand. Do not tidy them back up here: everything that must survive the
+splice belongs under the heading.
 
 ## Subgoals — revision 03-hmm-v0.2.0
 
@@ -41,6 +33,20 @@ Settled on the planning branch: `torch` is an **optional** backend behind a
 `pfsmgraph-hmm[torch]` extra, never a required dependency, so `core.md`'s invariant that
 "'GPU' means two unrelated things" survives intact — `numba-cuda` and `torch` remain
 separate extras with separate meanings.
+
+**Drafted before the source was read.** What would falsify the shape below:
+
+- **The M-step not being separable from the search.** `update-approx-*`
+  (`hmm-trainer.lsh:257-346`) is assumed to be plain expected-count accumulation. If it
+  already anticipates state merge/split, part of it belongs to revision 04.
+- **`run-add` (173 lines, `477-656`) not being the EM loop.** Its name suggests adding
+  states, which would make it topology search and move it to 04, leaving `run-converge`
+  (`656-677`) as this revision's only driver.
+- **The autograd identity not surviving the log₂ base.** The Lush code accumulates in
+  base 2 throughout because its description lengths are in bits. Nothing about the
+  gradient identity depends on the base, but the sentinel arithmetic in `safe-add--log2`
+  might not be expressible as a differentiable op, which would weaken subgoal 3 from an
+  equivalence test to a numerical-tolerance comparison.
 
 - [ ] Implement forward-backward in numpy as the reference: α, β, ξ, γ, in log space, with the log-zero sentinel `_numeric.py` fixed in revision 02. State whether the base stays 2 — natural for the description lengths of revision 04, unusual everywhere else — or whether base *e* is used with a conversion at the DL boundary.
 - [ ] Implement the M-step and the EM loop: parameter re-estimation, the convergence criterion, and the data description length (`update-data-dl`, `hmm-trainer.lsh:346-402`), which shares its accumulation shape with the likelihood and should share its code.
