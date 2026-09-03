@@ -21,7 +21,38 @@ packages depend on — the questions are genuinely open, and the answers are wor
 **Related documents.** Decided-but-not-yet-actionable work is *not* listed here; it lives
 in [`DEFERRED.md`](DEFERRED.md), indexed by the trigger that unblocks it. Open design
 questions live in [PRD §8](../design/PRD.md) and the `Open` sections of the
-[ADRs](../design/adr/README.md). This file tracks only work that is active now.
+[ADRs](../design/adr/README.md). This file tracks work that is active now, plus the
+revisions already drafted and waiting to be opened.
+
+## Planned revisions
+
+Drafted ahead of being opened, one directory each, in the same shape `/close-revision`
+leaves behind — so opening one is a splice from its `_TODO.md` rather than an authoring
+job. The detail lives in those files and not here, which is the point: this file stays
+short enough to read on every session, and a revision's subgoals enter it only while that
+revision is in progress.
+
+The `hmm` migration is **three** releases rather than one. The Lush trainer is 1,102 lines
+spanning three problems that fail differently — a decode, a fixed-topology estimator, and
+a search over model shapes — and each raises its own questions about parallelism and data
+structures. Conflating them would put the project's first `.pyx`, its first EM loop and its
+first resizing search in one revision, where a failure in any of them would be diagnosed
+against all three.
+
+- **Revision 02-hmm-v0.1.0** — Viterbi path and the `dataseq` interface. Carries the
+  project's firsts: first DP kernel, first `.pyx`, first non-empty ADR 0003 backend
+  matrix, and the meson-python namespace resolution that ADR 0012 stands down.
+  See [`02-hmm-v0.1.0/_TODO.md`](02-hmm-v0.1.0/_TODO.md).
+- **Revision 03-hmm-v0.2.0** — Baum-Welch on a fixed topology, with an optional `torch`
+  backend whose autograd E-step is held against the numpy reference's explicit
+  forward-backward. See [`03-hmm-v0.2.0/_TODO.md`](03-hmm-v0.2.0/_TODO.md).
+- **Revision 04-hmm-v0.3.0** — topology search by state merge and split, scored by
+  minimum description length. See [`04-hmm-v0.3.0/_TODO.md`](04-hmm-v0.3.0/_TODO.md).
+
+All three were drafted from a structural survey of `.scratch/hmm-lush/Code/HMMlib/` —
+definition maps and call-site counts — **before the source was read**. Each names the
+findings that would falsify its boundaries, and revision 02's first subgoal is the reading
+that checks them.
 
 ## Closed revisions
 

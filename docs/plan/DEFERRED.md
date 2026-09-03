@@ -385,6 +385,26 @@ and several of these must land *as part of* the merge rather than after it.
   (PRD §8). `hseg` has the largest design gap of the five packages, so this is the
   least-determined item here.
 
+## Trigger: a second module needing training progress reporting
+
+- **Reconsider a progress dashboard, family-wide.** Decided 2026-09-03: training reports
+  to **standard output** and nothing else. The assumption is a Jupyter notebook, whose
+  output cell can be browsed independently while a run continues, so a long run needs no
+  live widget to stay observable. This is why `hmm-trainer-view.lsh` (237 lines) is
+  migrated **nowhere** — see revision `04-hmm-v0.3.0`.
+
+  The deferral is deliberately *not* scoped to `hmm`. `dl` will want the same thing, and
+  a dashboard adopted for one member would either be duplicated or force a shared GUI
+  dependency into a family that currently has none. The trigger is therefore the moment
+  a **second** module needs training progress reported — most likely `dl` acquiring a
+  training loop — because that is when writing it twice becomes the alternative, and the
+  first point at which the requirements of two consumers can be compared instead of
+  guessed at from one.
+
+  What must not happen before then: a GUI or plotting framework entering any member's
+  `[project.dependencies]`. Reporting stays text on stdout, which costs nothing to keep
+  and is what a notebook, a log file and a CI transcript all read equally well.
+
 ## No trigger yet — revisit deliberately
 
 These have no event that will surface them. They need to be looked at on purpose.
