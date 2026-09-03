@@ -255,8 +255,16 @@ the account wins. It was written first precisely so the comparison could not be 
 reading of the original instead of the original.
 
 This generalises to every written analysis under `.scratch/` — `.scratch/dl/ANALYSIS.md` was
-the first, joined by `.scratch/hmm-lush/ACCOUNT.md` and `COMPARISON.md`, and by whatever
-goal 4 writes for `py-rudimentary` and `align-poc`.
+the first, joined by `.scratch/hmm-lush/ACCOUNT.md`, `COMPARISON.md` and `HMMLIB-ACCOUNT.md`,
+and by whatever goal 4 writes for `py-rudimentary` and `align-poc`.
+
+`HMMLIB-ACCOUNT.md` (2026-09-03) is the odd one of the set, and the difference matters for
+review. The other analyses were written against code this project had already decided to
+absorb; this one covers `Code/HMMlib/`, which has not been migrated at all, so every claim
+in it is load-bearing for revisions 02–04 and none of it can be checked against a Python
+counterpart yet — there is no translation beside it the way `translation/` sits beside
+`ACCOUNT.md`. Its own **provenance unknown** markers are the honest boundary and should be
+read as such rather than softened.
 
 **One caution specific to `.scratch/align-poc/`.** It holds `tokalign`, the proof-of-concept
 alignment library that PRD §1.2 and ADRs 0001–0004 were written *from*. It is therefore not

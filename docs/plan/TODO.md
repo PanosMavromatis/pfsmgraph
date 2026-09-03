@@ -44,6 +44,34 @@ private to `pfsmgraph.hmm` rather than in a new distribution.
 the ADR 0012 revert and the meson-python editable-install shadowing, and it is why
 subgoal 5 sits between the pure-Python kernel and the Cython one rather than after both.
 
+**The public-surface subgoal below also decides the class architecture, and that is worth
+separating from the encode-at-the-boundary question it's paired with.** The source splits
+the model into three classes that do not obviously survive translation: `hmm` (the
+persisted parameters — load/save, `update-entropy`), `hmm-param` (a mutable *working copy*,
+synchronized only by `copy-from-model`/`copy-to-model`), and `hmm-trainer` (Viterbi, the EM
+machinery, and topology search in revision 04). `hmm-param` exists to back an interactive
+undo — `hmm-trainer-view.lsh`'s "Keep model" / "Reset model" buttons (`HMMLIB-ACCOUNT.md`
+§5) — and this migration is not porting that GUI (see revision 04's subgoal recording that
+`hmm-trainer-view.lsh` migrates nowhere). Reproducing the split without its reason has a
+measured cost and no offsetting benefit: `update-entropy` is duplicated verbatim between
+`hmm.lsh:228-262` and `hmm-param.lsh:66-100`, 35 lines (`HMMLIB-ACCOUNT.md` §13) — exactly
+the drift hazard `core.md`'s "ADRs outrank the imported implementations" invariant exists
+to catch, and duplication a single class would not have. Nor is the decode/train coupling
+worth keeping by default: "No separation between decode and training. Viterbi is a method
+on `hmm-trainer`, so decoding a sequence requires constructing a trainer, which requires a
+corpus" (`HMMLIB-ACCOUNT.md` §14) is recorded there as an absence, not a feature. None of
+this settles what to build instead — a single mutable model, an immutable parameter object
+replaced each step, or something the optional `torch` backend pulls toward once parameters
+can be `nn.Parameter`s (revision 03) — only that inheriting the Lush shape by not deciding
+is not a neutral choice. Revision 04's topology search inherits whatever this revision
+settles, since `split-state`/`merge-states` lived in `hmm-param` and its rollback story
+(the parameter-representation subgoal) is where a wrong choice here gets expensive to
+unwind. Record the decision as an ADR once subgoal 2 below settles it — this is
+architecture on the order of
+[ADR 0010](../design/adr/0010-dataseq-composition-merging-three-implementations.md) and
+[ADR 0015](../design/adr/0015-arc-emission-mealy-formulation.md), not an implementation
+detail.
+
 **Drafted before the source was read.** The release boundaries below come from a
 structural survey of `.scratch/hmm-lush/Code/HMMlib/` — definition maps, call-site counts,
 comment headers — not from reading the 2,044 lines. Subgoal 1 is the reading, and its
@@ -52,19 +80,35 @@ first duty is to check these boundaries. What would falsify them:
 - **Viterbi turning out to depend on the forward variables.** The split assumes
   `update-viterbi-path` (`hmm-trainer.lsh:188-257`) computes δ independently of the α that
   `update-data-p` (`126-188`) builds. If it reads α, the 02/03 boundary moves and Viterbi
-  drags the forward pass into this release with it.
+  drags the forward pass into this release with it. **Checked, does not hold**:
+  `update-viterbi-path` reads no forward variable — `alpha*` is a local of `update-data-p`
+  alone, and the two methods are scheduled together by `update-data` only for readability,
+  not a data dependency (`HMMLIB-ACCOUNT.md` §7). The boundary stands.
 - **The stationary-distribution solve being something else.** `hmm-param.lsh:82` and
   `hmm.lsh:244` build a matrix from `int-delta` and call `LU-solve`; that reads as
-  `(I - Pᵀ)π = 0`, but it was inferred from two lines of context.
+  `(I - Pᵀ)π = 0`, but it was inferred from two lines of context. **Checked, does not
+  hold**: the solve is `(Pᵀ - I)π = 0` with the first row replaced by `Σπ = 1`
+  (`HMMLIB-ACCOUNT.md` §4); the guessed sign is flipped, but `(Pᵀ - I)` and `(I - Pᵀ)`
+  share the same null space, so the port is unaffected.
 - **`hmm-trainer.lsh:21-126` not being separable.** The scaffolding is assumed shareable
   across 02 and 03. If the constructor demands the training apparatus, 02 gets no trainer
   at all and Viterbi becomes a free function over a model — which may be the better design
-  regardless.
+  regardless. **Checked, holds**: neither constructor branch is free of the training
+  apparatus, and both require a corpus unconditionally; "a decode-only use of this library
+  is not expressible in its own terms" (`HMMLIB-ACCOUNT.md` §15). `21-126` is not
+  shareable scaffolding. Subgoal 2's premise below — Viterbi as a method with no trainer
+  object in this release — is now evidence-backed rather than assumed.
 
-- [ ] Read `Code/HMMlib/` in its own terms and write `.scratch/hmm-lush/HMMLIB-ACCOUNT.md`, following `ACCOUNT.md`'s conventions — measurements against the two tracked specimen corpora, and **provenance unknown** for behaviours the code admits but may never have exercised. Check the three falsifiers above and revise this plan if any holds.
-- [ ] Settle the public surface of `pfsmgraph.hmm` 0.1.0 and where it meets `dataseq`: what a caller constructs, what Viterbi is a method *on* given there is no trainer object in this release, and which of `SymbolTable`, the record container and `pad_collate` it consumes. Apply *encode at the boundary* ([ADR 0001](../design/adr/0001-encode-at-the-boundary.md)) by naming the exact entry and exit points where strings are still permitted.
-- [ ] Migrate the Utility code this release needs, private to the package: `_numeric.py` for `safe-/` (15 call sites), the log-zero sentinel that `safe->--log` implies, and `int-delta`; plus the stationary-distribution solve (`LU-solve` → `numpy.linalg.solve`), `rand-p-vector` for parameter initialisation, and `calculate-entropy`. Record which Numerical-Recipes transcriptions were replaced by a library call rather than translated, and that `minimize`/`mc.lsh` had **zero** call sites from `HMMlib` and so migrate nowhere.
-- [ ] Implement Viterbi at ADR 0002 phase 1 (pure Python/numpy) with the ADR 0003 test suite, and register it as the first backend. The session header stops reading `backends: none registered` for the first time since the hook landed.
+- [x] Read `Code/HMMlib/` in its own terms and write `.scratch/hmm-lush/HMMLIB-ACCOUNT.md`, following `ACCOUNT.md`'s conventions — measurements against the two tracked specimen corpora, and **provenance unknown** for behaviours the code admits but may never have exercised. Check the three falsifiers above and revise this plan if any holds.
+  > **Branch:** docs/hmmlib-account
+  > **Done:** `HMMLIB-ACCOUNT.md` written (600 lines, 15 sections, an appendix); the three
+  > falsifiers checked and recorded above (two do not hold, one holds); subgoals 2 and 3
+  > below amended with the account's consequences; and, independently, a design handoff
+  > surfaced from a local scratch directory promoted to
+  > [ADR 0015](../design/adr/0015-arc-emission-mealy-formulation.md) — PR #13.
+- [ ] Settle the public surface of `pfsmgraph.hmm` 0.1.0 and where it meets `dataseq`: what a caller constructs, what Viterbi is a method *on* given there is no trainer object in this release, and which of `SymbolTable`, the record container and `pad_collate` it consumes. Apply *encode at the boundary* ([ADR 0001](../design/adr/0001-encode-at-the-boundary.md)) by naming the exact entry and exit points where strings are still permitted. Decide the class architecture explicitly as part of this — see the paragraph above — rather than defaulting to Lush's `hmm`/`hmm-param`/`hmm-trainer` split by not deciding. The account gives this two more concrete constraints. First, Lush's model does not take an alphabet as an argument — its constructor reads `_alphabet_size`/`_alphabet` directly out of the corpus's `.sds` directory (`HMMLIB-ACCOUNT.md` §4), which is exactly the file-coupled seam `ACCOUNT.md` §1 already found on the container side; do not reproduce it — take a `SymbolTable` explicitly. Second, Lush's Viterbi always decodes one sequence — batching belongs to the trainer, and the trainer does not exist in this release — so `pad_collate`'s masked-batch path is plausibly not this subgoal's concern at all: settle whether Viterbi 0.1.0 consumes a single `dataseq` record directly, leaving `pad_collate` for revision 03's batched training.
+- [ ] Migrate the Utility code this release needs, private to the package: `_numeric.py` for `safe-/` (15 call sites), **`safe-add--log2` and `safe->--log`** — the log₂-domain accumulator and comparator Viterbi's inner loop actually calls, home of the `-1` log-zero sentinel (`HMMLIB-ACCOUNT.md` §3) — and `int-delta`; plus the stationary-distribution solve (`LU-solve` → `numpy.linalg.solve`), `rand-p-vector` for parameter initialisation, and `calculate-entropy`. The solve needs its row-replacement trick reproduced, not just its result: `(Pᵀ - I)π = 0` is singular by construction, so a port that hands the homogeneous system as stated to a dense solver fails outright — row 0 must be overwritten with the normalization `Σπ = 1` before calling `numpy.linalg.solve` (§4). Record which Numerical-Recipes transcriptions were replaced by a library call rather than translated, and that `minimize`/`mc.lsh` had **zero** call sites from `HMMlib` and so migrate nowhere.
+- [ ] Implement Viterbi at ADR 0002 phase 1 (pure Python/numpy) with the ADR 0003 test suite, and register it as the first backend. The session header stops reading `backends: none registered` for the first time since the hook landed. Two defects the account marks **provenance unknown** must be a decision, not a silent reproduction: `update-viterbi-path` seeds δ with raw `init-state-p` into the bit-domain accumulator, inverting the start-state preference and turning an exactly-zero initial probability into the *best* possible δ rather than the impossible sentinel (`HMMLIB-ACCOUNT.md` §7); and `psi` round-trips state indices through a float matrix, harmless below 2²⁴ states and not worth reproducing. Decide and record whether the seeding bug is fixed or faithfully reproduced — the ADR 0003 test suite should encode whichever is chosen, not accidentally validate a bug against itself.
 - [ ] Resolve the meson-python namespace shadowing and move `hmm` off hatchling, reverting [ADR 0012](../design/adr/0012-align-and-hmm-temporarily-on-hatchling.md) by whichever of its three recorded candidates survives contact: non-editable install of the compiled members, one combined compiled distribution, or an upstream fix. Re-add `meson-python`, `cython` and `ninja` to the root `dev` group.
 - [ ] Implement Viterbi at ADR 0002 phase 2 (Cython), the first `.pyx` in a distribution. Backend equivalence against phase 1 is enforced by the parameterized suite, not asserted.
 - [ ] Implement Viterbi at ADR 0002 phase 3.

@@ -26,6 +26,7 @@ Numbers are permanent and never reused. To add one, copy
 | [0012](0012-align-and-hmm-temporarily-on-hatchling.md) | `align` and `hmm` are temporarily on hatchling, not meson-python | Accepted (temporary) | 2026-08 | — |
 | [0013](0013-api-documentation-layout-and-tooling.md) | API documentation: repo-level `docs/api/`, hand-written, examples executed | Accepted | 2026-09-01 | — |
 | [0014](0014-scratch-retention-and-per-package-scoping.md) | Imported migration source is retained in `.scratch/`, scoped per package | Accepted | 2026-09-01 | — |
+| [0015](0015-arc-emission-mealy-formulation.md) | The HMM is arc-emission (Mealy): symbols are emitted on transitions | Accepted | 2026-09-03 | — |
 
 † Qualified in practice by 0012 until the first Cython kernel lands.
 ‡ Held at Proposed until 2026-09-01. The composition was decided when the record was
@@ -45,11 +46,16 @@ merge itself; it was, and 0010 records the settled API.
   how this family documents its public surfaces; 0014 settles how source imported *for a
   migration* is held, and supersedes the delete-at-merge intent the repository started
   with.
+- **0015** is the first record about a *model*, rather than about packaging, tooling or
+  process. It is where the `hmm` migration's most consequential fact is written down, and
+  it is worth reading before revision 02's plan, since every array shape in that plan
+  follows from it.
 
 ## Coverage of the PRD decision table
 
 Every decision D1–D11 in PRD §2 is covered: D1–D2 and D3–D4 by 0005, D5 by 0006, D6 by
 0007, D7–D8 by 0008, D9 by 0009, D10 by 0010, D11 by 0011. The inherited §1.2 decisions
-are covered by 0001–0004. 0012, 0013 and 0014 have no PRD counterpart — all three
-postdate the document; 0012 qualifies §6.1, 0013 settles a question §9 never raised, and
-0014 covers a working-area policy the PRD does not describe at all.
+are covered by 0001–0004. 0012, 0013, 0014 and 0015 have no PRD counterpart — all four
+postdate the document; 0012 qualifies §6.1, 0013 settles a question §9 never raised, 0014
+covers a working-area policy the PRD does not describe at all, and 0015 answers a question
+the PRD did not know it had left open: which HMM formulation `pfsmgraph-hmm` implements.

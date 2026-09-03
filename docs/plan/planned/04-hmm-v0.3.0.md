@@ -31,6 +31,18 @@ scores segmentations by description length, `DEFERRED.md`'s
 `## Trigger: hseg needing description lengths` promotes it to a shared home; inventing a
 sixth distribution before a second consumer exists is not warranted.
 
+**The criterion itself is an open question, and this revision does not answer it.**
+The Lush implementation scores with a **two-part** code — model cost plus data cost — and
+this revision reproduces it, because reproducing is what a migration means. Whether a
+**refined one-part** code (NML / stochastic complexity) is the criterion this project
+should end up with is registered at [PRD §8](../../design/PRD.md), *"Which description
+length scores the topology search"*, along with why it cannot be answered here: exact NML
+for HMM classes is intractable, and the tractable route — factorised NML over the
+multinomial case — is a research decision rather than a porting one. The only obligation
+it places on this revision is structural: **keep the criterion a seam.** If scoring is
+inlined into the search driver, answering the question later means rewriting the search;
+if it is a boundary in `_mdl.py`, it means substituting a function.
+
 **Drafted before the source was read.** What would falsify the shape below:
 
 - **The MDL criterion not being the whole story.** `int-code-length` and
@@ -43,11 +55,11 @@ sixth distribution before a second consumer exists is not warranted.
   becomes a first-class concern of this revision and `rand-p-vector`'s seeding is part of
   the public contract rather than an implementation detail.
 
-- [ ] Implement `_mdl.py`: `int_code_length`, `comb_code_length`, `entropy`, and the model description length. Document *which* universal code for integers the original uses — the choice is a research decision, and reproducing the search behaviour depends on it.
+- [ ] Implement `_mdl.py`: `int_code_length`, `comb_code_length`, `entropy`, and the model description length — a **two-part** code, matching the original. Document *which* universal code for integers it uses; the choice is a research decision, and reproducing the search behaviour depends on it. **Give the total score a single named entry point** that the search driver calls and nothing else computes, so the two-part/refined question registered at [PRD §8](../../design/PRD.md) can later be answered by substitution rather than by rewriting the search.
 - [ ] Implement state split (`try-split`, `suggest-split`, `hmm-trainer.lsh:738-843`), including the trial budget the `*min-split-trials*` and `*split-trials-per-state-p*` parameters imply, and settle the reproducibility contract if the search is stochastic.
 - [ ] Implement state merge (`try-merge`, `suggest-merge`, `843-952`).
-- [ ] Implement the search driver (`suggest-move`, `952-1073`): how a move is proposed, scored against the total description length, and accepted or rolled back.
-- [ ] Settle the resize strategy — reallocate versus over-allocate-and-slice — and make the rollback path cheap, since the search rejects far more moves than it accepts. Measure before choosing; this is the one revision where the data structure, not the recurrence, is the cost.
+- [ ] Implement the search driver (`suggest-move`, `952-1073`): how a move is proposed, scored against the total description length, and accepted or rolled back. It must obtain that score by **calling** `_mdl.py`'s entry point, never by assembling it from the pieces — the driver decides *whether* a move wins, not *what winning costs*.
+- [ ] Settle the **parameter representation**, of which the resize strategy is only one branch. There are three options, not two: reallocate on every accepted move; over-allocate and slice; or hold **no dense array at all** and keep an edge list, in which resizing is not the problem being solved. [ADR 0015](../../design/adr/0015-arc-emission-mealy-formulation.md) leaves this open deliberately — it fixes the model's semantics and not its storage — and it is also why the third option exists at all: under arc-emission the emission tensor is `(S, S, A)` and so quadratic in the number of states, measured at **62,500** entries against a Moore model's 1,250 for a 50-state model over `set11a_dInt`'s 25-symbol alphabet, and mostly empty for any sparse topology. Whichever is chosen, make the rollback path cheap, since the search rejects far more moves than it accepts. Measure before choosing; this is the one revision where the data structure, not the recurrence, is the cost. This is also where `02-hmm-v0.1.0`'s class-architecture choice is tested hardest: Lush's own answer to a cheap rollback path *was* the `hmm`/`hmm-param` split — `keep-model`/`reset-model` copying between a working copy and the committed model (`HMMLIB-ACCOUNT.md` §5) — so a single mutable class with no working-copy analogue owes this subgoal an explicit save-point, while an immutable parameter object gets rollback for free by construction.
 - [ ] Report search progress on **standard output**, extending revision 03's training log with the move that was tried, its description length, and whether it was accepted. This is the run a user most wants to watch and the one most likely to prompt a dashboard; the decision is that it does not get one — see `DEFERRED.md`, `## Trigger: a second module needing training progress reporting`.
 - [ ] Record that `hmm-trainer-view.lsh` (237 lines) migrated **nowhere**, and why, so the omission reads as a decision rather than an oversight. It is the only file in `Code/HMMlib/` with no destination.
 - [ ] Release `pfsmgraph-hmm` 0.3.0.
