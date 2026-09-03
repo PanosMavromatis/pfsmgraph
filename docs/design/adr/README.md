@@ -28,6 +28,7 @@ Numbers are permanent and never reused. To add one, copy
 | [0014](0014-scratch-retention-and-per-package-scoping.md) | Imported migration source is retained in `.scratch/`, scoped per package | Accepted | 2026-09-01 | — |
 | [0015](0015-arc-emission-mealy-formulation.md) | The HMM is arc-emission (Mealy): symbols are emitted on transitions | Accepted | 2026-09-03 | — |
 | [0016](0016-numba-cpu-parallel-phase.md) | Insert a Numba CPU-parallel phase between Cython and CUDA | Accepted | 2026-09-03 | — |
+| [0017](0017-frozen-parameter-object-for-hmm.md) | `pfsmgraph.hmm` parameters are a frozen value, not a mutable model object | Accepted | 2026-09-03 | — |
 
 † Qualified in practice by 0012 until the first Cython kernel lands.
 ‡ Held at Proposed until 2026-09-01. The composition was decided when the record was
@@ -55,13 +56,19 @@ phase 3 to phase 4.
   follows from it.
 - **0016** amends 0002: it inserts a Numba CPU-parallel phase between Cython and CUDA, so
   "phase 3" in anything dated after 2026-09-03 means CPU-parallel, and CUDA is phase 4.
+- **0017** is the second record about the `hmm` model, and reads after 0015: that one
+  fixes what the parameters *mean*, this one fixes that they are an immutable value and
+  that algorithms take them rather than own them. It is worth reading before revisions 03
+  and 04, both of which are planned on the assumption that it was decided.
 
 ## Coverage of the PRD decision table
 
 Every decision D1–D11 in PRD §2 is covered: D1–D2 and D3–D4 by 0005, D5 by 0006, D6 by
 0007, D7–D8 by 0008, D9 by 0009, D10 by 0010, D11 by 0011. The inherited §1.2 decisions
-are covered by 0001–0004. 0012, 0013, 0014, 0015 and 0016 have no PRD counterpart — all
-five postdate the document; 0012 qualifies §6.1, 0013 settles a question §9 never raised,
-0014 covers a working-area policy the PRD does not describe at all, 0015 answers a
+are covered by 0001–0004. 0012, 0013, 0014, 0015, 0016 and 0017 have no PRD counterpart —
+all six postdate the document; 0012 qualifies §6.1, 0013 settles a question §9 never
+raised, 0014 covers a working-area policy the PRD does not describe at all, 0015 answers a
 question the PRD did not know it had left open: which HMM formulation `pfsmgraph-hmm`
-implements, and 0016 amends the phase count §1.2/§6 originally described as three.
+implements, 0016 amends the phase count §1.2/§6 originally described as three, and 0017
+settles a class-architecture question the PRD leaves to the migration — whether
+`pfsmgraph.hmm` inherits the imported source's mutable model/working-copy split.
