@@ -36,11 +36,20 @@ code actually does, say so — that divergence is worth more than a style commen
 
 ### High-signal review targets
 
-**`dataseq` is implemented and tested; the other four members are still scaffolding
-(2026-09-01).** There is real code to review now, and all of it is in one package —
-`packages/pfsmgraph-dataseq/`, six modules and 74 tests, covered further down. For the four
-members that have no code, documentation and packaging coherence remain the highest-signal
-targets, which is where errors are cheapest to fix and most expensive to leave:
+**`dataseq` is implemented and released; `hmm` has begun; the other three members are still
+scaffolding (2026-09-03).** There is real code to review in two packages now.
+`packages/pfsmgraph-dataseq/` is six modules and 74 tests, covered further down.
+`packages/pfsmgraph-hmm/` is one private module and 30 tests — the numeric Utility code
+migrated from the Lush original, with no public API yet. Review it against
+`.scratch/hmm-lush/Code/Utility/util.lsh` and `HMMLIB-ACCOUNT.md` §3, and know the one fact
+that makes or breaks the reading: the quantities there are **description lengths in bits,
+not probabilities**, so they grow as the probability falls and Viterbi over them is a
+min-sum. A review that assumes max-product will read every comparison backwards. The `-1`
+log-zero sentinel is deliberately not reproduced — `bits(0)` is `+inf` — so a "missing
+sentinel handling" finding is a false positive; the branch plan and `_numeric.py`'s own
+docstring carry the argument. For the three members that have no code, documentation and
+packaging coherence remain the highest-signal targets, which is where errors are cheapest to
+fix and most expensive to leave:
 
 - **`docs/design/adr/` vs. `docs/design/PRD.md` vs. `docs/agents/core.md`.** Three documents
   describe one design. Claim drift between them is the live risk — the ADRs are authoritative

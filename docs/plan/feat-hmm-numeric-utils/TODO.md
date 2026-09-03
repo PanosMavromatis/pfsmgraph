@@ -157,10 +157,75 @@ Markers: `[ ]` not started · `[~]` in progress · `[x]` complete · `[!]` block
     > `util.lsh copy`, and the other 15 models under `set02a_200/` all remain
     > ignored — each confirmed by `git check-ignore -v` naming the rule that matched.
 
-- [ ] Migrate the log-domain arithmetic Viterbi's inner loop calls
-  - [ ] `safe-add--log2` and `safe->--log`, and decide the fate of the `-1` log-zero sentinel (§3) — faithfully reproduced, or replaced by `-inf`
-  - [ ] `safe-/` (15 call sites) and `int-delta`
-  - [ ] Tests, including behaviour at the sentinel boundary
+- [x] Migrate the log-domain arithmetic Viterbi's inner loop calls
+  > **Done:** `_numeric.py` and `tests/test_numeric.py` exist — the first code and
+  > the first tests in `packages/pfsmgraph-hmm/`. Two functions written, two
+  > dissolved, 30 tests, suite 94 → 124.
+  >
+  > **`bits` is unary where the original was binary, and that is a design call
+  > rather than a transcription.** `safe-add--log2(sum, x)` took the accumulator as
+  > an argument only so it could check `(= sum -1)`; with `+inf` absorbing on its
+  > own, that argument does no work, so the primitive is `bits(p) = -log2(p)` and
+  > accumulation is plain `+`. It also *exposes* the seeding defect the next
+  > master-plan subgoal has to decide on: writing `delta[0] = init_state_p` and then
+  > `delta[i-1, k] + bits(...)` puts a probability and a bit-count in the same
+  > expression visibly, where `safe-add--log2` absorbed the mismatch silently.
+  >
+  > **The function survives for one reason that is not arithmetic.** `np.log2(0)`
+  > raises a `divide by zero` RuntimeWarning; `bits` suppresses it in exactly one
+  > place. Without that the function would genuinely dissolve into its one-line
+  > body, and every call site would either emit spurious warnings or repeat the
+  > `errstate` — until one of them suppressed a warning that mattered. `invalid` is
+  > deliberately left unsuppressed, so a negative probability still yields `nan`
+  > loudly.
+  >
+  > **Correction to this subgoal's own text:** it offered "replaced by `-inf`". The
+  > sentinel is `+inf`. `np.log2(0)` is `-inf`, but a description length is
+  > `-log2(p)`, so an impossible event costs `+inf` bits. The sign slip is the
+  > §3 orientation trap in miniature, and is recorded rather than silently fixed.
+  - [x] `safe-add--log2` and `safe->--log`, and decide the fate of the `-1` log-zero sentinel (§3) — faithfully reproduced, or replaced by `-inf`
+    > **Done:** `safe-add--log2` → `bits`. `safe->--log` → **nothing**, and that is
+    > the deliverable: the original spelled
+    > `(and (<> y -1) (or (= x -1) (> x y)))` only because `-1` sorted numerically
+    > *below* every real description length while meaning "worse than all of them".
+    > `+inf` sorts where it means, so `>` is the entire function and a wrapper would
+    > hide that. The original's truth table is kept as a parametrized test over
+    > plain `>`, so reinstating a sentinel fails a test rather than passing quietly.
+  - [x] `safe-/` (15 call sites) and `int-delta`
+    > **Done:** `safe_divide` written **array-aware**, where the original is scalar
+    > inside explicit loops — every one of the 15 sites normalizes an array by a
+    > scalar or divides two arrays elementwise, so a scalar port would put loops
+    > back into code numpy writes in one line. Zero is returned for `0/0` *and*
+    > `x/0`, matching the original; numpy alone gives `nan` and `inf`, either of
+    > which propagates into a parameter array as silent corruption.
+    >
+    > **Flagged, not resolved: `safe_divide` has no consumer in 0.1.0.** All 15
+    > sites are in `update-data-p`, `update-approx-*` and `update-data-dl` (revision
+    > 03) or `hmm-param`'s surgery (revision 04); none is in `update-viterbi-path`,
+    > `update-entropy` or `init-random`. The master-plan subgoal's framing is
+    > "the Utility code this release needs", and by that test this one does not
+    > qualify — the call-site count was taken across the whole library. Migrated
+    > anyway because both the master plan and this subgoal name it explicitly, it is
+    > private so it reaches no public surface, and revision 03 then finds it done
+    > and tested. Dropping it is a one-function revert if that is preferred.
+    >
+    > `int-delta` → **`np.eye`**. Both its call sites build the identity term of
+    > `(Pᵀ - I)` one element at a time; the dissolution is recorded here and applied
+    > in goal 3, which is where the solve is written.
+  - [x] Tests, including behaviour at the sentinel boundary
+    > **Done:** 30 tests. Several assert the *absence* of the original's machinery
+    > rather than the presence of ours, which is what keeps the `+inf` claim honest:
+    > absorption in both operand orders and across a whole accumulation, the
+    > dissolved comparator's six-row truth table, non-negativity of a real
+    > description length (the property that made `-1` available as a sentinel in the
+    > first place), and silence at `log2(0)` versus a preserved `nan` warning for a
+    > negative input.
+    >
+    > **One test was wrong and is corrected in place with its reason**, because the
+    > next person writes the same one: `assert not hasattr(pfsmgraph.hmm, "_numeric")`
+    > can never pass. Importing a submodule binds it as an attribute of its parent
+    > package — the test file's own import does it — so the privacy that *is*
+    > checkable is that neither helper is reachable as a top-level name.
 
 - [ ] Port the stationary-distribution solve
   - [ ] Reproduce the row-replacement trick, not just the result: row 0 of `(Pᵀ - I)` overwritten with `Σπ = 1` before `numpy.linalg.solve` (§4)

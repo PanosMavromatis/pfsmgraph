@@ -62,3 +62,19 @@ This required amending a recorded decision. `.scratch/hmm-lush/.gitignore` had d
 saved checkpoints as "outputs of the algorithm being translated, not inputs to it, and
 unreadable without the model code that wrote them"; both halves are false for these three,
 and the declining note now points at its own exceptions.
+
+**2026-09-03 — goal 2.** `_numeric.py` and `tests/test_numeric.py` land: the first code and
+the first tests in `packages/pfsmgraph-hmm/`. Suite 94 → 124.
+
+Two functions written, two dissolved. `bits(p)` is unary where `safe-add--log2` was binary,
+because the accumulator argument existed only to check the `-1` sentinel and `+inf` absorbs
+unaided; it survives as a function at all only because it is the one place numpy's
+`log2(0)` warning is suppressed. `safe_divide` is array-aware where the original was scalar
+in a loop. `safe->--log` dissolves into `>` and `int-delta` into `np.eye`, both with the
+original's behaviour kept as tests so a reinstated sentinel fails rather than passes.
+
+Two things for the reviewer. `safe_divide` has **no consumer in 0.1.0** — all fifteen call
+sites are revision 03 or 04 — so it is migrated on the strength of the subgoal naming it,
+not on need. And this subgoal's own text offered "replaced by `-inf`"; it is `+inf`, since a
+description length is `-log2(p)`. That sign slip is §3's orientation trap in miniature and
+is recorded in the plan rather than quietly corrected.

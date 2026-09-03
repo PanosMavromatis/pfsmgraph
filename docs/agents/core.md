@@ -4,9 +4,27 @@ Shared project knowledge for any coding agent working in this repository.
 
 ## Current state
 
-**`dataseq` is implemented and tested; the other four members are still empty scaffolding.** In place: the uv workspace root `pyproject.toml` (virtual — no `[project]` table), `uv.lock`, all five `packages/*` members with their own `pyproject.toml`, the (currently dormant) `meson.build` files for `align` and `hmm`, and an empty `pfsmgraph/<pkg>/__init__.py` for the four members that have no code yet (plus `dl/rnn/` and `dl/transformer/`). The ADRs in `docs/design/adr/` are authoritative for the decisions they cover — the twelve initial records from the PRD, plus 0013 (how this family documents its public surfaces) and 0014 (how imported migration source is retained), both added 2026-09-01; the PRD remains the narrative design document.
+**`dataseq` is implemented and released; `hmm` has its first code as of 2026-09-03; the other three members are still empty scaffolding.** In place: the uv workspace root `pyproject.toml` (virtual — no `[project]` table), `uv.lock`, all five `packages/*` members with their own `pyproject.toml`, the (currently dormant) `meson.build` files for `align` and `hmm`, and an empty `pfsmgraph/<pkg>/__init__.py` for the three members that have no code yet (plus `dl/rnn/` and `dl/transformer/`). The ADRs in `docs/design/adr/` are authoritative for the decisions they cover — the twelve initial records from the PRD, plus 0013 (how this family documents its public surfaces) and 0014 (how imported migration source is retained), both added 2026-09-01; the PRD remains the narrative design document.
 
-**What `dataseq` now contains.** Six modules under `packages/pfsmgraph-dataseq/src/pfsmgraph/dataseq/` (the container landed 2026-08-31, the encoder API 2026-09-01) and 74 tests — the first tests in this repository, and 74 of the suite's 94 today; the remaining 20 are the repo-root backend-matrix, API-docs and release-runbook tests. `_reserved.py` hard-codes the ADR 0011 block as module constants, with no class or parameter that could relocate it; `_vocabulary.py` holds the `Vocabulary` protocol and `SymbolTable`, a frozen first-appearance-ordered implementation that encodes strictly and decodes *totally*, reserved codes included; `_record.py` and `_dataset.py` are the ragged container, whose records carry true lengths and never padding; `_collate.py` is `pad_collate`, where padding is introduced and always returned with its mask. The container imports neither torch nor pandas — verified in a subprocess — and its one runtime dependency is `numpy`.
+**What `dataseq` now contains.** Six modules under `packages/pfsmgraph-dataseq/src/pfsmgraph/dataseq/` (the container landed 2026-08-31, the encoder API 2026-09-01) and 74 tests — the first tests in this repository, and 74 of the suite's 124 today; 30 are `hmm`'s and the remaining 20 are the repo-root backend-matrix, API-docs and release-runbook tests. `_reserved.py` hard-codes the ADR 0011 block as module constants, with no class or parameter that could relocate it; `_vocabulary.py` holds the `Vocabulary` protocol and `SymbolTable`, a frozen first-appearance-ordered implementation that encodes strictly and decodes *totally*, reserved codes included; `_record.py` and `_dataset.py` are the ragged container, whose records carry true lengths and never padding; `_collate.py` is `pad_collate`, where padding is introduced and always returned with its mask. The container imports neither torch nor pandas — verified in a subprocess — and its one runtime dependency is `numpy`.
+
+**What `hmm` now contains.** One private module, `_numeric.py`, and 30 tests — the numeric
+Utility code migrated from the Lush original, landed 2026-09-03. There is no public API
+yet: nothing is re-exported from `pfsmgraph/hmm/__init__.py`, which is still empty.
+`bits(p)` is `-log2(p)`, and `safe_divide(num, den)` yields `0.0` wherever the denominator
+is zero, matching the original for `0/0` and `x/0` alike. **The quantities `bits` builds are
+description lengths, not probabilities** (`HMMLIB-ACCOUNT.md` §3): they *grow* as the
+probability falls, so **Viterbi over them is a min-sum, not a max-product**, and a port that
+reaches for `max` inverts every comparison. This is the second fact after arc-emission most
+likely to be lost in translation, and the original's own naming hides it — its `data-p` and
+`result-p` hold bits despite a `-p` suffix that means "probability" everywhere else in that
+library; nothing on this side carries that suffix. The original's `-1` log-zero sentinel is
+**not** reproduced: `bits(0)` is `+inf`, which absorbs under addition and sorts where it
+means, so `safe->--log` dissolves into plain `>` and `int-delta` into `np.eye`. Faithfulness
+to `-1` was declined as uncheckable — there is no Lush runtime in this repository, and the
+sentinel reaches no persisted artifact. One live loose end: `safe_divide` has **no consumer
+in 0.1.0**, since all fifteen of its call sites are in the forward pass, the M-step, or the
+topology surgery, which arrive in revisions 03 and 04.
 
 **The ADR 0003 reporting mechanism is complete as of 2026-09-01, and it lives at the repo
 root.** `conftest.py` carries `pytest_report_header` and nothing else; `_backends.py`
@@ -37,7 +55,7 @@ the merge into `packages/pfsmgraph-dataseq/`, together with the proof-of-concept
 alignment library whose `Alphabet` is the *encoder* ancestor. That distinction is why ADR
 0010 still says "three implementations" while also requiring the `Alphabet` reconciliation:
 four imported sources, three of them containers. So the scaffolding note above is a
-claim about the four members that have no code yet, and the test count is a claim about
+claim about the three members that have no code yet, and the test count is a claim about
 `packages/`: `.scratch/` does contain Python, Cython and `tests/` directories
 belonging to other projects, and now also Python of our own — a runnable transliteration of
 the Lush original under `.scratch/hmm-lush/translation/`, written as a reading aid for the
@@ -119,7 +137,7 @@ Still to do, in PRD order (§11): `hmm` (Lush translation), then `align`, then `
 Toolchain: **uv** (workspace) + **pytest**. Requires `uv` and Python ≥ 3.10.
 
 - `uv sync` — create/refresh the venv; installs all five members editable (plain `.pth`) plus the `dev` group (`pytest`).
-- `uv run pytest` — run the suite (94 tests: 74 in `packages/pfsmgraph-dataseq/tests/` and 20 in the repo-root `tests/` — 13 covering the ADR 0003 backend matrix, 5 executing documented code blocks against their pasted output per ADR 0013, 2 checking that `docs/ops/release.md` names only recipes the root `justfile` defines). That verifier reads `docs/api/*/*.md` **and `packages/*/README.md`**: a member README becomes a PyPI long description under an immutable version, so it is the one documentation surface where drift cannot be corrected in place. Every run opens with the backend header. One narrow skip is by design: `test_torch_interop.py` verifies the `DataLoader` integration and skips when torch is absent, since torch is a dependency of no member.
+- `uv run pytest` — run the suite (124 tests: 74 in `packages/pfsmgraph-dataseq/tests/`, 30 in `packages/pfsmgraph-hmm/tests/`, and 20 in the repo-root `tests/` — 13 covering the ADR 0003 backend matrix, 5 executing documented code blocks against their pasted output per ADR 0013, 2 checking that `docs/ops/release.md` names only recipes the root `justfile` defines). That verifier reads `docs/api/*/*.md` **and `packages/*/README.md`**: a member README becomes a PyPI long description under an immutable version, so it is the one documentation surface where drift cannot be corrected in place. Every run opens with the backend header. One narrow skip is by design: `test_torch_interop.py` verifies the `DataLoader` integration and skips when torch is absent, since torch is a dependency of no member.
 - `uv build --package pfsmgraph-<pkg>` — build one member's sdist + wheel.
 - `uv lock` — refresh `uv.lock` (committed; one lockfile for the whole family).
 
