@@ -34,6 +34,14 @@ Settled on the planning branch: `torch` is an **optional** backend behind a
 "'GPU' means two unrelated things" survives intact — `numba-cuda` and `torch` remain
 separate extras with separate meanings.
 
+**This revision does not re-decide the class architecture.** `02-hmm-v0.1.0`'s
+public-surface subgoal settles whether `pfsmgraph.hmm` follows Lush's
+`hmm`/`hmm-param`/`hmm-trainer` split or something else, and that choice is inherited
+here, not reopened. The one place this revision can still put pressure on it is the
+`torch` backend: wrapping the same arrays as `nn.Parameter`s is itself a class shape, and
+if it sits awkwardly against whatever 02 chose, that friction is this revision's to
+absorb — in the `torch`-backend subgoal below, not by redesigning the base class.
+
 **Drafted before the source was read.** What would falsify the shape below:
 
 - **The M-step not being separable from the search.** `update-approx-*`
