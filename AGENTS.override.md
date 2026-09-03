@@ -42,7 +42,7 @@ code actually does, say so — that divergence is worth more than a style commen
 **`dataseq` is implemented and released; `hmm` has begun; the other three members are still
 scaffolding (2026-09-03).** There is real code to review in two packages now.
 `packages/pfsmgraph-dataseq/` is six modules and 74 tests, covered further down.
-`packages/pfsmgraph-hmm/` is one private module and 46 tests — the numeric Utility code
+`packages/pfsmgraph-hmm/` is one private module and 66 tests — the numeric Utility code
 migrated from the Lush original, with no public API yet. Review it against
 `.scratch/hmm-lush/Code/Utility/util.lsh`, `Code/HMMlib/hmm.lsh:228-262`, and
 `HMMLIB-ACCOUNT.md` §3 and §4, and know the one fact
@@ -65,7 +65,23 @@ are not slack**: the saved `.hmm` fixtures are four-decimal prints, so `1e-4` is
 error budget (output rounding plus input rounding propagated through the solve), and the
 singularity test renormalises rows first because rounding lifts the smallest singular value
 of `(Pᵀ - I)` nine orders above `matrix_rank`'s tolerance. Tightening either one reintroduces
-a failure that was diagnosed, not worked around. For the three members that have no code, documentation and
+a failure that was diagnosed, not worked around.
+
+**The highest-value false positive in that module is `entropy` not reusing `bits`.** Entropy
+is `Σ p·bits(p)`, so "this duplicates `bits`, simplify it" is the natural finding and it is
+wrong: `bits(0)` is `+inf`, correct for a description length and wrong for an entropy term,
+where the zero is a weight as well as an argument and `0·inf` is `nan` instead of the 0 the
+`0 log 0 = 0` convention needs. Likewise the `!= 0` mask is not a sloppy `> 0` — it is what
+keeps a *negative* input reaching `log2` and going `nan` loudly, matching `bits`, where
+`invalid` is deliberately unsuppressed. And `rand_p_vector`'s required `rng` parameter is not
+a missing default: reproducibility is structural on purpose (ADR 0017's frozen value, ADR
+0002's `prange`/CUDA phases), so "add `rng=None`" reverses a recorded decision.
+
+Real findings would look different. Worth checking rather than assuming: that no migrated
+function has silently acquired a `_p` suffix (the original's `data-p`/`result-p` hold bits,
+not probabilities); that no comparison over description lengths reaches for `max`; and that
+`docs/agents/core.md`'s test counts still match `uv run pytest`, since they have moved three
+times in this branch alone. For the three members that have no code, documentation and
 packaging coherence remain the highest-signal targets, which is where errors are cheapest to
 fix and most expensive to leave:
 

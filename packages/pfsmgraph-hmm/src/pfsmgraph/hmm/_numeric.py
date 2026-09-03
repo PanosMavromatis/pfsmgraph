@@ -27,7 +27,13 @@ from __future__ import annotations
 
 import numpy as np
 
-__all__ = ["bits", "safe_divide", "stationary_distribution"]
+__all__ = [
+    "bits",
+    "entropy",
+    "rand_p_vector",
+    "safe_divide",
+    "stationary_distribution",
+]
 
 
 def bits(p):
@@ -151,3 +157,92 @@ def stationary_distribution(transition_p) -> np.ndarray:
             "dimension > 1, so the stationary distribution is not unique and "
             "replacing one row with the normalization cannot determine it"
         ) from err
+
+
+def entropy(p, axis=-1):
+    """Shannon entropy in bits, ``-sum(p * log2(p))``, taking ``0 log 0`` as 0.
+
+    Translates ``calculate-entropy`` (``util.lsh:448-460``), whose loop skips
+    zero entries explicitly -- ``(when (<> p-i 0.0) ...)`` -- which is that
+    convention spelled as control flow.
+
+    **This deliberately does not reuse :func:`bits`, and the reason is worth
+    stating.** Entropy is ``sum(p * bits(p))``, so reuse looks obvious; but
+    ``bits(0)`` is ``+inf``, which is *correct* for a description length -- an
+    impossible event costs infinitely many bits -- and *wrong* here, because in
+    entropy the zero is a weight as well as an argument, and ``0 * inf`` is
+    ``nan`` rather than the 0 the convention calls for. The two functions
+    disagree about zero because they are asking different questions of it.
+
+    The zeros are handled by substituting 1.0 before the logarithm, since
+    ``log2(1) == 0`` makes those terms vanish without ``log2(0)`` ever being
+    evaluated. The mask is ``!= 0`` rather than ``> 0`` on purpose: a *negative*
+    input then still reaches :func:`numpy.log2` and still yields ``nan``
+    loudly, matching :func:`bits`, where a negative probability is a bug rather
+    than a boundary case.
+
+    ``axis`` defaults to the last one, so a 1-D distribution gives a scalar and
+    an ``(S, A)`` array of per-state symbol distributions gives ``S``
+    entropies in one call. That second shape is the one the model wants: the
+    original computes each state's symbol distribution by marginalizing the
+    Mealy emission over successor states,
+    ``p_i(k) = sum_j transition_p[i, j] * output_p[i, j, k]``
+    (``hmm.lsh:246-253``), which is ``np.einsum("ij,ijk->ik", ...)``. That
+    marginalization is model-shaped and belongs with ``HMMParams``, not here.
+    """
+    probabilities = np.asarray(p, dtype=np.float64)
+    nonzero = np.where(probabilities != 0.0, probabilities, 1.0)
+    return -np.sum(probabilities * np.log2(nonzero), axis=axis)
+
+
+def rand_p_vector(size, noise_width, rng) -> np.ndarray:
+    """A near-uniform random probability vector of length ``size``.
+
+    Translates ``rand-p-vector`` (``util.lsh:523-546``): each element is set to
+    ``1 + noise_width * U(-1, 1)`` and the vector is then normalized, so
+    ``noise_width = 0`` gives the exactly uniform distribution and larger values
+    spread it. The original's commented-out alternative at ``531-533`` perturbs
+    the *existing* contents instead, and is annotated "it doesn't work very
+    well".
+
+    **It assigns rather than perturbs**, which is why this takes a ``size`` and
+    returns a new array where the original took an ``idx`` and overwrote it in
+    place. The Lush body discards whatever the argument held, so an
+    out-parameter would carry no information; the generated C
+    (``Code/Utility/C/util.c``) settled that mechanically, as a plain
+    ``IDX_PTR(...)[...] = (1+(noise_width*rand))``.
+
+    ``rng`` is a required :class:`numpy.random.Generator`. There is deliberately
+    no default and no module-level state: parameters are a frozen value under
+    ADR 0017, which is hollow if the value cannot be re-derived, and ADR 0002
+    commits to ``prange`` and CUDA phases where a shared generator is a data
+    race rather than a style preference. The original drew from Lush's global
+    ``(rand 1.0 -1.0)``, which the generated C shows is
+    ``((-1) - (1)) * Frand() + (1)`` -- uniform on ``(-1, 1]``, where numpy's
+    :meth:`~numpy.random.Generator.uniform` is ``[-1, 1)``. The half-open end
+    differs on a set of measure zero and is not worth reproducing.
+
+    ``noise_width`` must lie in ``[0, 1)``. At 1 or above an element can reach
+    zero or go negative, and normalizing that still yields a vector summing to 1
+    -- a negative "probability" that would flow into a parameter array as
+    exactly the silent corruption :func:`safe_divide` returns 0 to avoid. The
+    original does not check, but its only call sites pass 0.001 and 0.1.
+    """
+    # Checked before the comparison rather than left to it: passing the array to
+    # be filled is the natural mistake here, since that is what the Lush
+    # signature took, and `size < 1` on an array raises numpy's "truth value is
+    # ambiguous" -- a ValueError about nothing the caller did.
+    if not isinstance(size, (int, np.integer)):
+        raise TypeError(
+            f"size must be an integer, got {type(size).__name__}; this returns a "
+            "new vector rather than filling one, unlike the Lush original"
+        )
+    if size < 1:
+        raise ValueError(f"size must be at least 1, got {size}")
+    if not 0.0 <= noise_width < 1.0:
+        raise ValueError(
+            f"noise_width must lie in [0, 1), got {noise_width}; at 1 or above "
+            "an element can go negative and normalization would hide it"
+        )
+    values = 1.0 + noise_width * rng.uniform(-1.0, 1.0, size=size)
+    return values / values.sum()

@@ -20,7 +20,13 @@ import pytest
 
 import pfsmgraph.hmm
 from pfsmgraph.hmm import _numeric
-from pfsmgraph.hmm._numeric import bits, safe_divide, stationary_distribution
+from pfsmgraph.hmm._numeric import (
+    bits,
+    entropy,
+    rand_p_vector,
+    safe_divide,
+    stationary_distribution,
+)
 
 
 # --- bits: the description length ------------------------------------------
@@ -420,6 +426,166 @@ def test_a_frozen_transition_matrix_is_accepted():
     assert (transition_p == before).all()
 
 
+# --- entropy ----------------------------------------------------------------
+
+
+def test_the_uniform_distribution_over_n_costs_log2_n_bits():
+    for n in (2, 4, 8, 6):
+        assert entropy(np.full(n, 1 / n)) == pytest.approx(np.log2(n))
+
+
+def test_a_point_mass_has_no_entropy():
+    assert entropy(np.array([0.0, 1.0, 0.0])) == pytest.approx(0.0)
+
+
+def test_zeros_contribute_nothing():
+    """The `0 log 0 = 0` convention, which the original spells as a `when` guard."""
+    assert entropy(np.array([0.5, 0.5, 0.0, 0.0])) == pytest.approx(
+        entropy(np.array([0.5, 0.5]))
+    )
+
+
+def test_the_uniform_distribution_is_the_maximum():
+    uniform = np.full(5, 0.2)
+    skewed = np.array([0.6, 0.1, 0.1, 0.1, 0.1])
+
+    assert entropy(uniform) > entropy(skewed)
+
+
+def test_log_zero_is_never_evaluated():
+    """No `divide by zero` warning, because 1.0 is substituted before the log.
+
+    `entropy` deliberately does *not* reuse `bits`: `bits(0)` is `+inf`, which
+    is right for a description length and wrong here, since `0 * inf` is `nan`
+    rather than the 0 the convention calls for.
+    """
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert entropy(np.array([0.5, 0.5, 0.0])) == pytest.approx(1.0)
+
+
+def test_a_negative_probability_still_complains_in_entropy():
+    """The mask is `!= 0`, not `> 0`, so negatives reach log2 and stay loud.
+
+    Same posture as `bits`, where `invalid` is left unsuppressed on purpose.
+    The name is distinct from the `bits` test deliberately: two test functions
+    sharing a name silently rebind, and pytest then collects only the second --
+    the first check disappears with no error at all.
+    """
+    with pytest.warns(RuntimeWarning, match="invalid value"):
+        assert np.isnan(entropy(np.array([-0.5, 1.5])))
+
+
+def test_the_last_axis_is_reduced_by_default():
+    """An `(S, A)` array of per-state distributions gives `S` entropies.
+
+    That is the shape the model wants, which is why the default is the last
+    axis rather than the whole array.
+    """
+    distributions = np.array([[0.5, 0.5], [1.0, 0.0], [0.25, 0.75]])
+    result = entropy(distributions)
+
+    assert result.shape == (3,)
+    assert result == pytest.approx([1.0, 0.0, entropy(np.array([0.25, 0.75]))])
+
+
+@pytest.mark.parametrize("model", _SAVED_MODELS)
+def test_reproduces_the_originals_own_state_entropies(model):
+    """A differential test against the saved `state_entropies`.
+
+    The marginalization `p_i(k) = sum_j transition_p[i, j] * output_p[i, j, k]`
+    (`hmm.lsh:246-253`) is done here in the test rather than in `_numeric.py`,
+    because it is model-shaped and belongs with `HMMParams`. Doing it here still
+    pins down `entropy` against the original's own numbers, and records the
+    formula in executable form for whoever writes that property.
+
+    The tolerance is looser than the stationary solve's 1e-4, and the reason is
+    the same rounding budget counted correctly: this path combines *two*
+    four-decimal arrays before taking a logarithm, where the solve combined one.
+    Observed worst case is 1.44e-4.
+    """
+    directory = _FIXTURES / model
+    transition_p = _read_ascii_matrix(directory / "transition_p")
+    output_p = _read_ascii_matrix(directory / "output_p")
+    saved = _read_ascii_matrix(directory / "state_entropies")
+
+    marginal = np.einsum("ij,ijk->ik", transition_p, output_p)
+
+    assert entropy(marginal) == pytest.approx(saved, abs=5e-4)
+
+
+# --- rand_p_vector ----------------------------------------------------------
+
+
+def test_it_returns_a_distribution_of_the_requested_size():
+    result = rand_p_vector(7, 0.1, np.random.default_rng(0))
+
+    assert result.shape == (7,)
+    assert result.sum() == pytest.approx(1.0)
+    assert (result > 0.0).all()
+
+
+def test_no_noise_gives_the_exactly_uniform_distribution():
+    assert rand_p_vector(4, 0.0, np.random.default_rng(0)) == pytest.approx(
+        np.full(4, 0.25)
+    )
+
+
+def test_the_same_generator_seed_gives_the_same_vector():
+    """Reproducibility is the whole reason `rng` is required rather than optional.
+
+    Parameters are a frozen value under ADR 0017, which is hollow if the value
+    cannot be re-derived; and ADR 0002's `prange` and CUDA phases make a
+    module-level generator a data race, not a style choice.
+    """
+    first = rand_p_vector(6, 0.1, np.random.default_rng(20260903))
+    second = rand_p_vector(6, 0.1, np.random.default_rng(20260903))
+
+    assert first == pytest.approx(second)
+
+
+def test_different_seeds_give_different_vectors():
+    first = rand_p_vector(6, 0.1, np.random.default_rng(1))
+    second = rand_p_vector(6, 0.1, np.random.default_rng(2))
+
+    assert not np.allclose(first, second)
+
+
+def test_more_noise_spreads_the_distribution_further():
+    narrow = rand_p_vector(8, 0.01, np.random.default_rng(7))
+    wide = rand_p_vector(8, 0.5, np.random.default_rng(7))
+    uniform = np.full(8, 0.125)
+
+    assert np.abs(wide - uniform).max() > np.abs(narrow - uniform).max()
+
+
+def test_it_takes_a_size_rather_than_an_array_to_fill():
+    """The original overwrites its argument, so an out-parameter carries nothing.
+
+    `util.lsh:529-530` assigns `1 + noise_width * rand(-1, 1)` to every element,
+    discarding whatever was there; the generated C confirms it as a plain
+    store. The signature is the finding, so this asserts the signature.
+    """
+    with pytest.raises(TypeError):
+        rand_p_vector(np.zeros(5), 0.1, np.random.default_rng(0))
+
+
+@pytest.mark.parametrize("noise_width", [1.0, 1.5, -0.1])
+def test_a_noise_width_outside_the_unit_interval_is_refused(noise_width):
+    """At 1 or above an element can go negative, and normalizing would hide it.
+
+    The result would still sum to 1, so nothing downstream could tell -- the
+    same class of silent corruption `safe_divide` returns 0 to avoid.
+    """
+    with pytest.raises(ValueError, match="noise_width"):
+        rand_p_vector(5, noise_width, np.random.default_rng(0))
+
+
+def test_a_size_below_one_is_refused():
+    with pytest.raises(ValueError, match="size"):
+        rand_p_vector(0, 0.1, np.random.default_rng(0))
+
+
 # --- the package boundary ---------------------------------------------------
 
 
@@ -437,6 +603,12 @@ def test_the_numeric_helpers_are_private_to_the_package():
     what is actually checkable is that neither helper is reachable as a
     top-level name on the package.
     """
-    for name in ("bits", "safe_divide", "stationary_distribution"):
+    for name in (
+        "bits",
+        "entropy",
+        "rand_p_vector",
+        "safe_divide",
+        "stationary_distribution",
+    ):
         assert not hasattr(pfsmgraph.hmm, name)
     assert _numeric.__name__.rpartition(".")[2].startswith("_")

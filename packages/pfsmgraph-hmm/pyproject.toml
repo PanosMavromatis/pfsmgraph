@@ -21,6 +21,17 @@ classifiers = [
 dependencies = [
     "pfsmgraph-dataseq>=0.1.0",
     "pfsmgraph-align>=0.1",
+    # Higher than dataseq's >=1.24, and deliberately so -- the divergence tracks
+    # the pure/compiled split rather than being drift. hmm is a meson-python
+    # member (ADR 0005), and build-system.requires below already spells
+    # numpy>=2.1; a C extension built against numpy 2.x headers will not run on
+    # 1.x, so the runtime floor has to follow the build floor. Reviewed
+    # 2026-09-03 against the first numpy code in this package: _numeric.py uses
+    # nothing newer than numpy 1.20 (broadcast_shapes is the newest name), so
+    # the bound is justified by the compiled future, not by today's API. Do not
+    # "correct" it downward on that basis -- lowering it would only have to be
+    # undone at the first .pyx, and raising a published lower bound is the
+    # breaking direction.
     "numpy>=2.1",
 ]
 

@@ -100,3 +100,25 @@ The fixtures are read from `.scratch/` **in place**. They are tracked, so they e
 every clone, and `tests/` never ships — the wheel packages only `src/pfsmgraph`. The `.MAT`
 reader is a helper in the test module rather than a `conftest.py`, on the same
 "one consumer, no invented structure" grounds that kept `_numeric.py` one module.
+
+**2026-09-03 — goal 4.** `entropy` and `rand_p_vector` land; suite 140 → 160. `_numeric.py`
+is complete for 0.1.0 at five functions, and the branch is done.
+
+`entropy` **does not reuse `bits`**, though it looks like `Σ p·bits(p)`. `bits(0)` is `+inf`,
+right for a description length and wrong for an entropy term, where the zero is a weight as
+well as an argument and `0·inf` is `nan`. Zeros are handled by substituting 1 before the log,
+masked on `!= 0` so negatives still go loud. `rand_p_vector` takes a **required**
+`numpy.random.Generator` — reproducibility structural rather than available, since ADR 0017's
+frozen value is hollow if it cannot be re-derived and ADR 0002's `prange`/CUDA phases make
+module state a data race.
+
+**The subgoal's "migrates nowhere" claim was wrong twice**, which is the whole reason to
+check a negative finding rather than transcribe it. `minimize-int` has one call site
+(`hmm-trainer.lsh:441`, `suggest-d`), so it migrates at revision 04 — the same MDL boundary
+goal 1 drew for `int-code-length`. And `mc.lsh` *is* libloaded by `load-hmm.lsh:6`; what
+supports the conclusion is that none of its four names is ever called.
+
+`numpy>=2.1` is **kept**, with the justification now in `pyproject.toml`: nothing here needs
+newer than 1.20, so the bound is justified by the compiled future, and the divergence from
+`dataseq`'s `>=1.24` tracks the pure/compiled split rather than being drift. Editing it left
+`uv.lock` byte-identical, confirming the workspace footgun exactly as `core.md` describes.
