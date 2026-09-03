@@ -68,6 +68,12 @@ These two dependencies are why the family is a family. The packaging decisions i
 
 The three existing data sequence implementations have been inspected and will be merged into one (§3.5). Building the foundational layer first, rather than deferring it, removes the risk that a fourth representation hardens during the Lush translation, and it gives `hmm` a defined interface to target rather than one to invent.
 
+> **Status: `dataseq` is done (2026-09-01).** The container landed 2026-08-31 and the
+> encoder API 2026-09-01; `packages/pfsmgraph-dataseq/` carries six modules and 74 tests,
+> and [ADR 0010](adr/0010-dataseq-composition-merging-three-implementations.md) is
+> `Accepted`. `hmm` is next, as projected. Everything below this line is the June 2026
+> projection and is left as written.
+
 Expected order thereafter:
 
 - **`dataseq` first** — a merge of three known implementations rather than a design to be invented, which makes it far more tractable than "foundational layer" usually implies.
@@ -336,8 +342,8 @@ This keeps `dl` a regular package and `pfsmgraph` the **only** namespace level. 
 ## 8. Open questions
 
 - **Remaining dependency graph.** `dataseq` as the base and `align` as the common mid-layer are now established (§3.4). Still open: whether `hseg`, `hmm`, and `dl` depend on *each other*, and how tightly the family co-evolves in the first year. This affects how much the workspace's atomic-commit benefit is worth.
-- **Placement of the inherited alignment types.** `dataseq`'s container and encoder/decoder scope is settled (§3.5), as is the reserved index layout (§3.6 — `GAP` is a `dataseq` concern, not an `align` convention). `Alphabet` overlaps directly with the encoder/decoder being merged into `dataseq` — the two express the same symbol ↔ integer-code mapping — so reconciling them is part of the merge rather than a separate question. `ScoringMatrix` and `AlignmentResult` are alignment-specific and stay in `align`. What remains is the exact shape of the reconciled encoder API: constructor signature, the strictness switch, and how `align` consumes the mapping at its boundary.
-- **`dataseq` build backend.** Whether `dataseq` is pure-Python (hatchling) or carries performance-critical inner loops warranting compilation (meson-python) follows from the merge. The `dl`-derived base is presumed pure-Python; confirm once merged.
+- **Placement of the inherited alignment types.** `dataseq`'s container and encoder/decoder scope is settled (§3.5), as is the reserved index layout (§3.6 — `GAP` is a `dataseq` concern, not an `align` convention). `Alphabet` overlaps directly with the encoder/decoder being merged into `dataseq` — the two express the same symbol ↔ integer-code mapping — so reconciling them is part of the merge rather than a separate question. `ScoringMatrix` and `AlignmentResult` are alignment-specific and stay in `align`. **Settled 2026-09-01, and nothing in this entry remains open.** The reconciled encoder API landed with the merge and is what promoted [ADR 0010](adr/0010-dataseq-composition-merging-three-implementations.md) to `Accepted`: `SymbolTable(symbols)` with `from_sequences()` for a corpus, strictness spelled per call as `encode(..., on_unknown="raise" | "unk")`, and the symbol ↔ code mapping published as `code()` plus a read-only `sym_to_code` view, because `align` builds its scoring matrix from the whole mapping across a distribution boundary.
+- **`dataseq` build backend.** Whether `dataseq` is pure-Python (hatchling) or carries performance-critical inner loops warranting compilation (meson-python) follows from the merge. The `dl`-derived base is presumed pure-Python; confirm once merged. **Settled 2026-08-31: hatchling.** All four imported sources were read for a compiled inner loop belonging to `dataseq`, and there is none; recorded in [ADR 0010](adr/0010-dataseq-composition-merging-three-implementations.md) §Resolved.
 - **`hseg` DP.** Whether hierarchical segmentation has its own DP recurrence (and therefore its own Cython/wavefront path) is unconfirmed. If it is pure orchestration over `align`, it stays a pure-Python package.
 
 ---
@@ -346,7 +352,7 @@ This keeps `dl` a regular package and `pfsmgraph` the **only** namespace level. 
 
 This PRD is the source for the repository's initial ADR set. Numbering starts fresh; no ADRs are carried over from earlier iterations of the project. Each decision below should be promoted to a standalone ADR at scaffolding time, and the ADR — not this document — becomes the authoritative record thereafter.
 
-> **Status: done (2026-08-29).** The initial set is authored — see [`adr/README.md`](adr/README.md) for the index. Twelve records: the seven topics below (ADRs 0005–0011), the inherited §1.2 decisions (ADRs 0001–0004), and one for the temporary hatchling deviation (ADR 0012), which postdates this document and qualifies §6.1.
+> **Status: done (2026-08-29).** The initial set is authored — see [`adr/README.md`](adr/README.md) for the index. Twelve records: the seven topics below (ADRs 0005–0011), the inherited §1.2 decisions (ADRs 0001–0004), and one for the temporary hatchling deviation (ADR 0012), which postdates this document and qualifies §6.1. Two more have been added since — 0013 and 0014, both 2026-09-01 — so the index now lists fourteen; "twelve" is a count of the *initial* set this document seeded.
 >
 > **The ADRs are now authoritative for D1–D11.** Amend decisions there, not here. One carries a non-`Accepted` status: **ADR 0012** is `Accepted (temporary)`, expiring when the first `.pyx` lands. **ADR 0010** was `Proposed` on the same footing until 2026-09-01, when the encoder API reconciliation landed with the `dataseq` merge exactly as the prerequisite at the end of this section requires; it is now `Accepted` and records the settled API.
 
@@ -374,6 +380,12 @@ Prerequisite: the remaining open questions in §8 are narrower than they were �
 ---
 
 ## 11. Scaffolding notes
+
+> **Status (2026-09-01).** The workspace is scaffolded and the `dataseq` items below are
+> discharged: the merge landed, and the reserved-block renumbering landed *as part of* it
+> rather than after, on 2026-09-01. Two are still owed — the version bounds, which the
+> first real release settles, and the `_cython.pyx` fix in §11.1, which must still be
+> applied while that file is moved into `pfsmgraph-align`. The notes are left as written.
 
 - The existing codebase is a minimal proof-of-concept being brought into this structure; the module moves are mechanical given the project's relative-import discipline.
 - PyPI names are secured (§4). Placeholders should be replaced by real releases within a reasonable window.

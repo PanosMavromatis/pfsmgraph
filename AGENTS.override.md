@@ -39,9 +39,11 @@ code actually does, say so — that divergence is worth more than a style commen
 
 ### High-signal review targets
 
-**Today, the repo is scaffolding: no algorithms, no tests.** Until code lands, the highest-
-signal targets are documentation and packaging coherence, which is where errors are currently
-cheapest to fix and most expensive to leave:
+**`dataseq` is implemented and tested; the other four members are still scaffolding
+(2026-09-01).** There is real code to review now, and all of it is in one package —
+`packages/pfsmgraph-dataseq/`, six modules and 74 tests, covered further down. For the four
+members that have no code, documentation and packaging coherence remain the highest-signal
+targets, which is where errors are cheapest to fix and most expensive to leave:
 
 - **`docs/design/adr/` vs. `docs/design/PRD.md` vs. `docs/agents/core.md`.** Three documents
   describe one design. Claim drift between them is the live risk — the ADRs are authoritative
@@ -52,9 +54,40 @@ cheapest to fix and most expensive to leave:
   `SymbolTable` as provisional, is stale and worth a finding.
 - **`packages/*/pyproject.toml` dependency bounds.** ADR 0006's workspace footgun: a
   `{ workspace = true }` source satisfies *any* constraint, so a wrong `>=` bound cannot fail
-  locally and only breaks a pip user post-publish. Every intra-family bound currently reads
-  `>=0.1` against `0.0.0` placeholders. Local green proves nothing here — read the bounds as
-  literal claims about PyPI.
+  locally and only breaks a pip user post-publish. The four bounds naming
+  `pfsmgraph-dataseq` read `>=0.1.0` and were reviewed on 2026-09-01; the three naming
+  `pfsmgraph-align` still read `>=0.1` and were not, and that divergent spelling is the
+  record of which is which -- do not "fix" it into uniformity, which would destroy the
+  distinction at no gain. `pfsmgraph-align` is still only a `0.0.0` placeholder on PyPI;
+  `pfsmgraph-dataseq` publishes at `0.1.0` on 2026-09-02, which is what makes its four
+  bounds satisfiable for the first time. Local green proves
+  nothing here — read the bounds as literal claims about PyPI. **Nor does `uv.lock`**:
+  measured 2026-09-01, changing all four bounds left it byte-identical, because a workspace
+  member's `requires-dist` entry carries no version specifier at all. A clean lockfile diff
+  is not evidence that a bound is right.
+- **Release packaging in a member's `packages/pfsmgraph-<pkg>/`.** Two defects here build
+  cleanly and produce a broken artifact, so a green build is not evidence. A `LICENSE`
+  symlinked to the repo-root one yields an sdist that fails on *unpack*; a `py.typed` at the
+  distribution root rather than at `src/pfsmgraph/<pkg>/py.typed` reaches no wheel at all,
+  silently, and a type checker then discards every annotation in the package. Check for a
+  real-file `LICENSE`, a member-specific `README.md` with absolute links only (a relative
+  link 404s on PyPI), the `Typing :: Typed` classifier, and the marker at the path inside the
+  importable package — never at the `pfsmgraph/` namespace level, which no one distribution
+  owns. `dataseq` has all four as of 2026-09-02; the other four members have none, correctly,
+  until they release. A release commit missing any of them is a finding.
+  Two further silent variants, both measured 2026-09-02: the wheel ships the **member's**
+  `LICENSE`, not the repo-root one, so editing only the root file changes nothing a consumer
+  sees and the two silently diverge; and package metadata — `authors`, `maintainers`, the
+  copyright holder — passes `twine check` and the whole suite whatever it says, so a wrong
+  address or name is caught by a human reading the diff or not at all.
+- **The repo-root `justfile`'s guard ordering.** `just` runs every recipe body line *after*
+  every prerequisite, `publish` included, so a check written into the body of `release`
+  executes after the irreversible upload. Guards therefore live in the `preflight` recipe,
+  positioned left of `publish` in the prerequisite list. A proposed guard added to
+  `release`'s body is a finding even though it reads correctly and passes: the failure is
+  that it can only fail too late. `clean` as a prerequisite of `build` is load-bearing for a
+  related reason — `dist/` is shared by all five members and the publish glob carries no
+  version, so dropping it lets a stale version of the same package be uploaded.
 - **`docs/plan/DEFERRED.md` trigger integrity.** Several entries must land *as part of* their
   trigger, not after. A change that fires a trigger without discharging its entries is a
   finding. The example this rule was written from -- the reserved-block renumbering with the
@@ -87,6 +120,18 @@ cheapest to fix and most expensive to leave:
   `pytest_report_header` is a startup hook, and a conftest loaded during collection has its
   hook discarded with no warning. `tests/test_backends.py` pins the placement for that
   reason; treat a change that deletes those wiring tests as the same finding.
+- **`docs/api/` and the test that executes it** (ADR 0013). The pages are hand-written, so
+  their examples are the only guard against prose drifting from the code they describe;
+  `tests/test_api_docs.py` executes every block and compares its output — pasted exception
+  messages included — against the live result. Two things there look wrong and are not: the
+  setup blocks carry no `>>>` prompts, and errors are pasted as a bare last line without
+  doctest's `Traceback (most recent call last):` header. Both are deliberate, so the pages
+  read as clean scripts; stock `pytest --doctest-glob` fails 39 of the 44 examples on those
+  two facts alone and would prove nothing. **A change that replaces the runner with a
+  doctest pass, or that widens its signature-block exemption, is a finding** — that
+  exemption exists for lines like `pad_collate(batch: Sequence[SequenceRecord]) -> ...`,
+  which are not valid call expressions, and a truncated setup block is what would disappear
+  into a looser one.
 - **`meson.build` / editable-install interaction** when `align` and `hmm` return to
   meson-python (ADR 0012). meson-python's import hook claims the whole `pfsmgraph` PEP 420
   namespace and shadows its siblings. Any change here must be verified by actually importing
@@ -96,7 +141,7 @@ cheapest to fix and most expensive to leave:
 packages and will get its own sidecar once that settles; do not improvise review criteria for
 it from this file in the meantime.
 
-**`.scratch/` is not a review target.** On the `feat/dataseq-merge` branch, `.scratch/` holds
+**`.scratch/` is not a review target.** It holds
 the three existing `dataseq` implementations imported for side-by-side comparison, together
 with our own account of them and a Python transliteration of the Lush original. **That
 transliteration is deliberately idiomatic rather than literal** — it reproduces the original's
@@ -107,8 +152,9 @@ decisions, not the constructs, and `ACCOUNT.md` is where the original is describ
 priorities above — the encode seam most of all — generate noise when applied to any of it: a
 finding against scratch input is a finding against the thing being compared, not against
 anything that ships. Nothing in `.scratch/` is part of any
-distribution and nothing outside it may import from it. **It is no longer deleted when this
-branch merges** (changed 2026-08-31): the same imports seed `hmm` and `align` 0.1.0, so the
+distribution and nothing outside it may import from it. **It is no longer deleted when the merge
+branch lands** (changed 2026-08-31, and settled by
+[ADR 0014](../design/adr/0014-scratch-retention-and-per-package-scoping.md)): the same imports seed `hmm` and `align` 0.1.0, so the
 tree is retained and each import's `.gitignore` is re-scoped as the migration target changes.
 `.scratch/align-poc/.gitignore` is written in explicit phases for that reason; its `dataseq`
 block is complete and the `hmm` phase is active as of 2026-09-01, empty by design because
@@ -139,7 +185,7 @@ API, not code that ships, and it is verified by having been executed rather than
 Review the API it demonstrates under `packages/`, not the demonstration.
 
 **`packages/pfsmgraph-dataseq/` is the first real review target (2026-08-31)** — six modules and
-63 tests, where before there was nothing to review. Three things there will look like findings
+74 tests, where before there was nothing to review. Three things there will look like findings
 and are not.
 
 - **Its tests are not backend-parameterized, and must not be.** ADR 0003 parameterizes over
@@ -152,10 +198,14 @@ and are not.
   test saying so. That class is a plain class rather than a protocol or ABC, so satisfying
   `isinstance` means inheriting from it, which means importing torch into the base layer.
   `DataLoader` never makes that check for map-style datasets.
-- **`SymbolTable` is provisional by design.** Its constructor signature, the spelling of its
-  strictness switch, and how `align` reaches the mapping across a distribution boundary are the
-  encoder-API decisions, settled separately and recorded in ADR 0010. Reporting them as
-  unfinished API restates a known open question rather than finding one.
+- **`sym_to_code` exposes the symbol→code mapping publicly on purpose.** A read-only
+  `MappingProxyType` property on a container reads like leaked internals; it is a
+  cross-distribution contract. `pfsmgraph-align` builds an `(size, size)` scoring matrix from
+  the whole mapping at construction, and the alternative is reaching into a private attribute
+  across a distribution boundary. Narrowing it to `code(symbol)` alone is a breaking change,
+  not a tidy-up. *(This bullet previously read "`SymbolTable` is provisional by design". The
+  encoder API was settled 2026-09-01 and ADR 0010 is `Accepted`, so that wording had become
+  the exact staleness the high-signal targets above tell you to report.)*
 
 Two invariants there *are* worth findings against, because both were defects in an imported
 source and are now load-bearing: `decode` must stay **total** over the whole code range including

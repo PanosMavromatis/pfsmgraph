@@ -68,8 +68,9 @@ Two rules make that sustainable:
   that still runs does not prove the paragraph above it is still true.
 - Adding a member means writing its pages by hand. That is a per-package cost a generator
   would have amortised.
-- Nothing enforces the executed-examples rule automatically. Until CI exists it is a
-  discipline, and it is worth a doctest-style check when CI does.
+- Adding a member's pages means writing them by hand, and the executed-examples rule
+  then has to be honoured by whoever writes them. It is enforced from 2026-09-01 (see
+  `Resolved`), so the cost is writing the examples, not remembering to run them.
 
 ## Alternatives considered
 
@@ -98,8 +99,38 @@ trustworthy.
 
 ## Open
 
-**Whether the executed-examples rule becomes a doctest run.** The examples are written as
-`>>>` blocks, which is most of the way to being executable by `pytest --doctest-glob`.
-What stands in the way is that several show tracebacks, and one deliberately shows the
-escaped form of a `KeyError` — doctest's `IGNORE_EXCEPTION_DETAIL` and friends would have
-to be settled first. Deferred to the trigger "CI existing"; see `docs/plan/DEFERRED.md`.
+_None._
+
+## Resolved
+
+**Whether the executed-examples rule becomes a doctest run. Settled 2026-09-01: it became
+a test, but not a doctest run.** The question was deferred to "CI existing" on the
+assumption that `pytest --doctest-glob='*.md'` was most of the way there. It is not, and
+the two obstacles this section named turned out to be the reason rather than details to
+configure around. Measured before deciding: of 44 examples, stock doctest failed 39 —
+every one of them an artifact of the harness rather than a wrong output.
+
+Both obstacles are deliberate choices that make the *documentation* better and doctest
+inapplicable. The shared setup lives in plain `python` blocks with no `>>>` prompts, so a
+reader sees a clean script instead of prompt-cluttered lines — doctest sees only the
+`>>>` block and evaluates it against an empty namespace, so every example dies with
+`NameError`. And errors are pasted as the readable last line, `ValueError: cannot collate
+an empty batch`, without doctest's required `Traceback (most recent call last):` header.
+Restoring the setup and the headers would have satisfied the tool by making the pages
+worse, which is the wrong direction: the pages are the artifact, and the check exists to
+serve them.
+
+So `tests/test_api_docs.py` reads the documents' own convention instead — plain blocks are
+setup and are executed into one namespace per file in document order, `>>>` examples are
+evaluated against it, and an expected output shaped like `SomeError: message` is compared
+against the exception actually raised. A block that will not compile is an API signature
+(`pad_collate(batch: Sequence[SequenceRecord]) -> dict[str, np.ndarray]` is not a valid
+call expression) and is skipped, but only when it contains no statement and no assignment,
+so a truncated setup block fails rather than vanishing into the same exemption.
+
+It uses the standard library only, adds no build step and nothing to the `dev` group, so
+the *Decision* above is unchanged. It landed before CI rather than with it, because the
+cost turned out to be one file. The guard was verified by breaking the docs three ways —
+a wrong array value, a wrong exception message, and a truncated setup block — and
+confirming each one fails; a check that has never failed is not known to work. All 44
+examples passed unmodified, so this recorded no drift, only the absence of a mechanism.

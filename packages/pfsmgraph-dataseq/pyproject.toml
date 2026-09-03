@@ -6,15 +6,18 @@
 
 [project]
 name = "pfsmgraph-dataseq"
-version = "0.1.0.dev0"
+version = "0.1.0"
 description = "Data sequence container and symbol-to-code encoder; PyTorch Dataset-compatible base layer of the pfsmgraph family."
+readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
-authors = [{ name = "Panos Mavromatis", email = "panos.mav.ai@gmail.com" }]
+authors = [{ name = "Panos Mavromatis", email = "ai.labs@panos-mav.dev" }]
+maintainers = [{ name = "Mavromatis AI Labs", email = "ai.labs@panos-mav.dev" }]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
     "Programming Language :: Python :: 3",
+    "Typing :: Typed",
 ]
 
 # Settled at the dataseq merge (2026-08-31). numpy only: codes are int32 arrays,
@@ -25,6 +28,11 @@ classifiers = [
 # is the caller's business (PRD §3.5, §8; docs/plan/DEFERRED.md).
 # No intra-family dependencies by design (PRD §3.4, §5.5).
 dependencies = ["numpy>=1.24"]
+
+[project.urls]
+Homepage = "https://github.com/PanosMavromatis/pfsmgraph"
+Repository = "https://github.com/PanosMavromatis/pfsmgraph"
+Documentation = "https://github.com/PanosMavromatis/pfsmgraph/blob/main/docs/api/dataseq/README.md"
 
 [build-system]
 # Presumed pure-Python (dl-derived base); confirm at merge, switch to

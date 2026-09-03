@@ -10,7 +10,8 @@ version = "0.1.0.dev0"
 description = "PyTorch models (rnn, transformer) for interpretable modeling of symbolic sequences in the pfsmgraph family."
 requires-python = ">=3.10"
 license = "MIT"
-authors = [{ name = "Panos Mavromatis", email = "panos.mav.ai@gmail.com" }]
+authors = [{ name = "Panos Mavromatis", email = "ai.labs@panos-mav.dev" }]
+maintainers = [{ name = "Mavromatis AI Labs", email = "ai.labs@panos-mav.dev" }]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "Intended Audience :: Science/Research",
@@ -18,7 +19,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "pfsmgraph-dataseq>=0.1",
+    "pfsmgraph-dataseq>=0.1.0",
     "pfsmgraph-align>=0.1",
     # dl's "GPU" mechanism is torch itself -- distinct from the numba-cuda extra
     # on align/hmm (PRD §6). torch is a hard runtime dependency here.
