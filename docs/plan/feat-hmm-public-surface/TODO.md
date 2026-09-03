@@ -1,6 +1,6 @@
 # feat/hmm-public-surface
 
-**Status**: active
+**Status**: merged — PR #15 — 2026-09-03
 **Created**: 2026-09-03
 **Subgoal**: Settle the public surface of `pfsmgraph.hmm` 0.1.0 and where it meets `dataseq` (revision `02-hmm-v0.1.0`)
 
