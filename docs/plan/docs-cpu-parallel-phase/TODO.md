@@ -1,6 +1,6 @@
 # docs/cpu-parallel-phase
 
-**Status**: active
+**Status**: merged — PR #14 — 2026-09-03
 **Created**: 2026-09-03
 **Subgoal**: standalone — a lifecycle amendment ahead of revision 02, not itself a master-plan item
 
