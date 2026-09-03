@@ -91,6 +91,21 @@
 /Code/Utility/*
 !/Code/Utility/*.lsh
 
+# The DH compiler's output for the `dhc-make` list at the foot of `util.lsh`.
+# Tracked 2026-09-03, during the `hmm` numeric migration, for a reason only
+# visible then: there is no Lush runtime anywhere in this repository, so the
+# generated C is the only *machine-checked* statement of what these primitives
+# mean. It settled two questions a reading could only have guessed at --
+# `(rand 1.0 -1.0)` compiles to `((-1) - (1)) * Frand() + (1)`, so it is uniform
+# on (-1, 1] and the reversed bounds are harmless; and `rand-p-vector` *assigns*
+# `1 + noise*rand` to each element rather than perturbing what was there. Only
+# `util.c`: the two arch subdirectories hold object files and stay out. The
+# directory has to be un-ignored before the file can be, since git never descends
+# into an ignored directory.
+!/Code/Utility/C/
+/Code/Utility/C/*
+!/Code/Utility/C/util.c
+
 # --- Training: the driver scripts and two dataset specimens ------------------
 # `ds-format` runs format-sds over a `.sds` directory; the `hmm-train-*` pair are
 # the entry points. Keep all four: the `-nw` ("no window") variants are not
@@ -129,6 +144,37 @@
 /Training/set11a_dInt/*
 !/Training/set11a_dInt/set11a_dInt.sds/
 
+# Three saved models, tracked 2026-09-03 as differential-test fixtures for the
+# `hmm` numeric migration. This **qualifies the `Training/<all others>` note
+# below**, which declined saved checkpoints as "outputs of the algorithm being
+# translated, not inputs to it, and unreadable without the model code that wrote
+# them". Both halves are false for this narrow purpose. A `.hmm` directory holds
+# `transition_p` *and* `state_p`, `output_p` *and* `state_entropies` -- the inputs
+# and the outputs of exactly the two computations being ported -- so it is an
+# input/output pair rather than an output. And `save-ascii-matrix` writes a
+# `.MAT <ndim> <dims...>` header over plain decimals, readable with no model code
+# at all, which tracking these demonstrates rather than asserts.
+#
+# Measured before tracking, on all three: `A = Pt - I; A[0,:] = 1; b = e0`
+# reproduces every saved `state_p` to 5e-5, which is the 4-decimal print format's
+# own rounding. So they are *not* stale with respect to the manual
+# `update-entropy` discipline (`HMMLIB-ACCOUNT.md` §4), and ~1e-3 is the tolerance
+# a test can assert. Three model directories, 36 files, 12 apiece: deliberately
+# not the whole of `set02a_200/`, which is 287 files and 1.4 MB.
+#
+#   m001_0001_001.hmm   size 1. Degenerate, and worth having for it: (Pt - I) is
+#                       [0], so the row replacement is the entire content of the
+#                       solve and a port that omits it fails here first.
+#   m001_0005_005.hmm   size 5.
+#   m008_0001_008.hmm   size 8.
+!/Training/set02a/
+/Training/set02a/*
+!/Training/set02a/set02a_200/
+/Training/set02a/set02a_200/*
+!/Training/set02a/set02a_200/m001_0001_001.hmm/
+!/Training/set02a/set02a_200/m001_0005_005.hmm/
+!/Training/set02a/set02a_200/m008_0001_008.hmm/
+
 # --- deliberately not tracked, with reasons ----------------------------------
 # Named here rather than left to the catch-all so that the reasoning survives.
 #
@@ -137,6 +183,9 @@
 #                     state_p / output_p / _training_log / _total_dl, 4090 `.xls`.
 #                     Outputs of the algorithm being translated, not inputs to it,
 #                     and unreadable without the model code that wrote them.
+#                     Three exceptions are negated above, on evidence that
+#                     contradicts both halves of that sentence for the narrow
+#                     case of the numeric port's test fixtures.
 #   Code/_Obsolete/   An earlier generation of the same HMM library (hmm-bw,
 #                     hmm-ss, hmm-sm). Superseded by HMMlib/ and not loaded by
 #                     load-hmm.lsh.

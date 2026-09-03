@@ -64,9 +64,18 @@ hard-codes no gap index, and a negative finding needs a signature to be checkabl
 `_cython.pyx` stays untracked so `DEFERRED.md`'s "the first `.pyx` lands" trigger keeps one
 meaning — a `.pyx` under `.scratch/` belongs to no distribution and must not appear to fire
 it. The other three state their
-forward judgement in their own headers — `hmm-lush` is already scoped to the whole live HMM
-library and needs no widening when the `hmm` branch opens, while `dl` and `py-rudimentary`
-are spent imports whose tracked sets are final.
+forward judgement in their own headers, and `hmm-lush`'s was **wrong in an instructive
+way**. It read "already scoped to the whole live HMM library, needs no widening when the
+`hmm` branch opens"; the `hmm` numeric migration widened it twice on 2026-09-03, and both
+additions came from outside the library. `Code/Utility/C/util.c` — the DH compiler's
+generated C — is tracked because with no Lush runtime anywhere in this repository it is the
+only *machine-checked* statement of what a primitive means, and it settled two questions a
+reading could only have guessed at. Three saved `.hmm` model directories are tracked as
+differential-test fixtures, because each holds the **inputs and the outputs** of a
+computation being ported. So the judgement was right about the library and wrong about the
+boundary: a migration needs not only the code it translates but whatever makes the
+translation checkable, and that is rarely in the same directory. `dl` and `py-rudimentary`
+remain spent imports whose tracked sets are final.
 
 **The tracked set can only widen, never narrow.** `.gitignore` is consulted only for files
 git does not already track, so an ignore rule added over a tracked path is silently inert —

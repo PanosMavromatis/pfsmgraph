@@ -223,13 +223,16 @@ lost this to a missing `ClassVar`). Each has a test; a change that weakens eithe
 
 Note also that **each import carries its own deny-by-default `.gitignore`**, and each admits a
 small fraction of what is on disk: `.scratch/dl/` tracks 34 files out of 2.2 GB,
-`.scratch/hmm-lush/` 143 out of 929 MB, `.scratch/py-rudimentary/` 73 out of 1.7 GB, and
+`.scratch/hmm-lush/` 181 out of 929 MB, `.scratch/py-rudimentary/` 73 out of 1.7 GB, and
 `.scratch/align-poc/` 11 out of 194 MB, plus two documents of our own at the `.scratch/` root
 (`README.md` and `RESERVED-BLOCK.md`). The per-import counts include our own written analysis,
 which lives alongside the source it describes. *(Counts measured 2026-08-31; the previous
 figures for the first two were each high by one. `align-poc` went 9 -> 10 -> 11 on
 2026-09-01, as the reserved-block renumbering tracked first `_python.py` and then
-`test_needleman_wunsch.py`.)* If something in an imported tree looks conspicuously absent, that is the
+`test_needleman_wunsch.py`. `hmm-lush` went 143 -> 144 -> 181: `HMMLIB-ACCOUNT.md` landed
+after the measurement, and the `hmm` numeric migration added 37 on 2026-09-03 — `util.c`
+plus three saved `.hmm` model directories at 12 files apiece. The other three are unchanged,
+re-measured the same day.)* If something in an imported tree looks conspicuously absent, that is the
 intended behaviour and not a finding — the exclusions carry their reasons inline in each of those
 files, and what they turn away is overwhelmingly not source: virtualenvs and tool caches in the
 first, saved model checkpoints from 2008–2011 training runs in the second.
@@ -238,7 +241,14 @@ Two exclusions in `hmm-lush` are worth knowing before reading, because both look
 translation record and are not. `Code/SeqData/C/` is absent because every `.c` in it opens
 `WARNING: Automatically generated code ... by the DH compiler` — Lush's own compiler emitting C
 from the `.lsh` beside it, so it is a build artefact rather than a hand-written fast path, and
-there is no Python/C equivalence to check there. And `Code/_Old Lisp Code/` is absent because it
+there is no Python/C equivalence to check there. **One file of exactly that kind is
+nonetheless tracked, and the distinction is worth holding onto**: `Code/Utility/C/util.c`
+joined the tree on 2026-09-03, not as a fast path to compare against but as a *reference for
+Lush semantics*. There is no Lush runtime in this repository, so when a translation question
+turns on what a primitive actually does, the generated C answers it mechanically where a
+reading could only guess — `(rand 1.0 -1.0)` compiles to `((-1) - (1)) * Frand() + (1)`, so
+the reversed bounds are harmless and the draw is uniform on `(-1, 1]`. Generated C is still
+not a review target; it is a dictionary. And `Code/_Old Lisp Code/` is absent because it
 is an interpreted Common Lisp predecessor that the owner has ruled out as a source; the Lush
 version under `Code/` is the original the translation must be faithful to.
 

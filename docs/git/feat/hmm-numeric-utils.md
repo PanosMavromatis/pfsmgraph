@@ -26,6 +26,8 @@ fails outright. The row-replacement trick has to be reproduced, not just its res
 - `rand-p-vector` and `calculate-entropy`
 - `packages/pfsmgraph-hmm/tests/` — the package's first tests
 - Negative findings: what was replaced by a library call, and what migrates nowhere
+- A widening of `.scratch/hmm-lush/.gitignore` — the generated `util.c` as a Lush-semantics
+  reference, and three saved `.hmm` model directories as differential-test fixtures
 
 ## Context
 
@@ -42,3 +44,21 @@ fails outright. The row-replacement trick has to be reproduced, not just its res
 ## Notes
 
 <!-- Running log: decisions made, things tried, things deferred. -->
+
+**2026-09-03 — goal 1.** Four functions get written, not six: `int-delta` dissolves into
+`np.eye` and `safe->--log` into `>`, once the `-1` log-zero sentinel is replaced by `+inf`.
+That replacement is the branch's first decision, taken because faithfulness to `-1` is
+*uncheckable* — there is no Lush runtime here, and the sentinel reaches no persisted
+artifact.
+
+The unlooked-for result is that the stationary solve's test got much stronger than planned.
+A saved `.hmm` directory holds `transition_p` beside `state_p` and `output_p` beside
+`state_entropies`, so it is an input/output pair for both computations this branch ports,
+in a plain-ASCII format needing no model code to read. Measured across sizes 1, 5 and 8:
+`A = Pᵀ - I; A[0,:] = 1; b = e₀` reproduces every saved `state_p` to 5e-5, the print
+format's own rounding. The planned closed-form two-state chain is superseded.
+
+This required amending a recorded decision. `.scratch/hmm-lush/.gitignore` had declined
+saved checkpoints as "outputs of the algorithm being translated, not inputs to it, and
+unreadable without the model code that wrote them"; both halves are false for these three,
+and the declining note now points at its own exceptions.
