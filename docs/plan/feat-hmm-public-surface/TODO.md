@@ -90,5 +90,47 @@ Markers: `[ ]` not started · `[~]` in progress · `[x]` complete · `[!]` block
     > `codes` array read-only, so ADR 0017's `writeable = False` discipline is `dataseq`'s
     > existing practice rather than a new invention.
 
-- [ ] Apply *encode at the boundary* (ADR 0001)
-  - [ ] Name the exact entry and exit points where strings are still permitted
+- [x] Apply *encode at the boundary* (ADR 0001)
+  > **Done:** `pfsmgraph.hmm` sits **entirely below** the boundary. The boundary for this
+  > package is upstream, in `dataseq` — `SymbolTable.encode` and
+  > `SequenceDataset.from_symbols` are where symbols become codes, and `hmm` is only ever
+  > handed the result. That is the condition [ADR 0001](../../design/adr/0001-encode-at-the-boundary.md)
+  > says makes the compiled and GPU phases mechanical, so ADR 0002 phases 2–4 have no
+  > string handling to port.
+  - [x] Name the exact entry and exit points where strings are still permitted
+    > **Done:** Two of each, and no more.
+    >
+    > **Entry.** (1) `HMMParams` construction takes a `Vocabulary`. It *contains* strings,
+    > but `hmm` calls only `size` on it — to fix the `A` axis of `output_p` — and holds it
+    > for identity comparison; no symbol string is read. (2) `SequenceRecord.label`
+    > (`str | None`) arrives with the record. It is never encoded and never indexes
+    > anything; it is an opaque identifier.
+    >
+    > **There is deliberately no entry point that accepts symbols as strings.** ADR 0001
+    > names that exact temptation as the erosion mechanism — "a helper that accepts a
+    > string *just this once* for convenience is how the boundary erodes" — so there is no
+    > `viterbi(params, ["D3", "F3"])` overload. A caller holding strings encodes through
+    > `dataseq` first.
+    >
+    > **Exit.** (1) `ViterbiPath.label`, the passthrough of the above. (2) Nothing else.
+    > In particular `ViterbiPath.states` is **not** decoded, and that is not an omission:
+    > ADR 0001's "results decode back to strings at exit" is about *symbols*, and a state
+    > path lives in a different index space with no string representation in this release.
+    > The clause has no referent here rather than being waived.
+    >
+    > **What keeps it true is goal 2's two-layer split**, which turns out to do more work
+    > than backend mechanics. ADR 0001 lists "unenforceable by the type system" among its
+    > costs; here the kernel signature `_viterbi(init_p, transition_p, output_p, codes)`
+    > enforces it, because the label physically cannot reach the kernel — the public
+    > wrapper attaches it to the result instead of passing it down.
+    >
+    > **Consequence for persistence, recorded because it is not obvious:** 0.1.0 ships no
+    > model save/load, and could not without firing `DEFERRED.md`'s
+    > `## Trigger: a vocabulary outliving the process that built it`. ADR 0001's own cost
+    > clause is the reason — the mapping must travel with any persisted artifact, and
+    > `SymbolTable` has no serialization yet (the escaping rule is undecided).
+    >
+    > **Surfaced for the implementation subgoal, not decided here:** whether `A` is
+    > `vocab.size` (reserved block included, so the emission tensor carries fibres for
+    > `PAD`/`UNK`/… that must never be emitted) or only the user symbols. It changes the
+    > `(S, S, A)` shape, so it belongs with the kernel rather than with the boundary.
