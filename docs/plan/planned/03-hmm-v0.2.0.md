@@ -27,8 +27,8 @@ decoding one at a time.
 
 Its distinctive decision is a second implementation held against the first.
 **Reverse-mode automatic differentiation computes the backward algorithm.** For
-log-parameters, ∂ log P(O|θ) / ∂ log a_ij is exactly Σ_t ξ_t(i,j), the expected transition
-count — so a `torch` forward pass plus `.backward()` yields the E-step's sufficient
+log-parameters, `∂ log P(O|θ) / ∂ log a_ij` is exactly `Σ_t ξ_t(i,j)`, the expected
+transition count — so a `torch` forward pass plus `.backward()` yields the E-step's sufficient
 statistics, and the M-step is a row normalisation. The numpy reference still writes α and
 β explicitly. That the two agree is an unusually strong correctness result, because they
 share no code: one is a hand-written recursion, the other is a gradient. Verify the

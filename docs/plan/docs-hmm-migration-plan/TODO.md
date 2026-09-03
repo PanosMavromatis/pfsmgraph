@@ -42,8 +42,8 @@ findings that would falsify its boundaries.
   > **A:** numpy is the reference and the only required dependency; `torch` enters at
   > revision 03 behind a `[torch]` extra as an ADR 0003 backend. Autograd does facilitate
   > Baum-Welch, decisively and by identity rather than by heuristic: for log-parameters,
-  > ∂ log P(O|θ) / ∂ log a*ij = Σ_t ξ_t(i,j), so reverse-mode AD through the forward pass
-  > \_is* the backward algorithm and the E-step falls out of `.grad`. Keeping it optional
+  > `∂ log P(O|θ) / ∂ log a_ij = Σ_t ξ_t(i,j)`, so reverse-mode AD through the forward
+  > pass *is* the backward algorithm and the E-step falls out of `.grad`. Keeping it optional
   > buys the equivalence as a **test** — numpy's hand-written β against torch's gradient,
   > sharing no code — without making a ~2GB dependency mandatory for anyone who wants an
   > HMM, and so without disturbing `core.md`'s invariant that "'GPU' means two unrelated

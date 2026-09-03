@@ -20,8 +20,8 @@ not carry — and it is what makes a stale or misremembered reference detectable
   **Relied on for:** the claim that reverse-mode automatic differentiation through the
   forward pass *computes the backward algorithm*, so that the Baum-Welch E-step can be
   read off `.grad` rather than written by hand. Concretely: for log-parameters,
-  ∂ log P(O|θ) / ∂ log a_ij is the expected transition count Σ_t ξ_t(i,j), and the M-step
-  is then a row normalisation. The same identity gives the Viterbi backtrace as the
+  `∂ log P(O|θ) / ∂ log a_ij` is the expected transition count `Σ_t ξ_t(i,j)`, and the
+  M-step is then a row normalisation. The same identity gives the Viterbi backtrace as the
   subgradient of a max-plus forward pass, with no backpointers.
 
   This is the basis of revision `03-hmm-v0.2.0`'s decision to hold an optional `torch`
