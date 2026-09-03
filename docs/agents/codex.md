@@ -103,6 +103,14 @@ targets, which is where errors are cheapest to fix and most expensive to leave:
   `boundscheck(False)` / `wraparound(False)`. Bounds checking is *off*, so an index error is
   memory corruption, not an exception. Verify comma-form indexing (`M[i-1, j-1]`, never
   `M[i-1][j-1]` — the bracket form materializes an intermediate 1-D view per access).
+- `**/_cpu_parallel*.py` — Numba CPU-parallel (`prange`), anti-diagonal. Shares the
+  anti-diagonal indexing arithmetic and two-preceding-diagonal dependency with the CUDA
+  phase below, but the risk shape differs: a `prange` iteration must write only its own
+  diagonal's cells and read only already-completed prior-diagonal cells, with no shared
+  mutable state across iterations — a violation is a silent race, not a raised exception.
+  This is the first point the anti-diagonal decomposition is checked under real
+  concurrent execution ([ADR 0016](../design/adr/0016-numba-cpu-parallel-phase.md)), so a
+  bug caught here is cheaper than the same bug caught one phase later.
 - `**/_cuda*.py` — Numba CUDA anti-diagonal wavefront. Anti-diagonal indexing arithmetic,
   the two-preceding-diagonal dependency, boundary diagonals, and synchronization between
   wavefront steps. This is the single highest-payoff review surface in the project and the

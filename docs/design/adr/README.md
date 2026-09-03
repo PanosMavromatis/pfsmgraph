@@ -13,7 +13,7 @@ Numbers are permanent and never reused. To add one, copy
 | # | Title | Status | Date | PRD source |
 |---|---|---|---|---|
 | [0001](0001-encode-at-the-boundary.md) | Encode at the boundary | Accepted | 2025 | §1.2, §3.5 |
-| [0002](0002-three-phase-algorithm-lifecycle.md) | Three-phase algorithm lifecycle: Python, then Cython, then CUDA | Accepted | 2025 | §1.2, §6 |
+| [0002](0002-three-phase-algorithm-lifecycle.md) | Three-phase algorithm lifecycle: Python, then Cython, then CUDA | Accepted § | 2025 | §1.2, §6 |
 | [0003](0003-one-parameterized-test-suite-per-algorithm.md) | One parameterized test suite per algorithm, run against every backend | Accepted | 2025 | §1.2 |
 | [0004](0004-gpu-backends-and-optional-dependency-strategy.md) | GPU backends are two unrelated things; heavy dependencies stay optional | Accepted | 2025–2026 | §1.2, §6 |
 | [0005](0005-namespace-prefix-and-pep-420-layout.md) | The `pfsmgraph` prefix and a PEP 420 namespace layout | Accepted | 2026-06-29 | §3.1–§3.3, §4 |
@@ -27,11 +27,14 @@ Numbers are permanent and never reused. To add one, copy
 | [0013](0013-api-documentation-layout-and-tooling.md) | API documentation: repo-level `docs/api/`, hand-written, examples executed | Accepted | 2026-09-01 | — |
 | [0014](0014-scratch-retention-and-per-package-scoping.md) | Imported migration source is retained in `.scratch/`, scoped per package | Accepted | 2026-09-01 | — |
 | [0015](0015-arc-emission-mealy-formulation.md) | The HMM is arc-emission (Mealy): symbols are emitted on transitions | Accepted | 2026-09-03 | — |
+| [0016](0016-numba-cpu-parallel-phase.md) | Insert a Numba CPU-parallel phase between Cython and CUDA | Accepted | 2026-09-03 | — |
 
 † Qualified in practice by 0012 until the first Cython kernel lands.
 ‡ Held at Proposed until 2026-09-01. The composition was decided when the record was
 authored, but PRD §9 required the encoder API reconciliation to be resolved during the
 merge itself; it was, and 0010 records the settled API.
+§ Amended by 0016, which inserts a phase between Cython and CUDA and renumbers CUDA from
+phase 3 to phase 4.
 
 ## Reading order
 
@@ -50,12 +53,15 @@ merge itself; it was, and 0010 records the settled API.
   process. It is where the `hmm` migration's most consequential fact is written down, and
   it is worth reading before revision 02's plan, since every array shape in that plan
   follows from it.
+- **0016** amends 0002: it inserts a Numba CPU-parallel phase between Cython and CUDA, so
+  "phase 3" in anything dated after 2026-09-03 means CPU-parallel, and CUDA is phase 4.
 
 ## Coverage of the PRD decision table
 
 Every decision D1–D11 in PRD §2 is covered: D1–D2 and D3–D4 by 0005, D5 by 0006, D6 by
 0007, D7–D8 by 0008, D9 by 0009, D10 by 0010, D11 by 0011. The inherited §1.2 decisions
-are covered by 0001–0004. 0012, 0013, 0014 and 0015 have no PRD counterpart — all four
-postdate the document; 0012 qualifies §6.1, 0013 settles a question §9 never raised, 0014
-covers a working-area policy the PRD does not describe at all, and 0015 answers a question
-the PRD did not know it had left open: which HMM formulation `pfsmgraph-hmm` implements.
+are covered by 0001–0004. 0012, 0013, 0014, 0015 and 0016 have no PRD counterpart — all
+five postdate the document; 0012 qualifies §6.1, 0013 settles a question §9 never raised,
+0014 covers a working-area policy the PRD does not describe at all, 0015 answers a
+question the PRD did not know it had left open: which HMM formulation `pfsmgraph-hmm`
+implements, and 0016 amends the phase count §1.2/§6 originally described as three.
