@@ -78,3 +78,25 @@ sites are revision 03 or 04 — so it is migrated on the strength of the subgoal
 not on need. And this subgoal's own text offered "replaced by `-inf`"; it is `+inf`, since a
 description length is `-log2(p)`. That sign slip is §3's orientation trap in miniature and
 is recorded in the plan rather than quietly corrected.
+
+**2026-09-03 — goal 3.** `stationary_distribution` lands; suite 124 → 140. The solve was
+already validated in goal 1, so the work was the two things around it.
+
+A **reducible** chain leaves `A` singular even after the row replacement — the trick trades
+one redundant equation for the normalization, which rescues nullity 1 and no more.
+Measured: a four-state chain with two closed classes is still rank 3 of 4. Revision 04
+searches topology by state merge and split, so this is a plausible search *outcome*, not a
+malformed input; it raises `ValueError` naming the cause, `from` the `LinAlgError`.
+
+The saved fixtures are **four-decimal prints**, and that broke two tests in unrelated ways:
+a tolerance of `5e-5` that a value landed exactly on (true `π₀` = 0.10135, printed
+"0.1014"), and a singularity assertion defeated by rows summing to `1 ± 1e-4`, which lifts
+the smallest singular value nine orders above `matrix_rank`'s tolerance. Fixed by widening
+to `1e-4` with both error sources named, and by renormalising rows before asserting
+singularity — restoring the hypothesis rather than loosening the conclusion. Revision 03's
+differential tests inherit this hazard.
+
+The fixtures are read from `.scratch/` **in place**. They are tracked, so they exist in
+every clone, and `tests/` never ships — the wheel packages only `src/pfsmgraph`. The `.MAT`
+reader is a helper in the test module rather than a `conftest.py`, on the same
+"one consumer, no invented structure" grounds that kept `_numeric.py` one module.

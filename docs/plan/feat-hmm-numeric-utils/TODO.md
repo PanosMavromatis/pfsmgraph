@@ -227,10 +227,95 @@ Markers: `[ ]` not started · `[~]` in progress · `[x]` complete · `[!]` block
     > package — the test file's own import does it — so the privacy that *is*
     > checkable is that neither helper is reachable as a top-level name.
 
-- [ ] Port the stationary-distribution solve
-  - [ ] Reproduce the row-replacement trick, not just the result: row 0 of `(Pᵀ - I)` overwritten with `Σπ = 1` before `numpy.linalg.solve` (§4)
-  - [ ] Test against a chain whose stationary distribution is known in closed form
-  - [ ] Record that `LU-solve`, `LU-decomposition` and `LU-back-substitution` were replaced by a library call rather than translated
+- [x] Port the stationary-distribution solve
+  > **Done:** `stationary_distribution` lands in `_numeric.py` with sixteen test cases;
+  > suite 124 → 140. The solve itself is five lines, which goal 1 had already validated
+  > — so the work here was the two things around it.
+  >
+  > **The reducible chain is the finding.** The row replacement trades one redundant
+  > equation for the normalization, which suffices only when the null space is
+  > one-dimensional. A chain with two closed communicating classes has nullity 2 and
+  > stays singular; measured on a four-state example, `A` is still rank 3 of 4 after the
+  > replacement. The original never noticed, because `LU-decomposition` substitutes
+  > `TINY = 1e-20` for the zero pivot and returns a perturbed answer. This is not an
+  > exotic input: **revision 04 searches topology by state merge and split**, so a
+  > disconnected component is a plausible *outcome of the search*, and `state_p` is a
+  > cached property under ADR 0017, so the failure surfaces on an attribute access. Hence
+  > a `ValueError` naming the cause, with `raise ... from err` keeping the `LinAlgError`.
+  >
+  > **The fixtures are four-decimal prints, and that cost two test failures in unrelated
+  > places** — an `abs=5e-5` tolerance that a value landed exactly on, and a singularity
+  > assertion defeated by rows summing to `1 ± 1e-4`. Both are written up under the
+  > second subgoal. Revision 03's differential tests inherit the hazard, which is the
+  > reason it is recorded at this length rather than fixed in silence.
+  > **Q:** The three tracked `.hmm` fixtures hold `transition_p` beside `state_p`. How
+  > should the test reach them?
+  > **A:** Read `.scratch/` in place, locating the repo root from `__file__`. They are
+  > *tracked*, so unlike `.notebooks/`/`.data/` they exist in every clone, and goal 1
+  > tracked them for exactly this purpose. The invariant they brush against says nothing
+  > outside `.scratch/` may **import** from it; a test reading a tracked data file is not
+  > an import, and the "exists on one machine only" reasoning behind the sibling
+  > prohibition is precisely what tracking removes. `tests/` never ships either —
+  > `[tool.hatch.build.targets.wheel] packages = ["src/pfsmgraph"]` — so "the fixture is
+  > absent in an installed wheel" is not a scenario this repo has. Revisions 03 and 04
+  > inherit the pattern, which is the point: `output_p` differential tests are far too
+  > large to inline.
+  > **Q:** A reducible chain leaves `A` singular even after the row replacement. What
+  > should the port do?
+  > **A:** Catch `LinAlgError` and re-raise as `ValueError` naming the domain cause, with
+  > `raise ... from err` preserving the numerical detail. The row replacement trades *one*
+  > redundant equation for the normalization, which suffices only when the null space is
+  > one-dimensional — i.e. when the chain is irreducible. Measured on a four-state chain
+  > with two closed classes: nullity 2, and `A` still rank 3 of 4 after the replacement.
+  > This is not a hypothetical input, because revision 04 searches topology by state merge
+  > and split, so a disconnected component is a plausible *search outcome*; and
+  > `state_p` is a cached property under [ADR 0017](../../design/adr/0017-frozen-parameter-object-for-hmm.md),
+  > so a bare "Singular matrix" would surface on attribute access. Row-stochasticity is
+  > deliberately **not** validated here — that check belongs at `HMMParams` construction,
+  > and duplicating it in a private helper creates two places that can disagree.
+  - [x] Reproduce the row-replacement trick, not just the result: row 0 of `(Pᵀ - I)` overwritten with `Σπ = 1` before `numpy.linalg.solve` (§4)
+    > **Done:** `stationary_distribution(transition_p)` in `_numeric.py`, five lines of
+    > arithmetic under a docstring that carries the reason. The trick's *necessity* is
+    > what got tested, since its result is indistinguishable from replacing any other
+    > row: `test_the_homogeneous_system_needs_the_replacement` asserts
+    > `matrix_rank(Pᵀ - I) < S` on all three fixtures, so a port that "simplifies" the
+    > replacement away fails rather than quietly returning zeros.
+    >
+    > The squareness check is included and row-stochasticity deliberately is not; the
+    > line between them is a structural precondition of the solve versus a property of
+    > the model, and the second belongs to `HMMParams` under ADR 0017.
+  - [x] Test against a chain whose stationary distribution is known in closed form
+    > **Done:** `[b, a]/(a+b)` for the two-state chain, kept because it depends on
+    > nothing under `.scratch/`. But the differential tests against the original's own
+    > saved `state_p` are the stronger check, and `pi @ P == pi` — the defining property,
+    > asserted with no expected value at all — is stronger still. Sixteen cases in total,
+    > suite 124 → 140.
+    >
+    > **Two of them failed first, and both were the tests being wrong about the fixture
+    > format rather than the solve.** Recorded because the same fact bit twice in
+    > unrelated places, and will bite revision 03 too.
+    >
+    > 1. **A tolerance a value can land exactly on is a coin flip.** The 5-state model's
+    >    true `π₀` is `0.10135`, printed as `"0.1014"` — precisely on the .5 tie — so the
+    >    residual is `5.000000000000837e-05` and `approx(abs=5e-5)` failed by under an
+    >    ulp. The bound was also incomplete: `transition_p` is printed to four decimals
+    >    too, so *its* rounding propagates through the solve (renormalising the rows moves
+    >    the 8-state residual 4.975e-5 → 4.784e-5, which is that term made visible). Now
+    >    `1e-4`, with both sources named.
+    > 2. **Rounding destroys exact singularity.** The 8-state fixture's rows sum to
+    >    `1 ± 1e-4` after printing, lifting the smallest singular value of `(Pᵀ - I)` from
+    >    `6.6e-17` to `1.2e-5` — nine orders above `matrix_rank`'s `3.6e-15` tolerance, so
+    >    it reported *full* rank. Row-stochasticity is the hypothesis of "π is an
+    >    eigenvector"; the fix is to renormalise and restore it, not to loosen a
+    >    tolerance.
+  - [x] Record that `LU-solve`, `LU-decomposition` and `LU-back-substitution` were replaced by a library call rather than translated
+    > **Done:** In the function's docstring, with the behaviour change stated rather than
+    > implied: the trio (`util.lsh:246-415`) transcribes the Numerical Recipes routines
+    > down to NR's 1-indexed convention behind a copy-in/copy-out wrapper, and
+    > `LU-decomposition` substitutes `TINY = 1e-20` for a zero pivot (`321-322`),
+    > returning a silently perturbed answer where `numpy.linalg.solve` raises. That is
+    > goal 1's finding 6 reaching the code it was about. `int-delta` → `np.eye` is
+    > applied here, which was the other half of the dissolution recorded in goal 2.
 
 - [ ] Port `rand-p-vector` and `calculate-entropy`, and record what migrates nowhere
   - [ ] `rand-p-vector` for parameter initialisation — settle the RNG seam: a passed-in `numpy.random.Generator` versus module-level state

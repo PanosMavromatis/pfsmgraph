@@ -1,22 +1,26 @@
-"""The log-domain primitives, and the two functions that dissolved into numpy.
+"""The numeric primitives: the log-domain arithmetic and the stationary solve.
 
 Several tests here assert the *absence* of the original's machinery rather than
 the presence of ours. That is deliberate: the `-1` log-zero sentinel was
 replaced by `+inf` on the grounds that IEEE-754 reproduces every property it
 was built for, and the way to keep that claim honest is to test the properties
-themselves, so that reinstating a sentinel breaks something.
+themselves, so that reinstating a sentinel breaks something. The stationary
+solve's tests do the same in the other direction -- one of them asserts that
+the homogeneous system *cannot* be solved as stated, so that the row
+replacement cannot be "simplified" away without a failure.
 """
 
 from __future__ import annotations
 
 import warnings
+from pathlib import Path
 
 import numpy as np
 import pytest
 
 import pfsmgraph.hmm
 from pfsmgraph.hmm import _numeric
-from pfsmgraph.hmm._numeric import bits, safe_divide
+from pfsmgraph.hmm._numeric import bits, safe_divide, stationary_distribution
 
 
 # --- bits: the description length ------------------------------------------
@@ -206,6 +210,216 @@ def test_a_zero_denominator_never_produces_a_non_finite_value():
     np.testing.assert_allclose(result, 0.0)
 
 
+# --- stationary_distribution: the row-replacement solve ---------------------
+
+# Read from `.scratch/` in place rather than copied here. Those files are
+# *tracked*, so unlike `.notebooks/` and `.data/` they exist in every clone, and
+# they were tracked for exactly this purpose. `tests/` never ships either --
+# the wheel packages only `src/pfsmgraph` -- so "the fixture is absent in an
+# installed wheel" is not a scenario this repo has.
+_FIXTURES = (
+    Path(__file__).resolve().parents[3]
+    / ".scratch"
+    / "hmm-lush"
+    / "Training"
+    / "set02a"
+    / "set02a_200"
+)
+
+_SAVED_MODELS = ("m001_0001_001.hmm", "m001_0005_005.hmm", "m008_0001_008.hmm")
+
+# Two closed communicating classes, {0,1} and {2,3}, so the stationary space is
+# two-dimensional and one replaced row cannot pin it down.
+_REDUCIBLE = np.array(
+    [
+        [0.0, 1.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+        [0.0, 0.0, 1.0, 0.0],
+    ]
+)
+
+
+def _read_ascii_matrix(path):
+    """Read Lush's `save-ascii-matrix` format: `.MAT <ndim> <dims...>`, then values.
+
+    Written here rather than in a `conftest.py` for the reason `_numeric.py` is
+    one module: there is one consumer. When revision 03's differential tests
+    want it too, that is the moment a shared fixture earns itself.
+    """
+    tokens = path.read_text().split()
+    if tokens[0] != ".MAT":
+        raise ValueError(f"{path} is not a Lush ASCII matrix")
+    ndim = int(tokens[1])
+    dims = [int(t) for t in tokens[2 : 2 + ndim]]
+    values = np.array([float(t) for t in tokens[2 + ndim :]], dtype=np.float64)
+    return values.reshape(dims)
+
+
+def _irreducible_chain(size=6, seed=20260903):
+    rng = np.random.default_rng(seed)
+    transition_p = rng.random((size, size)) + 0.1
+    return transition_p / transition_p.sum(axis=1, keepdims=True)
+
+
+@pytest.mark.parametrize("model", _SAVED_MODELS)
+def test_reproduces_the_originals_own_state_p(model):
+    """A differential test against the Lush implementation's saved output.
+
+    Each `.hmm` directory holds `transition_p` (the input) beside `state_p`
+    (the output), so this compares our solve against the original's on numbers
+    the original itself produced -- which is a stronger check than any chain we
+    could construct, because it also catches a misreading of what `state_p`
+    *is*.
+
+    The tolerance is the saved format's, not slack, and it has two parts.
+    `save-ascii-matrix` prints four decimals, so `state_p` carries up to 5e-5 of
+    rounding; and `transition_p` was printed the same way, so its own rounding
+    propagates through the solve as well (renormalising the rows first moves the
+    8-state residual from 4.975e-5 to 4.784e-5, which is that contribution made
+    visible). 5e-5 is therefore the wrong bound in two ways: it omits the second
+    term, and a value can land *exactly* on it -- the 5-state model's true `pi_0`
+    is 0.10135, printed as "0.1014", so the residual is 5.000000000000837e-05
+    and an `abs=5e-5` comparison fails by less than an ulp. 1e-4 is one clean
+    doubling above the observed worst case, and still three orders tighter than
+    any genuine error in the solve could be.
+
+    There is deliberately no skip when the fixtures are missing. They are
+    tracked, so their absence means a broken checkout, not a configuration this
+    repository supports.
+    """
+    directory = _FIXTURES / model
+    transition_p = _read_ascii_matrix(directory / "transition_p")
+    saved = _read_ascii_matrix(directory / "state_p")
+
+    assert stationary_distribution(transition_p) == pytest.approx(saved, abs=1e-4)
+
+
+@pytest.mark.parametrize("model", _SAVED_MODELS)
+def test_the_homogeneous_system_needs_the_replacement(model):
+    """Why the trick is the algorithm: without it there is nothing to solve.
+
+    `(P.T - I)` is singular by construction -- that is what makes pi an
+    eigenvector -- so its rank is short of full on every real transition matrix,
+    including the original's own. Asserting it means a port that "simplifies"
+    the row replacement away fails here rather than quietly returning zeros.
+
+    The rows are renormalised first, and that is the point rather than a
+    convenience. Row-stochasticity is the *hypothesis* of the claim being
+    tested; the four-decimal print violates it by up to 1e-4 on the 8-state
+    model, which lifts the smallest singular value of `(P.T - I)` from 6.6e-17
+    to 1.2e-5 -- nine orders above `matrix_rank`'s 3.6e-15 tolerance, so it
+    reports full rank. Testing the conclusion on data that breaks the hypothesis
+    would test nothing at all.
+    """
+    saved = _read_ascii_matrix(_FIXTURES / model / "transition_p")
+    transition_p = saved / saved.sum(axis=1, keepdims=True)
+    size = transition_p.shape[0]
+
+    assert np.linalg.matrix_rank(transition_p.T - np.eye(size)) < size
+
+
+def test_a_two_state_chain_matches_the_closed_form():
+    """For `P = [[1-a, a], [b, 1-b]]` the stationary distribution is `[b, a]/(a+b)`.
+
+    The check the plan originally proposed, kept alongside the differential
+    tests because it depends on nothing under `.scratch/`.
+    """
+    a, b = 0.25, 0.75
+    transition_p = np.array([[1 - a, a], [b, 1 - b]])
+
+    assert stationary_distribution(transition_p) == pytest.approx(
+        np.array([b, a]) / (a + b)
+    )
+
+
+def test_the_result_is_a_fixed_point_of_the_transition_matrix():
+    """The defining property, checked without reference to any expected value."""
+    transition_p = _irreducible_chain()
+    pi = stationary_distribution(transition_p)
+
+    assert pi @ transition_p == pytest.approx(pi)
+
+
+def test_the_result_is_a_distribution():
+    pi = stationary_distribution(_irreducible_chain())
+
+    assert pi.sum() == pytest.approx(1.0)
+    assert (pi >= 0.0).all()
+
+
+def test_a_doubly_stochastic_chain_is_uniform():
+    transition_p = np.array(
+        [[0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [1.0, 0.0, 0.0]]
+    )
+
+    assert stationary_distribution(transition_p) == pytest.approx(np.full(3, 1 / 3))
+
+
+def test_an_absorbing_state_takes_all_the_mass():
+    transition_p = np.array([[0.5, 0.5], [0.0, 1.0]])
+
+    assert stationary_distribution(transition_p) == pytest.approx([0.0, 1.0])
+
+
+def test_the_single_state_chain_is_certain():
+    """The degenerate case needs no special handling.
+
+    `(P.T - I)` is `[[0.0]]`, which the row replacement turns into `[[1.0]]`
+    against `b = [1.0]`.
+    """
+    assert stationary_distribution(np.array([[1.0]])) == pytest.approx([1.0])
+
+
+def test_a_reducible_chain_is_refused():
+    """The row replacement supplies one equation, so it rescues nullity 1 and no more.
+
+    Revision 04 searches topology by state merge and split, which makes a
+    disconnected component a plausible search outcome rather than a malformed
+    input -- so the failure is named rather than left as "Singular matrix".
+    """
+    assert np.linalg.matrix_rank(_REDUCIBLE.T - np.eye(4)) == 2  # nullity 2
+
+    with pytest.raises(ValueError, match="reducible"):
+        stationary_distribution(_REDUCIBLE)
+
+
+def test_the_reducible_error_keeps_the_numerical_cause():
+    """`raise ... from err`, so the LinAlgError is still reachable for debugging."""
+    with pytest.raises(ValueError) as excinfo:
+        stationary_distribution(_REDUCIBLE)
+
+    assert isinstance(excinfo.value.__cause__, np.linalg.LinAlgError)
+
+
+def test_a_non_square_matrix_is_refused():
+    """A structural precondition, not a check on the model's semantics.
+
+    Without it this surfaces as a broadcasting error naming shapes the caller
+    never wrote. Row-stochasticity is the other kind of check and is
+    deliberately absent -- it belongs to `HMMParams` at construction (ADR 0017).
+    """
+    with pytest.raises(ValueError, match="square"):
+        stationary_distribution(np.zeros((3, 5)))
+
+
+def test_a_frozen_transition_matrix_is_accepted():
+    """The ADR 0017 scenario: parameter arrays are held with `writeable = False`.
+
+    `p.T` is then a read-only view, so the row replacement has to write into the
+    fresh array `p.T - np.eye(size)` produces. This fails loudly if anyone
+    "optimizes" that subtraction into an in-place assignment.
+    """
+    transition_p = np.array([[0.5, 0.5], [0.25, 0.75]])
+    transition_p.setflags(write=False)
+    before = transition_p.copy()
+
+    pi = stationary_distribution(transition_p)
+
+    assert pi @ transition_p == pytest.approx(pi)
+    assert (transition_p == before).all()
+
+
 # --- the package boundary ---------------------------------------------------
 
 
@@ -223,6 +437,6 @@ def test_the_numeric_helpers_are_private_to_the_package():
     what is actually checkable is that neither helper is reachable as a
     top-level name on the package.
     """
-    for name in ("bits", "safe_divide"):
+    for name in ("bits", "safe_divide", "stationary_distribution"):
         assert not hasattr(pfsmgraph.hmm, name)
     assert _numeric.__name__.rpartition(".")[2].startswith("_")

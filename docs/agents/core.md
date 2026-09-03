@@ -6,13 +6,15 @@ Shared project knowledge for any coding agent working in this repository.
 
 **`dataseq` is implemented and released; `hmm` has its first code as of 2026-09-03; the other three members are still empty scaffolding.** In place: the uv workspace root `pyproject.toml` (virtual — no `[project]` table), `uv.lock`, all five `packages/*` members with their own `pyproject.toml`, the (currently dormant) `meson.build` files for `align` and `hmm`, and an empty `pfsmgraph/<pkg>/__init__.py` for the three members that have no code yet (plus `dl/rnn/` and `dl/transformer/`). The ADRs in `docs/design/adr/` are authoritative for the decisions they cover — the twelve initial records from the PRD, plus 0013 (how this family documents its public surfaces) and 0014 (how imported migration source is retained), both added 2026-09-01; the PRD remains the narrative design document.
 
-**What `dataseq` now contains.** Six modules under `packages/pfsmgraph-dataseq/src/pfsmgraph/dataseq/` (the container landed 2026-08-31, the encoder API 2026-09-01) and 74 tests — the first tests in this repository, and 74 of the suite's 124 today; 30 are `hmm`'s and the remaining 20 are the repo-root backend-matrix, API-docs and release-runbook tests. `_reserved.py` hard-codes the ADR 0011 block as module constants, with no class or parameter that could relocate it; `_vocabulary.py` holds the `Vocabulary` protocol and `SymbolTable`, a frozen first-appearance-ordered implementation that encodes strictly and decodes *totally*, reserved codes included; `_record.py` and `_dataset.py` are the ragged container, whose records carry true lengths and never padding; `_collate.py` is `pad_collate`, where padding is introduced and always returned with its mask. The container imports neither torch nor pandas — verified in a subprocess — and its one runtime dependency is `numpy`.
+**What `dataseq` now contains.** Six modules under `packages/pfsmgraph-dataseq/src/pfsmgraph/dataseq/` (the container landed 2026-08-31, the encoder API 2026-09-01) and 74 tests — the first tests in this repository, and 74 of the suite's 140 today; 46 are `hmm`'s and the remaining 20 are the repo-root backend-matrix, API-docs and release-runbook tests. `_reserved.py` hard-codes the ADR 0011 block as module constants, with no class or parameter that could relocate it; `_vocabulary.py` holds the `Vocabulary` protocol and `SymbolTable`, a frozen first-appearance-ordered implementation that encodes strictly and decodes *totally*, reserved codes included; `_record.py` and `_dataset.py` are the ragged container, whose records carry true lengths and never padding; `_collate.py` is `pad_collate`, where padding is introduced and always returned with its mask. The container imports neither torch nor pandas — verified in a subprocess — and its one runtime dependency is `numpy`.
 
-**What `hmm` now contains.** One private module, `_numeric.py`, and 30 tests — the numeric
+**What `hmm` now contains.** One private module, `_numeric.py`, and 46 tests — the numeric
 Utility code migrated from the Lush original, landed 2026-09-03. There is no public API
 yet: nothing is re-exported from `pfsmgraph/hmm/__init__.py`, which is still empty.
-`bits(p)` is `-log2(p)`, and `safe_divide(num, den)` yields `0.0` wherever the denominator
-is zero, matching the original for `0/0` and `x/0` alike. **The quantities `bits` builds are
+`bits(p)` is `-log2(p)`; `safe_divide(num, den)` yields `0.0` wherever the denominator
+is zero, matching the original for `0/0` and `x/0` alike; and
+`stationary_distribution(transition_p)` is the solve behind the original's `state-p`.
+**The quantities `bits` builds are
 description lengths, not probabilities** (`HMMLIB-ACCOUNT.md` §3): they *grow* as the
 probability falls, so **Viterbi over them is a min-sum, not a max-product**, and a port that
 reaches for `max` inverts every comparison. This is the second fact after arc-emission most
@@ -25,6 +27,39 @@ to `-1` was declined as uncheckable — there is no Lush runtime in this reposit
 sentinel reaches no persisted artifact. One live loose end: `safe_divide` has **no consumer
 in 0.1.0**, since all fifteen of its call sites are in the forward pass, the M-step, or the
 topology surgery, which arrive in revisions 03 and 04.
+
+**The stationary solve carries the second fact a port loses.** `state_p` is the stationary
+distribution of `transition_p`, and `(Pᵀ - I)π = 0` is singular *by construction* — that is
+what makes π an eigenvector — so the original replaces row 0 with the normalization `Σπ = 1`
+before solving. A port that hands the homogeneous system to a dense solver fails outright,
+and `(I - Pᵀ)` has the same null space and needs the same fix. The trick supplies **exactly
+one** equation, so it rescues a one-dimensional null space and no more: a **reducible** chain
+(two closed communicating classes) has nullity 2 and stays singular, which
+`stationary_distribution` reports as a `ValueError` naming the cause rather than numpy's bare
+`LinAlgError`. That matters because revision 04 searches topology by state merge and split, so
+a disconnected component is a plausible *search outcome*, and ADR 0017 makes `state_p` a
+cached property, so the failure surfaces on an attribute access. The Lush `LU-solve` /
+`LU-decomposition` / `LU-back-substitution` trio is replaced by `numpy.linalg.solve` rather
+than translated, and that is a deliberate behaviour change: `LU-decomposition` substitutes
+`TINY = 1e-20` for a zero pivot and returns a silently perturbed answer where numpy raises.
+
+**`hmm`'s tests read differential fixtures from `.scratch/` in place, and that is the first
+test in this repository to read any file at all.** The three saved `.hmm` directories hold
+`transition_p` beside `state_p`, so the solve is checked against numbers the original itself
+produced. This is not the `.notebooks/`/`.data/` prohibition being bent: those are barred
+because their contents exist on one machine only, which is exactly what tracking removes, and
+the `.scratch/` rule is about *importing* Python. `tests/` reaches no wheel either — every
+member's `[tool.hatch.build.targets.wheel]` packages only `src/pfsmgraph` — so "the fixture is
+absent in an installed wheel" is not a scenario here. **The fixtures are four-decimal prints,
+and that is a trap worth knowing before revision 03 writes more of these**: it cost two test
+failures in unrelated places on first run. A tolerance of `5e-5` is both incomplete (the
+*input* is rounded too, and propagates through the solve) and exactly attainable — the 5-state
+model's true `π₀` is `0.10135`, printed `"0.1014"`, so the residual is `5.000000000000837e-05`
+and an `abs=5e-5` bound fails by less than an ulp. And rounding destroys exact singularity:
+the 8-state model's rows sum to `1 ± 1e-4`, lifting the smallest singular value of `(Pᵀ - I)`
+from `6.6e-17` to `1.2e-5`, nine orders above `matrix_rank`'s tolerance, so it reports *full*
+rank. Renormalise the rows before asserting anything that assumes row-stochasticity — that
+restores the hypothesis rather than loosening the conclusion.
 
 **The ADR 0003 reporting mechanism is complete as of 2026-09-01, and it lives at the repo
 root.** `conftest.py` carries `pytest_report_header` and nothing else; `_backends.py`
@@ -137,7 +172,7 @@ Still to do, in PRD order (§11): `hmm` (Lush translation), then `align`, then `
 Toolchain: **uv** (workspace) + **pytest**. Requires `uv` and Python ≥ 3.10.
 
 - `uv sync` — create/refresh the venv; installs all five members editable (plain `.pth`) plus the `dev` group (`pytest`).
-- `uv run pytest` — run the suite (124 tests: 74 in `packages/pfsmgraph-dataseq/tests/`, 30 in `packages/pfsmgraph-hmm/tests/`, and 20 in the repo-root `tests/` — 13 covering the ADR 0003 backend matrix, 5 executing documented code blocks against their pasted output per ADR 0013, 2 checking that `docs/ops/release.md` names only recipes the root `justfile` defines). That verifier reads `docs/api/*/*.md` **and `packages/*/README.md`**: a member README becomes a PyPI long description under an immutable version, so it is the one documentation surface where drift cannot be corrected in place. Every run opens with the backend header. One narrow skip is by design: `test_torch_interop.py` verifies the `DataLoader` integration and skips when torch is absent, since torch is a dependency of no member.
+- `uv run pytest` — run the suite (140 tests: 74 in `packages/pfsmgraph-dataseq/tests/`, 46 in `packages/pfsmgraph-hmm/tests/`, and 20 in the repo-root `tests/` — 13 covering the ADR 0003 backend matrix, 5 executing documented code blocks against their pasted output per ADR 0013, 2 checking that `docs/ops/release.md` names only recipes the root `justfile` defines). That verifier reads `docs/api/*/*.md` **and `packages/*/README.md`**: a member README becomes a PyPI long description under an immutable version, so it is the one documentation surface where drift cannot be corrected in place. Every run opens with the backend header. One narrow skip is by design: `test_torch_interop.py` verifies the `DataLoader` integration and skips when torch is absent, since torch is a dependency of no member.
 - `uv build --package pfsmgraph-<pkg>` — build one member's sdist + wheel.
 - `uv lock` — refresh `uv.lock` (committed; one lockfile for the whole family).
 
