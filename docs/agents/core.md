@@ -71,9 +71,51 @@ through, because **a saved model is not loadable without the ADR 0011 renumberin
 alphabet starts its user symbols at code 2, so the fixtures' `(S, S, 6)` `output_p` becomes
 `(S, S, 12)` here, placed at `[..., USER_BASE:]`; every derived quantity is invariant under
 that, since `state_p` never reads `output_p` and zero-padding a symbol axis adds only
-`0·log2(1) = 0` terms to an entropy. The symbol *names* are gone either way — `_alphabet`
-holds Lush pointer addresses (`#$11F50E0`), which is independent confirmation of ADR 0001's
-cost clause and of `DEFERRED.md`'s serialization trigger.
+`0·log2(1) = 0` terms to an entropy. A saved model's own `_alphabet` holds Lush pointer
+addresses (`#$11F50E0`) rather than names, **but the names are not lost — they are in the
+corpus**, at `set02a_200.sds/_alphabet`, which reads `0→begin, 1→end, 2→c, 3→d, 4→b, 5→a`.
+*(Corrected 2026-09-03. The earlier wording, "the symbol names are gone either way", was
+written from the model directory alone and is true only of it.)* The sharpened claim is the
+better evidence for the same conclusion: persistence split the mapping from the model, so
+the model alone stops denoting and has to be rejoined to the corpus that trained it, which
+is precisely ADR 0001's cost clause and `DEFERRED.md`'s serialization trigger.
+
+**The port has a decode oracle, and the Viterbi kernel was validated against it before it
+was written.** `save-viterbi-path` (`hmm-trainer.lsh:712-727`) wrote a `<model>.vpath.xls`
+beside each saved model — one `Output / States / Entropy` row per position, plus a leading
+`-` row for the state before the first symbol, which is ADR 0015's N+1 geometry printed to
+disk. All three tracked models have one, and they were tracked on 2026-09-03 together with
+the corpus. Concatenating the corpus's 200 `.seq` files reproduces each file's `Output`
+column exactly, and the `HMMLIB-ACCOUNT.md` §3 min-sum recurrence reproduces its `States`
+column at **1269/1269 positions on two of the three models**. So a differential test of the
+decode does not have to be invented, and — more to the point — **this branch cannot
+accidentally validate its kernel against itself**, which was the standing risk in porting a
+defect. The `.gitignore` widening that made this possible qualified the same
+`Training/<all others>` note a second time: "output of the algorithm being translated" is
+not a reason to decline a file when its inputs are tracked beside it, because that pairing
+is what a differential test is made of.
+
+**The δ-seeding defect is fixed, not reproduced, and the divergence is exactly one
+position.** `HMMLIB-ACCOUNT.md` §7 records that `update-viterbi-path` seeds δ with raw
+`init-state-p` into a bit-domain accumulator; here `delta[0] = bits(init_state_p)`. Measured
+against the three oracles: the corrected seed agrees at 1269/1269 on two models and
+1268/1269 on `m008_0001_008`, differing only at position 0, where the original prefers
+state 0 (`init_p` 0.3665) to state 5 (0.6335) — the two best outgoing arcs differ by 0.004
+bits, so the seed alone decides it and the original decides it backwards. **The defect
+reaches nothing downstream**, which is what makes the fix cheap: `run-add` is genuine
+Baum-Welch over α/β/ξ, the MDL score comes from `update-data-dl` (a clone of the *forward*
+pass), and `path-states`/`path-entropy` are read only by `save-viterbi-path` and
+`seq-state`'s printer — so the decode is annotation-only and neither revision 03's training
+nor revision 04's search moves. **The degenerate half of the defect is masked by the learned
+topology, and that is not a guarantee**: every state with `init_p == 0` in these models also
+cannot emit `begin` on any outgoing arc (0 of 4 reachable in `m001_0005_005`, 0 of 6 in
+`m008_0001_008`), so `+inf` absorbs before the δ = 0.0 seed can win. Revision 04's
+`split-state` halves initial probabilities without halving a topology, which decouples them
+— so the case the fixtures cannot exhibit is the one the next revision constructs. Note the
+contrast with the `-1` sentinel above, which was declined as *uncheckable*: that reasoning
+was sound when written and would have needed re-examining had the `.vpath.xls` files been
+found a revision earlier. §7's other defect, `psi` as a float matrix round-tripping state
+indices, is likewise not reproduced — `psi` is `np.int64`.
 
 **`entropy` deliberately does not reuse `bits`, and reuse would be a bug.** Entropy is
 `Σ p·bits(p)`, so the refactor looks obvious; but `bits(0)` is `+inf`, which is *correct* for

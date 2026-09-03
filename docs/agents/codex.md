@@ -277,16 +277,20 @@ lost this to a missing `ClassVar`). Each has a test; a change that weakens eithe
 
 Note also that **each import carries its own deny-by-default `.gitignore`**, and each admits a
 small fraction of what is on disk: `.scratch/dl/` tracks 34 files out of 2.2 GB,
-`.scratch/hmm-lush/` 181 out of 929 MB, `.scratch/py-rudimentary/` 73 out of 1.7 GB, and
+`.scratch/hmm-lush/` 391 out of 929 MB, `.scratch/py-rudimentary/` 73 out of 1.7 GB, and
 `.scratch/align-poc/` 11 out of 194 MB, plus two documents of our own at the `.scratch/` root
 (`README.md` and `RESERVED-BLOCK.md`). The per-import counts include our own written analysis,
 which lives alongside the source it describes. *(Counts measured 2026-08-31; the previous
 figures for the first two were each high by one. `align-poc` went 9 -> 10 -> 11 on
 2026-09-01, as the reserved-block renumbering tracked first `_python.py` and then
-`test_needleman_wunsch.py`. `hmm-lush` went 143 -> 144 -> 181: `HMMLIB-ACCOUNT.md` landed
-after the measurement, and the `hmm` numeric migration added 37 on 2026-09-03 — `util.c`
-plus three saved `.hmm` model directories at 12 files apiece. The other three are unchanged,
-re-measured the same day.)* If something in an imported tree looks conspicuously absent, that is the
+`test_needleman_wunsch.py`. `hmm-lush` went 143 -> 144 -> 181 -> 391: `HMMLIB-ACCOUNT.md` landed
+after the measurement; the `hmm` numeric migration added 37 on 2026-09-03 — `util.c` plus
+three saved `.hmm` model directories at 12 files apiece — and the Viterbi migration added
+210 more the same day, the corpus `set02a_200.sds` at 207 files plus the three
+`<model>.vpath.xls` decode oracles. **A large jump in this count is normal at a migration
+and is not a finding**; what would be a finding is a widening with no matching paragraph in
+the import's own `.gitignore`, since every negation there carries its reasoning inline. The
+other three are unchanged, re-measured the same day.)* If something in an imported tree looks conspicuously absent, that is the
 intended behaviour and not a finding — the exclusions carry their reasons inline in each of those
 files, and what they turn away is overwhelmingly not source: virtualenvs and tool caches in the
 first, saved model checkpoints from 2008–2011 training runs in the second.

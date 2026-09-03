@@ -175,6 +175,45 @@
 !/Training/set02a/set02a_200/m001_0005_005.hmm/
 !/Training/set02a/set02a_200/m008_0001_008.hmm/
 
+# The three matching `.vpath.xls` decodes and the corpus they were decoded from,
+# tracked 2026-09-03 for the Viterbi migration. This qualifies the same
+# `Training/<all others>` note a second time, and in the same way. `4090 .xls`
+# was declined as "outputs of the algorithm being translated, not inputs to it",
+# but a `.vpath.xls` is the *output half of an input/output pair* whose input
+# half -- the model, and now the corpus -- is tracked beside it. That is the
+# criterion the `.hmm` block above already states; the `.xls` sentence had simply
+# not been re-read against it. The lesson the header records about the library
+# boundary applies to file *types* too: a migration needs whatever makes the
+# translation checkable, and that is rarely the code it translates.
+#
+# `save-viterbi-path` (`hmm-trainer.lsh:712-727`) writes one row per position --
+# `Output<TAB>States<TAB>Entropy` -- plus a leading `-` row for the state before
+# the first symbol, which is the N+1 geometry of ADR 0015 printed to disk.
+# Measured before tracking: concatenating the 200 `.seq` files reproduces each
+# file's `Output` column exactly, and the min-sum recurrence of
+# `HMMLIB-ACCOUNT.md` §3 reproduces its `States` column at 1269/1269 positions on
+# all three models. These are a decode oracle, not a checkpoint.
+#
+# The `.sds` is tracked whole, for the reason given above at `set01z0_100.sds`:
+# `_size` is a count the loader trusts. It is also the only place the symbol
+# *names* survive -- `_alphabet` here reads `0<TAB>begin` ... `5<TAB>a`, where the
+# same filename inside a `.hmm` directory holds Lush pointer addresses
+# (`#$11F50E0`). A saved model does not denote without the corpus that trained
+# it: ADR 0001's cost clause and `DEFERRED.md`'s serialization trigger, measured.
+#
+#   set02a_200.sds            207 files, ~25 KB of content. 200 sequences,
+#                             1268 symbols concatenated, 6-symbol alphabet.
+#   m001_0001_001.vpath.xls   17 KB. Size 1, so every path is state 0.
+#   m001_0005_005.vpath.xls   16 KB. Size 5, `init_state_p = [0,1,0,0,0]`.
+#   m008_0001_008.vpath.xls   16 KB. Size 8, and the only fixture where the
+#                             delta-seeding defect (§7) changes the decode: at
+#                             position 0 the original prefers state 0
+#                             (`init_p` 0.3665) to state 5 (0.6335).
+!/Training/set02a/set02a_200.sds/
+!/Training/set02a/set02a_200/m001_0001_001.vpath.xls
+!/Training/set02a/set02a_200/m001_0005_005.vpath.xls
+!/Training/set02a/set02a_200/m008_0001_008.vpath.xls
+
 # --- deliberately not tracked, with reasons ----------------------------------
 # Named here rather than left to the catch-all so that the reasoning survives.
 #
@@ -183,9 +222,15 @@
 #                     state_p / output_p / _training_log / _total_dl, 4090 `.xls`.
 #                     Outputs of the algorithm being translated, not inputs to it,
 #                     and unreadable without the model code that wrote them.
-#                     Three exceptions are negated above, on evidence that
-#                     contradicts both halves of that sentence for the narrow
-#                     case of the numeric port's test fixtures.
+#                     Seven exceptions are negated above -- three `.hmm`
+#                     directories, three `.vpath.xls`, and one `.sds` -- on
+#                     evidence that contradicts both halves of that sentence for
+#                     the narrow case of the port's test fixtures. That the same
+#                     sentence has now been qualified twice, by two different
+#                     migrations, is the finding: "output of the algorithm" is
+#                     not a reason to decline a file when its inputs are tracked
+#                     beside it, because that pairing is what a differential test
+#                     is made of.
 #   Code/_Obsolete/   An earlier generation of the same HMM library (hmm-bw,
 #                     hmm-ss, hmm-sm). Superseded by HMMlib/ and not loaded by
 #                     load-hmm.lsh.

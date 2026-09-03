@@ -99,3 +99,41 @@ Unplanned but load-bearing: the tracked `.hmm` fixtures cannot be loaded without
 pointer addresses rather than names, so the symbol identities are gone. `_lush_fixtures.py`
 was extracted to hold `load_params` — the reader's own docstring named revision 03 as the
 trigger for sharing it, and the second consumer arrived here in 02.
+
+**2026-09-03 — goal 2, the δ-seeding decision.** Decided: **fix it**, `delta[0] =
+bits(init_state_p)`. What makes the entry worth reading is that the goal expected an
+argument and got a measurement instead.
+
+**The original's own decodes are on disk.** `save-viterbi-path` wrote a `<model>.vpath.xls`
+next to each saved model — `Output / States / Entropy` per position — and all three tracked
+fixtures have one; the corpus sits beside them at `set02a_200.sds`. Concatenating its 200
+`.seq` files reproduces the vpath `Output` column exactly, so the port has an aligned
+**decode oracle**. Running the §3 min-sum recurrence against it, using goal 1's
+`load_params` and a sixty-line probe:
+
+| model | S | original seed | corrected seed |
+|---|---|---|---|
+| `m001_0001_001` | 1 | 1269/1269 | 1269/1269 |
+| `m001_0005_005` | 5 | 1269/1269 | 1269/1269 |
+| `m008_0001_008` | 8 | 1269/1269 | 1268/1269 — position 0 only |
+
+So the kernel is validated before goal 3 writes it, and fixing the defect costs one position
+in 3807 — at `m008` position 0, where the two live start states' best arcs differ by 0.004
+bits and the seed alone decides it: the original prefers `init_p` 0.3665 to 0.6335.
+
+Two things the account could not have known, both found by measuring rather than reading:
+
+- **The degenerate case is masked by the learned topology.** Every `init_p == 0` state is
+  also unable to emit `begin` on any outgoing arc, so `+inf` absorbs before δ = 0.0 can win.
+  That correlation is a property of trained models, not an invariant — and revision 04's
+  `split-state` is what decouples it. The fixtures therefore cannot exhibit the defect's
+  worse half, which is itself an argument for fixing rather than reproducing.
+- **The symbol names are not gone**, only separated: the *corpus* `_alphabet` has them. Goal
+  1's note was true of the model directory and false of the repository. Corrected in
+  `core.md`; the sharpened form is better evidence for the same ADR 0001 conclusion.
+
+The pattern from goal 1 held again, in a third form. There it was two assertions written
+from reasoning and corrected by measurement; here it was a whole *decision* framed as a
+judgement call that turned out to be an empirical question, and the evidence had been
+sitting untracked in `.scratch/` since import. Worth carrying into goal 3: before deciding
+what the fixtures can support, look at what is actually in the directory.
