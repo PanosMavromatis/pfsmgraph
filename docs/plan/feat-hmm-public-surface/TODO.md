@@ -47,10 +47,48 @@ Markers: `[ ]` not started · `[~]` in progress · `[x]` complete · `[!]` block
     > Accepted 2026-09-03, plus its three `adr/README.md` edits (index row, reading-order
     > bullet, coverage paragraph).
 
-- [ ] Settle what a caller constructs and what Viterbi is a method on
-  - [ ] No trainer object exists in 0.1.0 (falsifier-3 finding, `HMMLIB-ACCOUNT.md` §15) — confirm this shapes the construction API
-  - [ ] Settle `SymbolTable` consumption: explicit constructor argument, not a file-coupled read
-  - [ ] Settle whether Viterbi 0.1.0 consumes a single `dataseq` record directly, deferring `pad_collate` to revision 03
+- [x] Settle what a caller constructs and what Viterbi is a method on
+  > **Q:** Should the frozen parameter value retain the `Vocabulary` it was sized against?
+  > **A:** Retain it. Two different 25-symbol tables produce identically-shaped,
+  > incompatibly-meaning tensors and no range check can tell them apart; holding the
+  > vocabulary is the only thing that makes the mismatch detectable. It is consistent with
+  > [ADR 0017](../../design/adr/0017-frozen-parameter-object-for-hmm.md) because a
+  > `SymbolTable` is frozen and cannot change, and it is a parameter of the model rather
+  > than run bookkeeping — the emission axis means nothing without it.
+  > **Q:** What does the public Viterbi entry point consume?
+  > **A:** Two layers. Public `viterbi(params, record)` takes one `SequenceRecord` and
+  > returns a `ViterbiPath`; a private array-level kernel takes the three arrays plus a
+  > codes array and is what each ADR 0003 backend implements. The split is what keeps the
+  > Cython and Numba phases mechanical — a backend never touches a dataclass.
+  - [x] No trainer object exists in 0.1.0 (falsifier-3 finding, `HMMLIB-ACCOUNT.md` §15) — confirm this shapes the construction API
+    > **Done:** Confirmed, and §7 makes it stronger than §15 alone did. The decode "reads
+    > no forward variable": `update-viterbi-path` binds only the three parameter arrays,
+    > the sequence and `state-entropies`, and allocates δ and ψ itself; `alpha*` is a
+    > local of `update-data-p` and unreachable. The two are scheduled together by
+    > `update-data` "for readability", but "the coupling is scheduling, not data". So
+    > Viterbi sitting on `hmm-trainer` is an artefact of where the corpus lived, and it
+    > becomes a **free function over parameters and one sequence**. Two riders: the
+    > entropy annotation is separable (it needs the stationary solve, the δ/ψ recurrence
+    > does not) and is free under 0017's cached properties; and Lush writes its results
+    > back into the corpus object (`:data-seq:path-states`, `:data-seq:path-entropy`) —
+    > the same coupling as the alphabet read, so **the decode returns a result rather
+    > than mutating the dataset**.
+  - [x] Settle `SymbolTable` consumption: explicit constructor argument, not a file-coupled read
+    > **Done:** Taken explicitly, and typed as the `Vocabulary` **Protocol** rather than
+    > the concrete `SymbolTable` — `SequenceDataset.__init__` already types its own
+    > parameter that way, so the structural type is the established pattern rather than a
+    > new one. Retained on `HMMParams` per the Q&A above. `hmm` needs exactly one thing
+    > from it, `size`, to fix the `A` axis of `output_p`; everything crossing the boundary
+    > after that is already integers. Lush's file-coupled read of `_alphabet_size` /
+    > `_alphabet` out of the `.sds` directory (§4) is not reproduced.
+  - [x] Settle whether Viterbi 0.1.0 consumes a single `dataseq` record directly, deferring `pad_collate` to revision 03
+    > **Done:** A single `SequenceRecord`, and the deferral is structural rather than a
+    > scheduling choice: a record never holds padding (`_record.py` — length is always the
+    > true length), so a single-sequence decode has no mask to consult and `pad_collate`
+    > has nothing to contribute. Padding exists only in a collated batch, which is
+    > revision 03's batched trainer. Noted in passing: `SequenceRecord` already stores its
+    > `codes` array read-only, so ADR 0017's `writeable = False` discipline is `dataseq`'s
+    > existing practice rather than a new invention.
 
 - [ ] Apply *encode at the boundary* (ADR 0001)
   - [ ] Name the exact entry and exit points where strings are still permitted

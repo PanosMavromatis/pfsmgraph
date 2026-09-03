@@ -38,7 +38,7 @@ requires — `init_state_p` of shape `(S,)`, `transition_p` of shape `(S, S)`, a
 `output_p` of shape `(S, S, A)`, indexed by source state, destination state and symbol —
 and holds nothing else that can change.
 
-Three properties follow from that sentence and are part of the decision rather than
+Four properties follow from that sentence and are part of the decision rather than
 consequences of it:
 
 **The buffers are read-only, not merely the bindings.** A frozen dataclass prevents
@@ -54,12 +54,27 @@ per-state entropies, and the model entropy are cached properties of the paramete
 slots alongside them. In the original they are slots, refreshed by a manual
 `update-entropy` call after any change.
 
+**The vocabulary the symbol axis was sized against is held with the arrays.** `output_p`'s
+third axis is indexed by symbol code, and a code means nothing without the table that
+assigned it: two different 25-symbol vocabularies produce parameter sets of identical
+shape and incompatible meaning, and no check on the codes alone can tell them apart. The
+type therefore holds a `Vocabulary` — `dataseq`'s Protocol rather than the concrete
+`SymbolTable`, matching how `SequenceDataset` types its own parameter — while `n_symbols`
+stays derived from `output_p.shape[2]` rather than stored beside it. This does not weaken
+the sentence above: a `SymbolTable` is frozen by construction with no method that adds a
+symbol, so it is not something that can change. It is a parameter of the model in the
+sense that matters, not bookkeeping about a run — without it the emission tensor does not
+denote anything.
+
 **Algorithms take parameters; parameters do not own algorithms.** Viterbi receives a
 parameter value rather than being a method that reaches into `self` for it, and revision
 04's `split_state` and `merge_states` return a new value rather than mutating one in
-place. Lush's remaining slots — `name`, `counter`, `d`, `training_log` — are bookkeeping
-about a training run, not parameters of a model, and do not join this type; where they are
-needed they belong to whatever owns the run.
+place. The public entry point takes a `dataseq` `SequenceRecord` and returns a result
+value; the array-level kernel that each [ADR 0003](0003-one-parameterized-test-suite-per-algorithm.md)
+backend implements takes plain arrays, so a backend never touches a dataclass. Lush's
+remaining slots — `name`, `counter`, `d`, `training_log` — are bookkeeping about a
+training run, not parameters of a model, and do not join this type; where they are needed
+they belong to whatever owns the run.
 
 ## Consequences
 
