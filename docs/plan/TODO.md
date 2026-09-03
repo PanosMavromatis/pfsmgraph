@@ -124,8 +124,33 @@ first duty is to check these boundaries. What would falsify them:
   > checked and **does not exist**: §11 records that the original's search was driven by
   > hand, so it is a forward assumption rather than a translated fact. Left to the kernel
   > subgoal: whether `A` is `vocab.size` or only the user symbols — PR #15.
-- [ ] Migrate the Utility code this release needs, private to the package: `_numeric.py` for `safe-/` (15 call sites), **`safe-add--log2` and `safe->--log`** — the log₂-domain accumulator and comparator Viterbi's inner loop actually calls, home of the `-1` log-zero sentinel (`HMMLIB-ACCOUNT.md` §3) — and `int-delta`; plus the stationary-distribution solve (`LU-solve` → `numpy.linalg.solve`), `rand-p-vector` for parameter initialisation, and `calculate-entropy`. The solve needs its row-replacement trick reproduced, not just its result: `(Pᵀ - I)π = 0` is singular by construction, so a port that hands the homogeneous system as stated to a dense solver fails outright — row 0 must be overwritten with the normalization `Σπ = 1` before calling `numpy.linalg.solve` (§4). Record which Numerical-Recipes transcriptions were replaced by a library call rather than translated, and that `minimize`/`mc.lsh` had **zero** call sites from `HMMlib` and so migrate nowhere.
+- [x] Migrate the Utility code this release needs, private to the package: `_numeric.py` for `safe-/` (15 call sites), **`safe-add--log2` and `safe->--log`** — the log₂-domain accumulator and comparator Viterbi's inner loop actually calls, home of the `-1` log-zero sentinel (`HMMLIB-ACCOUNT.md` §3) — and `int-delta`; plus the stationary-distribution solve (`LU-solve` → `numpy.linalg.solve`), `rand-p-vector` for parameter initialisation, and `calculate-entropy`. The solve needs its row-replacement trick reproduced, not just its result: `(Pᵀ - I)π = 0` is singular by construction, so a port that hands the homogeneous system as stated to a dense solver fails outright — row 0 must be overwritten with the normalization `Σπ = 1` before calling `numpy.linalg.solve` (§4). Record which Numerical-Recipes transcriptions were replaced by a library call rather than translated, and that `minimize`/`mc.lsh` had **zero** call sites from `HMMlib` and so migrate nowhere.
   > **Branch:** feat/hmm-numeric-utils
+  > **Done:** `_numeric.py` and 66 tests — the first code in `packages/pfsmgraph-hmm/`,
+  > suite 94 → 160. **Six functions named, five written**: `int-delta` dissolves into
+  > `np.eye` and `safe->--log` into plain `>`, both consequences of replacing the `-1`
+  > log-zero sentinel with `+inf` — declined as *uncheckable*, since there is no Lush
+  > runtime here and the sentinel reaches no persisted artifact. `bits(p)` is unary where
+  > `safe-add--log2` was binary, the accumulator argument having existed only to test that
+  > sentinel. The stationary solve reproduces the row replacement and adds what the
+  > original could not detect: a **reducible** chain has nullity 2 and stays singular after
+  > one replaced row, so it raises `ValueError` naming the cause where
+  > `LU-decomposition` substituted `TINY = 1e-20` and returned a perturbed answer. That is
+  > not exotic — revision 04's merge/split search can produce a disconnected component.
+  >
+  > **Two of this subgoal's own claims were wrong and are corrected rather than carried.**
+  > `minimize-int` does **not** have zero call sites: `hmm-trainer.lsh:441` (`suggest-d`)
+  > minimizes `total-dl` over `d`, so it migrates at **revision 04**, the same MDL boundary
+  > as `int-code-length`. And `mc.lsh` *is* libloaded (`load-hmm.lsh:6`); what supports
+  > "migrates nowhere" is that none of its four names is ever called. The text above records
+  > what was believed at planning time and is left as written.
+  >
+  > Also settled: `safe_divide` has **no consumer in 0.1.0** (all fifteen sites are revisions
+  > 03–04), `entropy` deliberately does not reuse `bits` (`bits(0) = +inf` is right for a
+  > description length and wrong for an entropy term), `rand_p_vector` takes a **required**
+  > `Generator`, and `numpy>=2.1` was reviewed and kept — justified by the compiled future,
+  > not today's API. Three `.hmm` model directories are now tracked as differential
+  > fixtures; their four-decimal print format is a documented trap for revision 03 — PR #16.
 - [ ] Implement Viterbi at ADR 0002 phase 1 (pure Python/numpy) with the ADR 0003 test suite, and register it as the first backend. The session header stops reading `backends: none registered` for the first time since the hook landed. Two defects the account marks **provenance unknown** must be a decision, not a silent reproduction: `update-viterbi-path` seeds δ with raw `init-state-p` into the bit-domain accumulator, inverting the start-state preference and turning an exactly-zero initial probability into the _best_ possible δ rather than the impossible sentinel (`HMMLIB-ACCOUNT.md` §7); and `psi` round-trips state indices through a float matrix, harmless below 2²⁴ states and not worth reproducing. Decide and record whether the seeding bug is fixed or faithfully reproduced — the ADR 0003 test suite should encode whichever is chosen, not accidentally validate a bug against itself.
 - [ ] Resolve the meson-python namespace shadowing and move `hmm` off hatchling, reverting [ADR 0012](../design/adr/0012-align-and-hmm-temporarily-on-hatchling.md) by whichever of its three recorded candidates survives contact: non-editable install of the compiled members, one combined compiled distribution, or an upstream fix. Re-add `meson-python`, `cython` and `ninja` to the root `dev` group.
 - [ ] Implement Viterbi at ADR 0002 phase 2 (Cython), the first `.pyx` in a distribution. Backend equivalence against phase 1 is enforced by the parameterized suite, not asserted.

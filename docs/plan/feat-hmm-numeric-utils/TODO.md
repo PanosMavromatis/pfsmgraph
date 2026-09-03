@@ -1,6 +1,6 @@
 # feat/hmm-numeric-utils
 
-**Status**: active
+**Status**: merged — PR #16 — 2026-09-03
 **Created**: 2026-09-03
 **Subgoal**: Migrate the Utility code this release needs, private to the package (revision `02-hmm-v0.1.0`)
 
