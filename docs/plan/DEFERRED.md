@@ -389,6 +389,15 @@ and several of these must land *as part of* the merge rather than after it.
   sidesteps escaping but commits the format; that trade is the decision, and it deserves
   to be made deliberately.
 
+- **`pfsmgraph.hmm` model persistence is a second consumer of this trigger.** A trained
+  model stores codes, so it is unreadable without the table that assigned them —
+  [ADR 0001](../design/adr/0001-encode-at-the-boundary.md) records exactly that as a cost
+  of the encode boundary, and [ADR 0017](../design/adr/0017-frozen-parameter-object-for-hmm.md)
+  holds the `Vocabulary` on `HMMParams` for the same reason. So `hmm` 0.1.0 ships no
+  save/load, and cannot until the entry above is settled: persisting a model means
+  persisting a `SymbolTable`, and the escaping rule is the undecided part.
+  Recorded 2026-09-03 on `feat/hmm-public-surface`.
+
 ## Trigger: a corpus large enough for code locality to matter
 
 - **`SymbolTable.from_frequencies()`, offered but never default.** Frequency ordering
