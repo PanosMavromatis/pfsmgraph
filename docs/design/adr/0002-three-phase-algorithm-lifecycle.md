@@ -1,6 +1,8 @@
 # 0002. Three-phase algorithm lifecycle: Python, then Cython, then CUDA
 
-- **Status:** Accepted
+- **Status:** Accepted — but see [ADR 0016](0016-numba-cpu-parallel-phase.md), which
+  inserts a phase (Numba CPU-parallel) between Cython and CUDA, renumbering CUDA from
+  phase 3 to phase 4.
 - **Date:** 2025 (proof-of-concept); formalized 2026-08-29
 - **Source:** PRD §1.2, §6 — inherited from the proof-of-concept alignment library
 
