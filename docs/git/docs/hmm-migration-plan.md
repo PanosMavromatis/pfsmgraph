@@ -12,19 +12,26 @@ Lush HMM library has never actually been read. The three reading aids under
 `.scratch/hmm-lush/` (`ACCOUNT.md`, `COMPARISON.md`, `translation/`) were all written for
 subgoals of `feat/dataseq-merge` and cover `Code/SeqData/` only, the container half.
 `Code/HMMlib/` is 2,044 lines across four files and has no account, no comparison against
-anything, and no transliteration. Planning the migration before reading it would be
-inventing a schedule for code nobody here has looked at.
+anything, and no transliteration.
 
-This branch therefore reads the library, settles the decisions the source forces, records
-them where they will be found, and opens revision 02 with subgoals that a later branch can
-execute. **No code lands under `packages/pfsmgraph-hmm/src/`.**
+This branch therefore surveys the library structurally, splits the migration into three
+revisions, settles the decisions that split forces, and opens the first of them. **No code
+lands under `packages/pfsmgraph-hmm/src/`,** and the source *reading* is not here either:
+`ACCOUNT.md` records itself as a subgoal of `feat/dataseq-merge`, so `HMMLIB-ACCOUNT.md`
+follows that precedent and belongs to revision 02.
+
+**The migration is three releases, not one.** The trainer spans three problems that fail
+differently — a decode, a fixed-topology estimator, and a search over model shapes — and
+each raises its own questions about parallelism and data structures. Conflating them would
+put the project's first `.pyx`, its first EM loop and its first resizing search in one
+revision, where a failure in any of them would be diagnosed against all three.
 
 ## Scope
 
-- Read `Code/HMMlib/` in its own terms and write the account, as `ACCOUNT.md` did for `SeqData`
-- Decide the translation strategy and the shape of `pfsmgraph.hmm`, including where it meets `dataseq`
-- Settle the scope questions the source forces: the view layer, topology search, and the `.sds` format
-- Record the outcome — new ADR(s), a `DEFERRED.md` trigger, and revision 02 opened in the master plan
+- Draft `docs/plan/0{2,3,4}-hmm-*/_TODO.md` and register them under `## Planned revisions` in the master plan
+- Settle the numpy/`torch` posture, the home of the migrated `Utility` code, and whether the packaging work is isolated
+- Write the ADRs those decisions warrant, including that ADR 0002's anti-diagonal claim does not generalize to HMM
+- Add the `DEFERRED.md` triggers, and open revision 02
 
 ## Context
 
@@ -32,6 +39,7 @@ execute. **No code lands under `packages/pfsmgraph-hmm/src/`.**
 - `docs/plan/01-dataseq-v0.1.0/_TODO.md` — how the previous revision was shaped; the model this one should follow
 - `.scratch/hmm-lush/ACCOUNT.md` — the template for goal 1, and the evidence that goal 1 is owed: it is scoped to `SeqData` throughout
 - `.scratch/hmm-lush/Code/HMMlib/` — `hmm.lsh` (319), `hmm-param.lsh` (386), `hmm-trainer.lsh` (1102), `hmm-trainer-view.lsh` (237)
+- `.scratch/hmm-lush/Code/Utility/` — `util.lsh` (574) and `mc.lsh` (47); mostly Numerical Recipes transcriptions with zero call sites from `HMMlib`, but it also holds the MDL machinery that scores topology search
 - [ADR 0002](../../design/adr/0002-three-phase-algorithm-lifecycle.md) — the three-phase lifecycle; Baum-Welch is where it first applies
 - [ADR 0003](../../design/adr/0003-one-parameterized-test-suite-per-algorithm.md) — the backend matrix, empty until a DP kernel reaches phase 1
 - [ADR 0012](../../design/adr/0012-align-and-hmm-temporarily-on-hatchling.md) — why `hmm` is on hatchling, and what the first `.pyx` reopens
