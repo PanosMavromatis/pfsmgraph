@@ -68,12 +68,31 @@ test:
 # username itself whenever it is given a token rather than a user/password.
 
 # Store a PyPI token for a package (prompts for the value).
-token-set package=default_package:
-    security add-generic-password -U -a "$USER" -s pypi-{{ package }} -w
+token-set package=default_package: (_token-prompt "pypi-" + package)
 
 # Store a TestPyPI token for a package (prompts for the value).
-token-set-test package=default_package:
-    security add-generic-password -U -a "$USER" -s testpypi-{{ package }} -w
+token-set-test package=default_package: (_token-prompt "testpypi-" + package)
+
+# Prompt for a token, store it under `service`, and verify it round-trips.
+#
+# Only the service name crosses a process boundary here; the token itself is
+# read into this shell and reaches the argv of `security` alone, which is the
+# one exposure the Keychain CLI offers no way to avoid.
+
+_token-prompt service:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    read -rsp "token for {{ service }} (input hidden): " tok; echo
+    [[ -n "$tok" ]] || { echo "empty token -- nothing stored" >&2; exit 1; }
+    [[ "$tok" == pypi-* ]] || { echo "token does not begin with 'pypi-' -- both PyPI and TestPyPI tokens do; nothing stored" >&2; exit 1; }
+    security add-generic-password -U -a "$USER" -s '{{ service }}' -w "$tok"
+    back="$(security find-generic-password -a "$USER" -s '{{ service }}' -w)"
+    if [[ "$back" != "$tok" ]]; then
+      security delete-generic-password -a "$USER" -s '{{ service }}' >/dev/null 2>&1 || true
+      echo "stored ${#back} of ${#tok} characters -- entry deleted rather than left broken" >&2
+      exit 1
+    fi
+    echo "stored ${#tok} characters under {{ service }}"
 
 # A missing keychain entry must fail loudly. An empty UV_PUBLISH_TOKEN is not an
 # error to `uv publish`: it falls through to trusted-publishing discovery, which

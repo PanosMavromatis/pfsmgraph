@@ -230,6 +230,28 @@ Keychain entry rather than refusing; revoke the old token on PyPI and re-run it.
 `-U` -- how it shipped on 2026-09-02 -- `security` errors with `The specified item already
 exists in the keychain` and the entry has to be deleted by hand first.
 
+**`token-set` reads the token into the shell and verifies the round-trip, and both are
+load-bearing.** `security add-generic-password`'s own interactive `-w` prompt **silently
+truncates its input at 128 characters** -- measured 2026-09-02: a 200-character value went
+in and 128 came back, with no error, no warning, and a non-zero exit nowhere. PyPI tokens
+are longer than that, so the first release attempt stored a well-formed *prefix* of a valid
+token and PyPI answered:
+
+```
+Server returned status code 403 Forbidden. Server says: 403 Invalid or non-existent
+authentication information.
+```
+
+which names the credential and says nothing about where it was damaged. The recipe now
+prompts with the shell's own `read -rs` and, after storing, reads the value back and
+compares it to what was typed; a mismatch deletes the entry rather than leaving a broken
+credential in place, and reports how many characters of how many survived. It also rejects
+an empty value and one not beginning with `pypi-` (both registries' tokens do).
+
+This is the same failure shape as the symlinked `LICENSE` and the misplaced `py.typed`: a
+step that succeeds, emits nothing, and yields a broken artifact. The round-trip check is
+the cheapest general guard against it -- it does not care *why* the value changed.
+
 **Never run `just token` on its own.** It exists to be consumed by `$(...)` inside
 `publish`, and standalone it prints a live credential into your scrollback. If it happens,
 revoke the token and re-run `token-set`.
@@ -352,3 +374,4 @@ rather than a habit rewrite.
 | sdist fails on unpack | `LICENSE` is a symlink. Replace with a real copy, bump, re-release. |
 | `just verify` fails on import | Check the import path is `pfsmgraph.<pkg>`, not `pfsmgraph_<pkg>`. |
 | `just preflight` rejects the version | `pyproject.toml` declares something else. The argument is not the source of truth. |
+| `403 Invalid or non-existent authentication information` | The stored token is wrong, revoked, or **truncated**. Re-run `just token-set`, which now verifies the round-trip. Nothing was uploaded; the version is not spent. |
