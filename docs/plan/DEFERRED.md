@@ -420,3 +420,46 @@ These have no event that will surface them. They need to be looked at on purpose
 - **How the Claude Code development plugin fits the multi-package family** — one
   family-wide dev plugin, or one per package. Explicitly out of scope for the PRD (§10)
   and never discussed.
+
+## Trigger: `align` able to produce a multiple alignment
+
+- **Open a revision for the alignment-seeded topology search.** Decided 2026-09-03, from
+  [`arc-emission-hmm-handoff.md`](../design/arc-emission-hmm-handoff.md) §1. It is **its
+  own revision**, and it comes after all three planned `hmm` revisions *and* after
+  substantial work on `align` — expected to be more than one `align` revision's worth. It
+  is therefore given a trigger rather than a number: how many revisions `align` needs is
+  not knowable now, and a number claimed today would be wrong.
+
+  **What it is.** Revision `04-hmm-v0.3.0` migrates the Lush topology search as it
+  stands: start from a single-state model and search by merging and splitting, which is
+  quadratic in model size because a merge step tries all state pairs. The deferred work
+  replaces that starting point. A rough multiple alignment of the corpus yields a seed
+  FSM directly; its gaps appear as **epsilon-emitting arcs**; removing those silent
+  transitions leaves a smaller, better-initialised model for the merge/split search to
+  refine. The quadratic term is attacked at its input rather than in its inner loop.
+
+  **Why it is expressible at all** is [ADR 0015](../design/adr/0015-arc-emission-mealy-formulation.md):
+  under arc-emission, an alignment gap *is* an epsilon emission on an arc. Under
+  state-emission it would be a silent state, which is the object the profile-HMM
+  literature keeps and handles rather than removes. `GAP` at index 4
+  ([ADR 0011](../design/adr/0011-fixed-reserved-symbol-block-and-strict-encoding.md)) is
+  already the code this needs.
+
+  **This is new work, not a migration.** A search of `Code/HMMlib/` and `Code/Utility/`
+  for `epsilon|silent|null-|empty-symbol` returns **zero hits** (2026-09-03) — the
+  imported implementation has no silent transitions anywhere, so nothing here ports.
+  Expect to write acyclic weighted epsilon removal by hand: the epsilons come from
+  alignment gaps and so are strictly time-ordered, which reduces closure to a
+  topological-order weight propagation. Cycles can be introduced later by state merging,
+  but by then the epsilons are gone. Note that the operation is *not* deleting the silent
+  arcs — it is folding their weight into the surrounding arcs so the marginal
+  distribution over observable sequences is preserved.
+
+  **Two questions to settle when it opens**, both from the handoff's §3 and §6: how exact
+  the epsilon removal must be, given that the merge loop re-estimates all weights
+  downstream and may need only the topology to be right; and whether OpenFst/`pynini`
+  earns its toolchain weight for the acyclic case, which the handoff argues it does not.
+
+  Nothing about this is in `core.md`'s claim that "alignment is a training accelerant for
+  HMM topology search" beyond the claim itself — this entry is the mechanism that
+  sentence has been standing on since the PRD.

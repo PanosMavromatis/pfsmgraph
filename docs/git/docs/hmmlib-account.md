@@ -42,3 +42,35 @@ this one — an API designed against a survey would be designed against a guess.
 - `.scratch/hmm-lush/.gitignore:42` — the `!/*.md` negation that makes `HMMLIB-ACCOUNT.md` visible to `git status`. Verified with `git check-ignore -v` before this branch was created, because the failure mode is silence rather than an error
 
 ## Notes
+
+**2026-09-03 — the branch took on work its Scope does not list, and deliberately.** A
+design handoff from an earlier conversation (2026-06-13) surfaced in an untracked `tmp/`
+directory while goal 1 was closing. It independently confirms the account's central
+finding — the model is arc-emission (Mealy) — as *intent* with a lineage, where the
+account could only establish it as behaviour. Two independent derivations agreeing is
+what promoted that finding from a plan note to [ADR
+0015](../../design/adr/0015-arc-emission-mealy-formulation.md), which is the first record
+in this repository about a *model* rather than about packaging, tooling or process.
+
+Four things follow, all committed here rather than deferred, because the handoff was
+sitting in a gitignored directory and existed on one machine only:
+
+- The handoff moved to `docs/design/arc-emission-hmm-handoff.md`, verbatim under a
+  provenance preamble that marks each of its claims confirmed, unchecked, or —
+  in one case — **contradicted by the source**: it presumes epsilon machinery that a
+  search of `Code/HMMlib/` and `Code/Utility/` shows does not exist.
+- Its alignment-derived seed is the mechanism `core.md`'s "alignment is a training
+  accelerant for HMM topology search" has been standing on since the PRD. Recorded in
+  `DEFERRED.md` under a **trigger** rather than a revision number, per the decision that
+  it follows all three planned `hmm` revisions *and* substantial `align` work.
+- Two `planned/` drafts amended while amending them is still free: revision 04's resize
+  subgoal had two representation options where there are three, and revision 03 gained an
+  external-oracle subgoal that catches a class of error its `torch` equivalence test
+  structurally cannot.
+- The two-part versus refined/NML question registered at PRD §8 — *not* in `DEFERRED.md`,
+  which routes open questions there by its own header.
+
+**What this branch's remaining goals inherit.** Goal 2's falsifier verdicts are untouched
+and still owed. Goal 3 is partly discharged by the above, but only partly: the account's
+consequences for subgoal 2's public surface and subgoal 3's Utility migration are still
+unwritten.
