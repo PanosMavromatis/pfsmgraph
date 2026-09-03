@@ -1,6 +1,8 @@
 **Status**: planned — drafted 2026-09-03 on `docs/hmm-migration-plan`, not yet opened
 **Splice**: everything from `## Subgoals` down is what `/open-revision` places into
-[`docs/plan/TODO.md`](../TODO.md); this preamble stays behind.
+[`docs/plan/TODO.md`](../TODO.md); this preamble stays behind and this file is removed.
+It lives in `planned/`, not in `docs/plan/04-hmm-v0.3.0/`, because `/open-revision` refuses a
+label whose directory already exists.
 
 **Drafted before the source was read.** What would falsify the shape below:
 

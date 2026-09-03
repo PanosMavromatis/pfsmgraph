@@ -28,7 +28,7 @@ revision, where a failure in any of them would be diagnosed against all three.
 
 ## Scope
 
-- Draft `docs/plan/0{2,3,4}-hmm-*/_TODO.md` and register them under `## Planned revisions` in the master plan
+- Draft `docs/plan/planned/0{2,3,4}-hmm-*.md` and register them under `## Planned revisions` in the master plan
 - Settle the numpy/`torch` posture, the home of the migrated `Utility` code, and whether the packaging work is isolated
 - Write the ADRs those decisions warrant, including that ADR 0002's anti-diagonal claim does not generalize to HMM
 - Add the `DEFERRED.md` triggers, and open revision 02
