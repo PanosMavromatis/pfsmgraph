@@ -1,6 +1,6 @@
 # docs/hmm-migration-plan
 
-**Status**: active
+**Status**: merged — PR #10 — 2026-09-03
 **Created**: 2026-09-03
 **Subgoal**: standalone — revision 01 is closed and no revision is open; this branch drafts revisions 02, 03 and 04 and opens the first of them
 
