@@ -66,12 +66,23 @@ does not hold" is a finding, while silence is indistinguishable from not having 
   > for the first time, not a translation.
   > **Commit:** the five sub-items were one continuous reading, so they were taken as a
   > unit rather than pausing for a commit checkpoint between each.
+  > **Correction:** this sub-item's own region note above — "`257-346` M-step" — is wrong,
+  > found while checking falsifier 3 in goal 2. `HMMLIB-ACCOUNT.md` §8-9 establish `257-346`
+  > as parameter quantization (`update-approx-*`) plus `update-dl`, not expected-count
+  > accumulation; the real M-step is `run-add` at `483-652`. The account's own "Corrected
+  > region map" appendix table already carries this; left uncorrected here until now
+  > because nothing had re-read this line against it. Not rewriting the line above —
+  > recording the correction instead, the way the account narrates its own corrections.
 
-- [ ] Check the three falsifiers the master plan names, and record each verdict
-  - [ ] **Does Viterbi read the forward variables?** The 02/03 split assumes `update-viterbi-path` (`hmm-trainer.lsh:188-257`) computes δ independently of the α that `update-data-p` (`126-188`) builds. If it reads α, the boundary moves and Viterbi drags the forward pass into 02 with it
-  - [ ] **Is the stationary-distribution solve what it looks like?** `hmm-param.lsh:82` and `hmm.lsh:244` build a matrix from `int-delta` and call `LU-solve`; that reads as `(I - Pᵀ)π = 0`, inferred from two lines of context
-  - [ ] **Is `hmm-trainer.lsh:21-126` separable?** The scaffolding is assumed shareable across 02 and 03. If the constructor demands the training apparatus, 02 gets no trainer at all and Viterbi becomes a free function over a model — which may be the better design regardless
-  - [ ] Revise `docs/plan/TODO.md` for any falsifier that holds, and amend the affected `planned/` draft if the consequence reaches 03 or 04
+- [x] Check the three falsifiers the master plan names, and record each verdict
+  - [x] **Does Viterbi read the forward variables?** The 02/03 split assumes `update-viterbi-path` (`hmm-trainer.lsh:188-257`) computes δ independently of the α that `update-data-p` (`126-188`) builds. If it reads α, the boundary moves and Viterbi drags the forward pass into 02 with it
+    > **Verdict:** Does not hold. `update-viterbi-path` reads no forward variable — `alpha*` is a local of `update-data-p` alone and there is no α slot on the class; the two methods are scheduled together by `update-data` only for readability, per the source's own comment, not a data dependency (`HMMLIB-ACCOUNT.md` §7). The 02/03 boundary as drawn stands.
+  - [x] **Is the stationary-distribution solve what it looks like?** `hmm-param.lsh:82` and `hmm.lsh:244` build a matrix from `int-delta` and call `LU-solve`; that reads as `(I - Pᵀ)π = 0`, inferred from two lines of context
+    > **Verdict:** Does not hold. The solve is `(Pᵀ - I)π = 0` with the first row replaced by `Σπ = 1` (`HMMLIB-ACCOUNT.md` §4) — the guessed sign is flipped from the derived one, but `(Pᵀ - I)` and `(I - Pᵀ)` share the same null space, so the port is unaffected.
+  - [x] **Is `hmm-trainer.lsh:21-126` separable?** The scaffolding is assumed shareable across 02 and 03. If the constructor demands the training apparatus, 02 gets no trainer at all and Viterbi becomes a free function over a model — which may be the better design regardless
+    > **Verdict:** Holds. Neither constructor branch is free of the training apparatus: the default branch runs full Baum-Welch (`run-converge`) plus the `d` machinery and a model save before returning; the other runs the forward pass, Viterbi and a description-length computation. Both require a corpus unconditionally (`fprop-all`, line 66). "A decode-only use of this library is not expressible in its own terms" (`HMMLIB-ACCOUNT.md` §15). `21-126` is not shareable scaffolding — it is the class plus a constructor that trains. This confirms rather than merely assumes revision 02 subgoal 2's premise ("what Viterbi is a method *on* given there is no trainer object in this release").
+  - [x] Revise `docs/plan/TODO.md` for any falsifier that holds, and amend the affected `planned/` draft if the consequence reaches 03 or 04
+    > **Done:** Appended the three verdicts above, in place, to revision 02's falsifier bullets in `docs/plan/TODO.md`. Falsifier 3's consequence stays inside revision 02 — 03's draft already treats "the trainer" as something *it* introduces (e.g. "Batch the trainer over sequences"), so nothing there needed amending on this account. A second, unrelated correction surfaced while reading §8-9 for this check: the region map both this branch's own goal-1 annotation and `03-hmm-v0.2.0.md`'s falsifier text inherited from the structural survey — "`257-346` M-step" — is wrong; `HMMLIB-ACCOUNT.md` §8-9 (and its own "Corrected region map" appendix table) establish `257-346` as quantization + `update-dl`, and the real M-step is `run-add` at `483-652`. Corrected `03-hmm-v0.2.0.md`'s citations; see the correction note under goal 1 below for this branch's own copy of the mislabeling.
 
 - [ ] Record what the account changes for the subgoals downstream of it
   - [ ] Note anything subgoal 2 (the public surface) now has evidence for that it previously had only a survey of

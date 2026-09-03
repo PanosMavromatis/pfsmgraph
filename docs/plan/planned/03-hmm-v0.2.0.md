@@ -44,9 +44,15 @@ absorb — in the `torch`-backend subgoal below, not by redesigning the base cla
 
 **Drafted before the source was read.** What would falsify the shape below:
 
-- **The M-step not being separable from the search.** `update-approx-*`
-  (`hmm-trainer.lsh:257-346`) is assumed to be plain expected-count accumulation. If it
-  already anticipates state merge/split, part of it belongs to revision 04.
+- **The M-step not being separable from the search.** *Corrected 2026-09-03 against
+  `HMMLIB-ACCOUNT.md` §8-9, whose "Corrected region map" appendix flags exactly this
+  mislabeling: the real M-step is `run-add` (`hmm-trainer.lsh:483-652`), not
+  `update-approx-*` (`257-346`, which is parameter quantization for the description
+  length, not expected-count accumulation).* `run-add` allocates the full ξ/γ apparatus and
+  re-estimates in place; nothing in it anticipates state merge/split, so this falsifier
+  does not hold as originally posed. The corrected line range is worth carrying forward
+  regardless, since revision 04's `try-split`/`try-merge` calls back into whatever this
+  revision builds around it.
 - **`run-add` (173 lines, `477-656`) not being the EM loop.** Its name suggests adding
   states, which would make it topology search and move it to 04, leaving `run-converge`
   (`656-677`) as this revision's only driver.
@@ -57,7 +63,7 @@ absorb — in the `torch`-backend subgoal below, not by redesigning the base cla
   subgoal from an equivalence test to a numerical-tolerance comparison.
 
 - [ ] Implement forward-backward in numpy as the reference: α, β, ξ, γ, in log space, with the log-zero sentinel `_numeric.py` fixed in revision 02. State whether the base stays 2 — natural for the description lengths of revision 04, unusual everywhere else — or whether base *e* is used with a conversion at the DL boundary.
-- [ ] Implement the M-step and the EM loop: parameter re-estimation, the convergence criterion, and the data description length (`update-data-dl`, `hmm-trainer.lsh:346-402`), which shares its accumulation shape with the likelihood and should share its code.
+- [ ] Implement the M-step and the EM loop: parameter re-estimation (`run-add`, `hmm-trainer.lsh:483-652`), the convergence criterion (`run-converge`, `661-674`), and the data description length (`update-data-dl`, `hmm-trainer.lsh:346-402`), which shares its accumulation shape with the likelihood and should share its code.
 - [ ] Validate the numpy reference against an **external oracle** before anything is built on it. An arc-emission model whose emission depends only on the *destination* state is a state-emission model ([ADR 0015](../../design/adr/0015-arc-emission-mealy-formulation.md)), so construct that reduced case and check the forward-backward — and the fitted parameters after EM — against `hmmlearn`'s `CategoricalHMM` to machine precision. This catches a class of error the torch backend below **cannot**: autograd and a hand-written β are two implementations of the same derivation, so they can agree on a shared misreading of the model, whereas `hmmlearn` shares no lineage with either. Write it as early as the numpy forward-backward allows rather than leaving it until the EM loop is finished too. `hmmlearn` is a **test-only** dependency in the root `dev` group and reaches no shipped artifact; it is explicitly *not* an [ADR 0003](../../design/adr/0003-one-parameterized-test-suite-per-algorithm.md) backend, since a backend is another implementation of the same kernel and this is a different model that coincides with ours on one special case. Source: [`arc-emission-hmm-handoff.md`](../../design/arc-emission-hmm-handoff.md) §3.
 - [ ] Add the `torch` backend behind the `[torch]` extra: the forward pass and the autograd E-step. **Assert the count identity** — numpy's explicit ξ and γ against torch's `.grad` on the log-parameters — as an ADR 0003 cross-backend test rather than a tolerance check, and record what tolerance was actually needed.
 - [ ] Batch the trainer over sequences. This is the first place `pad_collate`'s mask does real work: padded timesteps must contribute nothing to the expected counts, and a mask bug here is silent, since it shifts the estimates rather than raising.

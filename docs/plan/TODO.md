@@ -80,14 +80,24 @@ first duty is to check these boundaries. What would falsify them:
 - **Viterbi turning out to depend on the forward variables.** The split assumes
   `update-viterbi-path` (`hmm-trainer.lsh:188-257`) computes δ independently of the α that
   `update-data-p` (`126-188`) builds. If it reads α, the 02/03 boundary moves and Viterbi
-  drags the forward pass into this release with it.
+  drags the forward pass into this release with it. **Checked, does not hold**:
+  `update-viterbi-path` reads no forward variable — `alpha*` is a local of `update-data-p`
+  alone, and the two methods are scheduled together by `update-data` only for readability,
+  not a data dependency (`HMMLIB-ACCOUNT.md` §7). The boundary stands.
 - **The stationary-distribution solve being something else.** `hmm-param.lsh:82` and
   `hmm.lsh:244` build a matrix from `int-delta` and call `LU-solve`; that reads as
-  `(I - Pᵀ)π = 0`, but it was inferred from two lines of context.
+  `(I - Pᵀ)π = 0`, but it was inferred from two lines of context. **Checked, does not
+  hold**: the solve is `(Pᵀ - I)π = 0` with the first row replaced by `Σπ = 1`
+  (`HMMLIB-ACCOUNT.md` §4); the guessed sign is flipped, but `(Pᵀ - I)` and `(I - Pᵀ)`
+  share the same null space, so the port is unaffected.
 - **`hmm-trainer.lsh:21-126` not being separable.** The scaffolding is assumed shareable
   across 02 and 03. If the constructor demands the training apparatus, 02 gets no trainer
   at all and Viterbi becomes a free function over a model — which may be the better design
-  regardless.
+  regardless. **Checked, holds**: neither constructor branch is free of the training
+  apparatus, and both require a corpus unconditionally; "a decode-only use of this library
+  is not expressible in its own terms" (`HMMLIB-ACCOUNT.md` §15). `21-126` is not
+  shareable scaffolding. Subgoal 2's premise below — Viterbi as a method with no trainer
+  object in this release — is now evidence-backed rather than assumed.
 
 - [ ] Read `Code/HMMlib/` in its own terms and write `.scratch/hmm-lush/HMMLIB-ACCOUNT.md`, following `ACCOUNT.md`'s conventions — measurements against the two tracked specimen corpora, and **provenance unknown** for behaviours the code admits but may never have exercised. Check the three falsifiers above and revise this plan if any holds.
   > **Branch:** docs/hmmlib-account
