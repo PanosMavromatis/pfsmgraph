@@ -83,8 +83,16 @@ edit becomes a data migration.
   > `_backends.py`, 13 tests, suite 74 -> 87; the matrix is empty by design and says so
   > rather than printing nothing. Sited at the rootdir by measurement, not taste -- a
   > nested conftest's `pytest_report_header` is discarded silently — PR #6
-- [ ] Release `pfsmgraph-dataseq` 0.1.0, replacing the `0.0.0` placeholder, and set honest lower bounds on the intra-family dependencies that name it.
+- [x] Release `pfsmgraph-dataseq` 0.1.0, replacing the `0.0.0` placeholder, and set honest lower bounds on the intra-family dependencies that name it.
   > **Branch:** chore/release-dataseq-0.1.0
+  > **Done:** 0.1.0 is on PyPI and tagged `pfsmgraph-dataseq-v0.1.0`, verified by importing
+  > the published wheel rather than the local one. The version bump was the small part: the
+  > member also gained a PyPI-facing README, a real LICENSE copy, `[project.urls]` and a PEP
+  > 561 marker, all of which fail silently if placed wrong and none of which can be fixed in
+  > place afterwards. The four dependents' bounds now read `>=0.1.0`, reviewed against a
+  > version that exists. The release path is a `justfile` plus `docs/ops/release.md`, with
+  > its guards written as prerequisites because `just` runs body lines after `publish` —
+  > PR #8
 
 ## Closed revisions
 
