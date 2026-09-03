@@ -1,6 +1,6 @@
 # docs/hmmlib-account
 
-**Status**: active
+**Status**: merged — PR #13 — 2026-09-03
 **Created**: 2026-09-03
 **Subgoal**: Read `Code/HMMlib/` in its own terms and write `.scratch/hmm-lush/HMMLIB-ACCOUNT.md`, following `ACCOUNT.md`'s conventions — measurements against the two tracked specimen corpora, and **provenance unknown** for behaviours the code admits but may never have exercised. Check the three falsifiers and revise the plan if any holds (revision `02-hmm-v0.1.0`)
 
