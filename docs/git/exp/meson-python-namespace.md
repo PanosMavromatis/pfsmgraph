@@ -72,7 +72,22 @@ measurement. Likely explanation for the original claim: without `no-build-isolat
 every import dies `FileNotFoundError`, which looks like everything conflicting with
 everything.
 
-**Still open.** The sequencing question this doc records as deliberately unresolved now
-leans one way: every finding above was obtained with the extension blocks dormant, so
-ADR 0012's "the information needed to choose arrives with the first `.pyx`" appears to be
-wrong about its own premise. Decide it explicitly rather than by drift.
+**2026-09-04 — the sequencing question is settled: decide and land here, no `.pyx`.**
+Every finding above was obtained with the extension blocks dormant, which falsifies ADR
+0012's premise for deferring rather than merely leaning against it. The error is
+nameable: 0012's Context identifies the mechanism correctly as the *editable-install*
+import hook, then its Alternatives reasons two sections later as though the deferred cost
+were *compilation* — "the information needed to choose arrives with the first `.pyx`".
+Those are separable, since a meson-python member with no compiled code still injects the
+finder. A throwaway `.pyx` was rejected: its only unique yield is dev-loop friction data,
+which the real `_viterbi_cython.pyx` produces one master-plan goal later anyway.
+
+One coupling this surfaced, carried into the evaluation goal: *when* to land is
+downstream of *what* is chosen. Candidate 1 makes every `.py` edit in `hmm` need a
+reinstall — strictly worse than today's hatchling + editable, for a benefit that does not
+exist until the `.pyx` — while candidate 4 costs nothing extra today. So a candidate-1
+win may still argue for deferring the apply step even though the decision does not need
+deferring. Candidate 1's own crux is now pinned too: whether `[tool.uv]` mirrors
+`--no-editable-package` the way it mirrors `no-build-isolation-package`. If it does not,
+that candidate is not "a manual reinstall step in the dev loop" as 0012 describes it but
+a non-default `uv sync` every contributor and CI job must remember.
