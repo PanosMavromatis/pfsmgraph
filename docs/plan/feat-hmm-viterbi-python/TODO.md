@@ -1,6 +1,6 @@
 # feat/hmm-viterbi-python
 
-**Status**: active
+**Status**: merged — PR #17 — 2026-09-04
 **Created**: 2026-09-03
 **Subgoal**: Implement Viterbi at ADR 0002 phase 1 (pure Python/numpy) with the ADR 0003 test suite, and register it as the first backend (revision `02-hmm-v0.1.0`)
 

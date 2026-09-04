@@ -151,8 +151,26 @@ first duty is to check these boundaries. What would falsify them:
   > `Generator`, and `numpy>=2.1` was reviewed and kept — justified by the compiled future,
   > not today's API. Three `.hmm` model directories are now tracked as differential
   > fixtures; their four-decimal print format is a documented trap for revision 03 — PR #16.
-- [ ] Implement Viterbi at ADR 0002 phase 1 (pure Python/numpy) with the ADR 0003 test suite, and register it as the first backend. The session header stops reading `backends: none registered` for the first time since the hook landed. Two defects the account marks **provenance unknown** must be a decision, not a silent reproduction: `update-viterbi-path` seeds δ with raw `init-state-p` into the bit-domain accumulator, inverting the start-state preference and turning an exactly-zero initial probability into the _best_ possible δ rather than the impossible sentinel (`HMMLIB-ACCOUNT.md` §7); and `psi` round-trips state indices through a float matrix, harmless below 2²⁴ states and not worth reproducing. Decide and record whether the seeding bug is fixed or faithfully reproduced — the ADR 0003 test suite should encode whichever is chosen, not accidentally validate a bug against itself.
+- [x] Implement Viterbi at ADR 0002 phase 1 (pure Python/numpy) with the ADR 0003 test suite, and register it as the first backend. The session header stops reading `backends: none registered` for the first time since the hook landed. Two defects the account marks **provenance unknown** must be a decision, not a silent reproduction: `update-viterbi-path` seeds δ with raw `init-state-p` into the bit-domain accumulator, inverting the start-state preference and turning an exactly-zero initial probability into the _best_ possible δ rather than the impossible sentinel (`HMMLIB-ACCOUNT.md` §7); and `psi` round-trips state indices through a float matrix, harmless below 2²⁴ states and not worth reproducing. Decide and record whether the seeding bug is fixed or faithfully reproduced — the ADR 0003 test suite should encode whichever is chosen, not accidentally validate a bug against itself.
   > **Branch:** feat/hmm-viterbi-python
+  > **Done:** `HMMParams` and the decode landed; the header reads `backends: python ✓`.
+  > Suite 160 → 264. **Both §7 defects were decided rather than reproduced**, and the
+  > seeding one was settled by measurement rather than argument: `save-viterbi-path` had
+  > written a `.vpath.xls` beside each saved model, so the port has a decode oracle and the
+  > correction is worth exactly one position in 3807. `psi` is `np.int64`, confirmed
+  > harmless below 2²⁴ rather than assumed — PR #17.
+  >
+  > **Two things the next subgoals need.** *For phase 2:* the ADR 0003 suite is **not**
+  > parameterized and cannot be until `align`. That ADR requires the backend be a fixture
+  > parameter *and* that tests be written against the public API only; `viterbi(params,
+  > record)` has nowhere to put a backend, and adding one is the selection API its own Open
+  > section defers. So the line below — "backend equivalence against phase 1 is enforced by
+  > the parameterized suite, not asserted" — has a prerequisite that is not scheduled
+  > anywhere, and phase 2 is where that bites. *For phase 2 and 3 both:* **a tie-breaking
+  > rule is contract**, per ADR 0003's Negative section, because two correct backends would
+  > otherwise legitimately disagree. Ours is first-wins, matching the original, and it is
+  > exercised by no fixture — 0 exact ties in 3804 positions — so it is pinned by a
+  > constructed uniform model that a wavefront kernel must also satisfy.
 - [ ] Resolve the meson-python namespace shadowing and move `hmm` off hatchling, reverting [ADR 0012](../design/adr/0012-align-and-hmm-temporarily-on-hatchling.md) by whichever of its three recorded candidates survives contact: non-editable install of the compiled members, one combined compiled distribution, or an upstream fix. Re-add `meson-python`, `cython` and `ninja` to the root `dev` group.
 - [ ] Implement Viterbi at ADR 0002 phase 2 (Cython), the first `.pyx` in a distribution. Backend equivalence against phase 1 is enforced by the parameterized suite, not asserted.
 - [ ] Implement Viterbi at ADR 0002 phase 3 (Numba CPU-parallel, `prange`) — [ADR 0016](../design/adr/0016-numba-cpu-parallel-phase.md) inserted this phase 2026-09-03, one step before what used to sit here; it is now the earliest point real concurrent execution is attempted.
