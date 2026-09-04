@@ -1,6 +1,6 @@
 # exp/meson-python-namespace
 
-**Status**: active
+**Status**: merged — PR #18 — 2026-09-04
 **Created**: 2026-09-04
 **Subgoal**: Resolve the meson-python namespace shadowing and move `hmm` off hatchling,
 reverting ADR 0012 by whichever of its three candidates survives contact.
