@@ -171,7 +171,24 @@ first duty is to check these boundaries. What would falsify them:
   > otherwise legitimately disagree. Ours is first-wins, matching the original, and it is
   > exercised by no fixture — 0 exact ties in 3804 positions — so it is pinned by a
   > constructed uniform model that a wavefront kernel must also satisfy.
-- [ ] Resolve the meson-python namespace shadowing and move `hmm` off hatchling, reverting [ADR 0012](../design/adr/0012-align-and-hmm-temporarily-on-hatchling.md) by whichever of its three recorded candidates survives contact: non-editable install of the compiled members, one combined compiled distribution, or an upstream fix. Re-add `meson-python`, `cython` and `ninja` to the root `dev` group.
+- [x] Resolve the meson-python namespace shadowing and move `hmm` off hatchling, reverting [ADR 0012](../design/adr/0012-align-and-hmm-temporarily-on-hatchling.md) by whichever of its three recorded candidates survives contact: non-editable install of the compiled members, one combined compiled distribution, or an upstream fix. Re-add `meson-python`, `cython` and `ninja` to the root `dev` group.
+  > **Branch:** exp/meson-python-namespace
+  > **Done:** Resolved by **none of the three candidates** — by a fourth this subgoal could
+  > not have named, because it is only visible once ADR 0012's candidate 2 is refuted. That
+  > candidate assumed two meson-python finders conflict; they *chain*, so one finder is not
+  > the problem and any finder is. The fix is therefore to give **every** member a finder:
+  > all five are on meson-python, three of which compile nothing and never will. `hmm` moved
+  > off hatchling as asked, and so did the other four. The `dev` group regained
+  > `meson-python`, `cython` and `ninja` **plus `numpy`**, a build requirement of
+  > `align`/`hmm` that `build-system.requires` cannot supply once
+  > `[tool.uv] no-build-isolation-package` turns isolation off — which every member needs,
+  > since the editable loader bakes an absolute `ninja` path rather than consulting `PATH`.
+  > Recorded as [ADR 0018](../design/adr/0018-family-wide-meson-python-build-backend.md);
+  > 0012 and 0008 are now `Superseded`, the first in that directory. Suite 271 → 280, all
+  > from `test_meson_sources.py` parameterising over the three new `meson.build` files.
+  > **Note for revision 02:** this subgoal was scheduled expecting the first `.pyx` to force
+  > the choice. It did not — the finder comes from the editable install, not from
+  > compilation — so phase 2 inherits a settled backend rather than this question. PR #18
 - [ ] Implement Viterbi at ADR 0002 phase 2 (Cython), the first `.pyx` in a distribution. Backend equivalence against phase 1 is enforced by the parameterized suite, not asserted.
 - [ ] Implement Viterbi at ADR 0002 phase 3 (Numba CPU-parallel, `prange`) — [ADR 0016](../design/adr/0016-numba-cpu-parallel-phase.md) inserted this phase 2026-09-03, one step before what used to sit here; it is now the earliest point real concurrent execution is attempted.
   - [ ] **Settle the anti-diagonal question first — this is the point at which it is strictly needed.** [ADR 0002](../design/adr/0002-three-phase-algorithm-lifecycle.md):53 states the wavefront transformation is "the same transformation for every DP kernel in the family". A structural survey on the planning branch suggested it is not — an HMM recurrence is 1-D over time with dense N×N state coupling, so it has no anti-diagonals, and its parallel decompositions are batch, states-within-a-timestep, and possibly an associative scan over time in the (max, +) semiring. **The finding was deliberately left undecided on the planning branch** because phases 1 and 2 do not depend on it: a Cython kernel is single-threaded, so nothing before this subgoal can falsify or need it. Decide it here, against a kernel that exists, and settle whether it is a wording fix scoped to alignment-family kernels or a reversal warranting its own ADR number.

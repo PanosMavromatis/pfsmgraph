@@ -23,13 +23,12 @@ dependencies = [
 ]
 
 [build-system]
-# hatchling while hseg is pure orchestration over align. Switch to meson-python
-# if it turns out to have its own DP recurrence (PRD §6, §8 -- open question).
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/pfsmgraph"]
+# Pure orchestration over align today, and on meson-python for the namespace
+# reason spelled out in packages/pfsmgraph-dataseq/pyproject.toml rather than for
+# any build one. If hseg turns out to have its own DP recurrence (PRD §6, §8 --
+# still open), add cython/numpy to requires; the backend itself needs no change.
+requires = ["meson-python"]
+build-backend = "mesonpy"
 
 [tool.uv.sources]
 pfsmgraph-dataseq = { workspace = true }

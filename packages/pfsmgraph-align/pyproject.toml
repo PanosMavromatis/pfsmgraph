@@ -32,33 +32,21 @@ dependencies = [
 gpu = ["numba-cuda"]
 
 [build-system]
-# TEMPORARILY hatchling, not meson-python.
+# meson-python, for both of the reasons this family has. align is a compiled
+# member by design -- the DP kernels follow the ADR 0002/0016 lifecycle -- and it
+# is additionally one of the five finder-bearing members, which is the reason the
+# three *pure* members are on this backend too; that argument lives in
+# packages/pfsmgraph-dataseq/pyproject.toml and is not repeated here.
 #
-# align and hmm are meson-python members by design (PRD §6.1 / D8). But
-# meson-python's editable-install import hook injects a meta-path finder that
-# claims the whole `pfsmgraph` PEP 420 namespace and shadows the sibling
-# distributions (dataseq, hseg, dl) -- `uv sync` then yields an environment where
-# `import pfsmgraph.dataseq` raises ModuleNotFoundError. Two meson editables also
-# conflict with each other. The PRD §6.1 "namespace is fine" evidence was
-# gathered with setuptools editable, which composes; meson-python's does not.
-#
-# There is no compiled code here yet (meson.build's extension block is a dormant
-# `if fs.exists()` guard), so meson-python currently produces a pure-Python wheel
-# and buys nothing. The sibling meson.build is kept in place for the switch back.
-#
-# Revert when the first .pyx lands, and solve the namespace/editable interaction
-# then (non-editable install of the compiled members, a single combined compiled
-# distribution, or an upstream fix). To revert:
-#   requires = ["meson-python", "cython>=3.0", "numpy>=2.1"]
-#   build-backend = "mesonpy"
-# then drop the [tool.hatch.*] block below and restore meson-python/cython/ninja
-# to the workspace-root dev group. NW extension target:
+# There is no compiled code here yet: meson.build's extension block is a dormant
+# `if fs.exists()` guard that activates when the first .pyx appears. That used to
+# be the argument for staying on hatchling in the meantime (ADR 0012); it is not,
+# because meson-python's namespace-shadowing finder is injected by the editable
+# install rather than by compilation, so deferring bought nothing and hid the
+# problem behind a trigger that had not fired. NW extension target:
 # pfsmgraph.align.algorithms.needleman_wunsch._cython (PRD §11).
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/pfsmgraph"]
+requires = ["meson-python", "cython>=3.0", "numpy>=2.1"]
+build-backend = "mesonpy"
 
 [tool.uv.sources]
 pfsmgraph-dataseq = { workspace = true }

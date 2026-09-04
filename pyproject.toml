@@ -12,6 +12,27 @@
 [tool.uv.workspace]
 members = ["packages/*"]
 
+# All five members are meson-python editable installs (see
+# packages/pfsmgraph-dataseq/pyproject.toml for why the pure ones are too), and
+# the generated editable loader bakes an *absolute* path to ninja at build time
+# rather than consulting PATH. Under build isolation that path points into a
+# temporary directory uv deletes once the build finishes, so every subsequent
+# import dies FileNotFoundError before the namespace question is even reachable.
+# Building without isolation makes the baked path the dev group's ninja, which
+# persists. Having ninja on PATH is necessary and not sufficient; this list is
+# the other half. Measured 2026-09-04 on exp/meson-python-namespace.
+#
+# Every member must be listed. Omitting one restores build isolation for it
+# alone, and its baked path dies the same way.
+[tool.uv]
+no-build-isolation-package = [
+    "pfsmgraph-dataseq",
+    "pfsmgraph-align",
+    "pfsmgraph-hmm",
+    "pfsmgraph-hseg",
+    "pfsmgraph-dl",
+]
+
 [dependency-groups]
 # Family-wide dev tooling, synced by default for every member.
 #
@@ -19,13 +40,26 @@ members = ["packages/*"]
 #             run against every available backend, so backend equivalence is
 #             enforced rather than assumed (CLAUDE.md "Invariants").
 #
-# When align/hmm move back to meson-python (they are temporarily on hatchling --
-# see packages/pfsmgraph-align/pyproject.toml), re-add: "meson-python", "cython",
-# "ninja". They belong here rather than in build isolation because meson-python's
-# editable install rebuilds on import and its isolated build env is deleted after
-# the initial build (PRD §6.1).
+# The build toolchain sits in the dev group rather than in build isolation
+# because [tool.uv].no-build-isolation-package above turns isolation off for all
+# five members -- so meson-python, cython and ninja have to come from the
+# environment, and ninja additionally has to *stay* there, since the editable
+# loader bakes its absolute path (PRD §6.1).
+#
+#   meson-python - build backend for all five members (ADR 0018)
+#   cython       - align's NW kernel and hmm's Baum-Welch core; dormant until
+#                  the first .pyx, but the build requires it now
+#   ninja        - the loader's rebuild-on-import hook shells out to it
+#   numpy        - a *build* requirement of align/hmm (their extensions compile
+#                  against numpy headers). Without build isolation it cannot be
+#                  supplied by build-system.requires alone, so it is listed here
+#                  even though no member depends on it at development time.
 dev = [
     "pytest>=8",
+    "meson-python",
+    "cython>=3.0",
+    "ninja",
+    "numpy>=2.1",
 ]
 
 [tool.pytest.ini_options]

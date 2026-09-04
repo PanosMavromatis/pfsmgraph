@@ -40,20 +40,19 @@ dependencies = [
 gpu = ["numba-cuda"]
 
 [build-system]
-# TEMPORARILY hatchling, not meson-python -- see the long note in
-# packages/pfsmgraph-align/pyproject.toml. meson-python's editable-install import
-# hook shadows the shared `pfsmgraph` namespace, and there is no cythonized code
-# here yet (only the Baum-Welch core is ever compiled; meson.build's extension
-# block is a dormant `if fs.exists()` guard). The sibling meson.build is kept for
-# the switch back. Revert to:
-#   requires = ["meson-python", "cython>=3.0", "numpy>=2.1"]
-#   build-backend = "mesonpy"
-# when the Baum-Welch .pyx lands (PRD §6, §6.1).
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/pfsmgraph"]
+# meson-python. The Baum-Welch core is the compiled part (revision 03); the
+# decode that exists today is pure Python, and meson.build's extension block is a
+# dormant `if fs.exists()` guard until that .pyx lands. The backend is not
+# waiting on it -- see packages/pfsmgraph-align/pyproject.toml for why the
+# compiled trigger turned out to be the wrong one, and
+# packages/pfsmgraph-dataseq/pyproject.toml for the namespace reason that puts
+# even the pure members here.
+#
+# numpy>=2.1 is the build floor, and [project].dependencies above follows it
+# rather than the other way round: an extension built against numpy 2.x headers
+# will not run on 1.x.
+requires = ["meson-python", "cython>=3.0", "numpy>=2.1"]
+build-backend = "mesonpy"
 
 [tool.uv.sources]
 pfsmgraph-dataseq = { workspace = true }

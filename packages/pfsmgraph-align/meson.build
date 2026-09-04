@@ -4,7 +4,14 @@
 # -> Numba CUDA anti-diagonal wavefront lifecycle (CLAUDE.md "Invariants").
 # meson-python is chosen for its rebuild-on-import behaviour under editable
 # installs; `ninja` must be on PATH in the dev environment for that hook to fire
-# (PRD §6.1). It is in the workspace-root [dependency-groups].dev.
+# (PRD §6.1). ADR 0012 removed it from the workspace-root [dependency-groups].dev
+# along with meson-python and cython; it returns not because that ADR was
+# reverted but because it was superseded (ADR 0018) -- all five are meson-python
+# now, pure ones included, for reasons that have nothing to do with compilation
+# (packages/pfsmgraph-dataseq/pyproject.toml). Note that PATH alone is not
+# sufficient -- measured on exp/meson-python-namespace, the generated editable
+# loader bakes an absolute ninja path at build time and never consults PATH,
+# which is what [tool.uv].no-build-isolation-package at the root addresses.
 #
 # PEP 420: this file installs sources under pfsmgraph/align/ only. It must never
 # create or install pfsmgraph/__init__.py -- the pfsmgraph level is an implicit

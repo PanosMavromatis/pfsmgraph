@@ -1,11 +1,20 @@
 # 0012. `align` and `hmm` are temporarily on hatchling, not meson-python
 
-- **Status:** Accepted (temporary) — qualifies
-  [ADR 0008](0008-per-package-build-backends.md) rather than reversing it. Expires when
-  the first Cython kernel lands.
+- **Status:** Superseded by
+  [ADR 0018](0018-family-wide-meson-python-build-backend.md), 2026-09-04. It did **not**
+  expire as written below: the first Cython kernel never landed, and the deferral's
+  premise was falsified instead. The finder that breaks the workspace is injected by the
+  *editable install*, not by compilation, so everything needed to choose was already
+  present with every extension block dormant. Two claims here are now known false — that
+  two meson-python editable installs conflict with each other (they chain), and therefore
+  that candidate 2 would leave only one finder. Read this record for the problem
+  statement and for what was believed at the time; read 0018 for the resolution.
 - **Date:** 2026-08
 - **Source:** repository state; `CLAUDE.md` "Current state"; the revert recipe kept in
   `packages/pfsmgraph-align/pyproject.toml` and `packages/pfsmgraph-hmm/pyproject.toml`
+  — **that recipe no longer exists in either file.** It was applied and removed on
+  2026-09-04; both now carry the meson-python `[build-system]` it describes, alongside a
+  comment pointing at `packages/pfsmgraph-dataseq/pyproject.toml`.
 
 ## Context
 

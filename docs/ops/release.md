@@ -111,6 +111,20 @@ differing sdists indicate a real change. `exclude = ["/.gitignore"]` under
 `[tool.hatch.build.targets.sdist]` does *not* remove it -- tried and measured, the file
 still ships -- so this is filed in `docs/plan/DEFERRED.md` rather than fixed in passing.
 
+**All of the above was measured against a hatchling build, and no member is on hatchling
+any more** (2026-09-04: all five moved to meson-python, for the namespace reason recorded
+in [ADR 0018](../design/adr/0018-family-wide-meson-python-build-backend.md), which lists
+this re-measurement among its costs). Nothing here is known to be false, and nothing here is known to
+still hold -- both findings are properties of hatchling's builder, not of this project.
+`pfsmgraph-dataseq` 0.1.0 shipped from hatchling, so **its next release is the first
+meson-built wheel this project publishes**, and the whole of this section has to be
+re-measured against it rather than assumed forward: whether the wheel is still
+byte-identical across builds, and what meson-python puts in an sdist. Re-verify the
+four-file invariant (`README.md`, the `LICENSE` copy, `Typing :: Typed`, and `py.typed`
+*inside* the package) against an actual built wheel in a clean venv at the same time --
+`py.typed` is the one most exposed by the switch, because meson does not glob and
+`install_sources` must name it explicitly.
+
 **So prefer `just release` over hand-publishing the artifacts already in `dist/`.** The
 alternative -- `just check && just publish` plus a manual tag -- preserves bytes that are
 already provably reproducible for the wheel, and pays for it by skipping the entire
@@ -370,7 +384,7 @@ rather than a habit rewrite.
 | Upload fails halfway | Re-run; `--check-url` skips what's already there. |
 | `400 File already exists` | Version is spent. Bump and rebuild. |
 | Wheel contains `pfsmgraph/__init__.py` | Namespace collision with siblings. Fix the build, bump, re-release. |
-| Wheel contains no `py.typed` | Marker is at the distribution root, not inside the package. Bump, re-release. |
+| Wheel contains no `py.typed` | Marker is at the distribution root, not inside the package. Under meson-python, also check `meson.build`'s `install_sources` names it — meson does not glob, and `py.typed` is not a `.py` file. Bump, re-release. |
 | sdist fails on unpack | `LICENSE` is a symlink. Replace with a real copy, bump, re-release. |
 | `just verify` fails on import | Check the import path is `pfsmgraph.<pkg>`, not `pfsmgraph_<pkg>`. |
 | `just preflight` rejects the version | `pyproject.toml` declares something else. The argument is not the source of truth. |
