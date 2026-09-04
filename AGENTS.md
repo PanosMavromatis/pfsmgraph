@@ -408,7 +408,12 @@ These constrain any code written here. They are inherited from the proof-of-conc
   a type checker then discards every annotation in the package (measured on `dataseq`: a
   deliberate `bad: str = vocab.size` was *accepted*). It cannot go at the `pfsmgraph/`
   namespace level either, for the same reason no `__init__.py` may: no single distribution
-  owns that level. Verify by installing the built wheel into a clean venv outside the
+  owns that level. **Since all five members moved to meson-python (ADR 0018) there is a
+  third way it misses the wheel**, and it is the one the next release commit will hit:
+  `meson.build` does not glob, so a marker at the correct path but absent from that
+  member's `install_sources` reaches no wheel either. That one is *not* silent —
+  `tests/test_meson_sources.py` covers `py.typed` by name — so adding the marker and
+  listing it are one change, not two. Verify by installing the built wheel into a clean venv outside the
   workspace — a file listing shows what went into the box, not what a consumer gets out.
   All four land **in the release commit**, since they are wheel content and adding them later
   leaves a published version standing as the broken one.

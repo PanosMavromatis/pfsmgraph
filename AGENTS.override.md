@@ -161,6 +161,16 @@ fix and most expensive to leave:
   importable package — never at the `pfsmgraph/` namespace level, which no one distribution
   owns. `dataseq` has all four as of 2026-09-02; the other four members have none, correctly,
   until they release. A release commit missing any of them is a finding.
+  **Since 2026-09-04 there is a third way `py.typed` misses the wheel**, and it is the one
+  a release commit will actually hit: all five members build through meson-python (ADR
+  0018), `meson.build` does not glob, so a marker at the correct path but absent from that
+  member's `install_sources` reaches no wheel either. Unlike the two above it is **not**
+  silent -- `tests/test_meson_sources.py` covers `py.typed` by name and says in its own
+  docstring that this is the case it exists for more than the modules -- so do not report
+  it as a silent-failure finding. What is worth checking is the pairing: a release commit
+  that adds `src/pfsmgraph/<pkg>/py.typed` must add it to `install_sources` in the same
+  commit, and `pfsmgraph-hmm` 0.1.0 is where this lands first, being the first meson-built
+  wheel this project will publish.
   Two further silent variants, both measured 2026-09-02: the wheel ships the **member's**
   `LICENSE`, not the repo-root one, so editing only the root file changes nothing a consumer
   sees and the two silently diverge; and package metadata — `authors`, `maintainers`, the
