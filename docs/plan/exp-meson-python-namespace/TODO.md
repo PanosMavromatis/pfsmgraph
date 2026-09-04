@@ -306,12 +306,60 @@ reverting ADR 0012 by whichever of its three candidates survives contact.
   > is not the problem; any finder is, so a combined compiled distribution would still
   > shadow `dataseq`, `hseg` and `dl`.
 
-- [ ] Land the choice.
-  - [ ] Revert recipe applied to both members; `[tool.hatch.*]` dropped.
-  - [ ] `meson-python`, `cython`, `ninja` back in the root `dev` group, **plus whatever
+- [x] Land the choice.
+  > **Done:** All five members are on meson-python in the working tree, verified from a
+  > genuinely clean venv. Scope note: this goal's subgoals were drafted while candidates
+  > 1–2 were still live, so the first one says "both members" — the chosen candidate makes
+  > it five, and `dataseq`, `hseg` and `dl` had no revert recipe to follow because nobody
+  > expected them to move.
+  - [x] Revert recipe applied to both members; `[tool.hatch.*]` dropped.
+    > **Result:** Applied to all five, not two. The two dead `[tool.hatch.build.targets.wheel]`
+    > blocks that were still present (`dataseq`, `dl`) are gone; `align`/`hmm`/`hseg` had
+    > none, so the tree had been inconsistent. **Every one of the five build-system
+    > comments was false or misleading**, not just the two carrying "TEMPORARILY
+    > hatchling": `dataseq` said switch to meson-python *only if* a compiled inner loop is
+    > found, `hseg` said "hatchling while hseg is pure orchestration", and `dl`'s "Pure-Python
+    > (PRD §6)" was true but had stopped explaining the backend. The namespace argument is
+    > now written once in `dataseq`'s — the member whose comment was most wrong, and the base
+    > of the dependency graph — with the other four pointing at it.
+    > Two further stale spots found by sweeping for the *claim* rather than the word
+    > "hatchling": `align/meson.build` said ninja "returns when that ADR is reverted" (it
+    > returns because 0012 was **superseded**, which is a different thing), and the root dev
+    > group still explained itself in terms of align/hmm moving *back*.
+    > **A mechanical trap worth recording**, since the next such edit will hit it: the old
+    > revert recipes contained `build-backend = "mesonpy"` as a *commented* line, so a
+    > replacement bounded by that string terminated inside the comment and left a duplicated
+    > `requires`/`build-backend` pair below the new block. TOML's last-key-wins made the file
+    > still parse, so it would not have failed loudly. Caught by counting `^build-backend`
+    > per file.
+  - [x] `meson-python`, `cython`, `ninja` back in the root `dev` group, **plus whatever
         makes the loader's baked ninja path stable** — PATH alone is not enough, as
         measured.
-  - [ ] All five members import after a clean `uv sync`; full suite green.
+    > **Result:** The dev group carries `meson-python`, `cython>=3.0`, `ninja` and also
+    > **`numpy>=2.1`** — the fourth is not decoration: it is a *build* requirement of
+    > `align`/`hmm`, and with build isolation off it cannot be supplied by
+    > `build-system.requires` alone. What stabilises the baked path is
+    > `[tool.uv] no-build-isolation-package` listing **all five** members; the comment now
+    > says explicitly that omitting one restores isolation for that member alone and its
+    > baked path dies the same way. Each dev-group entry now states what needs it.
+  - [x] All five members import after a clean `uv sync`; full suite green.
+    > **Result:** `rm -rf .venv` then a plain `uv sync` — no `--reinstall`, which was the
+    > point, since a reused venv already has ninja on disk and cannot answer the question.
+    > uv reported *"Prepared 5 packages without build isolation in 2.06s"*, so the bootstrap
+    > ordering resolves on its own: the dev group is installed before the members that need
+    > it to build. That ordering is emergent from the resolver rather than stated anywhere in
+    > the config, which is why it needed measuring rather than reasoning about.
+    > All seven import paths resolve (`dataseq`, `align`, `hmm`, `hseg`, `dl`, `dl.rnn`,
+    > `dl.transformer`), **five editable finders on `sys.meta_path`**, and
+    > `pfsmgraph.__path__` is the single synthetic
+    > `_pfsmgraph_hseg_editable_loader.py/pfsmgraph` entry — the namespace *is* still
+    > replaced, and it no longer matters, which is the positive statement of the fix.
+    > Suite green at **280**. `uv lock --check` clean.
+    > The dev-loop claim that decided the choice was checked rather than assumed: appending a
+    > name to `hseg/__init__.py` and importing with **no sync at all** showed it. (The probe
+    > was reverted with `git checkout --`; note that a plain `cp` restore silently did
+    > nothing here, because the interactive `cp -i` alias prompted and defaulted to "no" —
+    > `git checkout --` is the reliable revert for a scratch probe.)
 
 - [ ] Record the resolution as a new ADR superseding 0012, and clear the footnotes it
       planted in `README.md` and `docs/agents/core.md`.

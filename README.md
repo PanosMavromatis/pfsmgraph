@@ -10,13 +10,13 @@ A composable ecosystem of Python packages for modeling symbolic data sequences. 
 
 | Distribution | Import | Role | Depends on | Build backend |
 |---|---|---|---|---|
-| `pfsmgraph-dataseq` | `pfsmgraph.dataseq` | Data sequence container + symbol↔code encoder; PyTorch `Dataset`-compatible base layer&nbsp;‡ | — | hatchling |
-| `pfsmgraph-align` | `pfsmgraph.align` | Sequence alignment (DP-heavy, compiled) | `dataseq` | meson-python&nbsp;† |
-| `pfsmgraph-hseg` | `pfsmgraph.hseg` | Hierarchical segmentation | `dataseq`, `align` | hatchling |
-| `pfsmgraph-hmm` | `pfsmgraph.hmm` | Baum-Welch, topology search via state merge/split | `dataseq`, `align` | meson-python&nbsp;† |
-| `pfsmgraph-dl` | `pfsmgraph.dl` | PyTorch models (`rnn`, `transformer` submodules) | `dataseq`, `align` | hatchling |
+| `pfsmgraph-dataseq` | `pfsmgraph.dataseq` | Data sequence container + symbol↔code encoder; PyTorch `Dataset`-compatible base layer&nbsp;‡ | — | meson-python&nbsp;† |
+| `pfsmgraph-align` | `pfsmgraph.align` | Sequence alignment (DP-heavy, compiled) | `dataseq` | meson-python |
+| `pfsmgraph-hseg` | `pfsmgraph.hseg` | Hierarchical segmentation | `dataseq`, `align` | meson-python&nbsp;† |
+| `pfsmgraph-hmm` | `pfsmgraph.hmm` | Baum-Welch, topology search via state merge/split | `dataseq`, `align` | meson-python |
+| `pfsmgraph-dl` | `pfsmgraph.dl` | PyTorch models (`rnn`, `transformer` submodules) | `dataseq`, `align` | meson-python&nbsp;† |
 
-† `align` and `hmm` are meson-python by design (they get Cython + CUDA kernels), but are **temporarily on hatchling** until the first *compiled* kernel lands — meson-python's editable-install hook currently shadows the shared namespace. `hmm`'s Viterbi decode is pure Python/numpy, which is ADR 0002 phase 1 and does not fire this trigger; the first `.pyx` does. See [`packages/pfsmgraph-align/pyproject.toml`](packages/pfsmgraph-align/pyproject.toml).
+† `align` and `hmm` are meson-python because they get Cython + CUDA kernels. The other three are marked because they are on it for a reason unrelated to building: meson-python's editable install injects a meta-path finder that replaces `pfsmgraph.__path__`, so **a member left on a plain `.pth` is shadowed by any sibling's finder and stops importing**. Finders chain, so the fix is for every member to have one — pure ones included. Measured 2026-09-04; the decision supersedes ADR 0012 and overrides ADR 0008's per-package backends. See [`packages/pfsmgraph-dataseq/pyproject.toml`](packages/pfsmgraph-dataseq/pyproject.toml), which carries the argument the other four point at.
 
 ‡ The only member with an implementation. Its public API is documented at [`docs/api/dataseq/`](docs/api/dataseq/README.md); the other four rows describe intent, not code.
 
@@ -38,14 +38,14 @@ docs/design/PRD.md             # authoritative design document
 docs/design/adr/               # decision records (authoritative)
 docs/api/                      # API documentation, one subdirectory per package
 packages/
-├── pfsmgraph-dataseq/
+├── pfsmgraph-dataseq/         # + meson.build
 ├── pfsmgraph-align/           # + meson.build
-├── pfsmgraph-hseg/
+├── pfsmgraph-hseg/            # + meson.build
 ├── pfsmgraph-hmm/             # + meson.build
-└── pfsmgraph-dl/
+└── pfsmgraph-dl/              # + meson.build
 ```
 
-Each member has its own `pyproject.toml` and build backend. Sources use a `src/` layout under `src/pfsmgraph/<pkg>/`; there is deliberately **no `pfsmgraph/__init__.py`** at any level — the namespace is implicit (PEP 420).
+Each member has its own `pyproject.toml`, and all five share the meson-python backend. Sources use a `src/` layout under `src/pfsmgraph/<pkg>/`; there is deliberately **no `pfsmgraph/__init__.py`** at any level — the namespace is implicit (PEP 420).
 
 ## Development
 
@@ -53,12 +53,12 @@ Requires [uv](https://docs.astral.sh/uv/) and Python ≥ 3.10.
 
 ```bash
 uv sync                             # venv + all five members editable + dev tools
-uv run pytest                       # run the suite (271: 74 dataseq, 165 hmm, 32 root)
+uv run pytest                       # run the suite (280: 74 dataseq, 165 hmm, 41 root)
 uv build --package pfsmgraph-align  # build one distribution
 uv lock                             # refresh uv.lock (committed; one per family)
 ```
 
-Once `align`/`hmm` return to meson-python, a C compiler and `ninja` (for rebuild-on-import) are also needed; `uv sync` will provide `ninja` via the dev group, though the dev group alone is not enough — the editable loader bakes an absolute `ninja` path at build time, so those members must also be built without build isolation.
+All five members build through meson-python, so `ninja` (for rebuild-on-import) is needed; `uv sync` provides it via the dev group. The dev group alone is **not** enough — the editable loader bakes an absolute `ninja` path at build time rather than consulting `PATH`, so every member is also listed under `[tool.uv] no-build-isolation-package` at the workspace root. A C compiler joins the list when `align`/`hmm` get their first `.pyx`; until then nothing here is compiled.
 
 Because `uv sync` installs every member **editable**, imports resolve to `packages/*/src/` — so a feature can be exercised locally the moment it is written, with nothing to publish or reinstall. Two gitignored directories exist for that: [`.notebooks/`](.notebooks/README.md) is the workbench and [`.data/`](.data/README.md) holds its inputs. Each tracks only a `.gitignore` and a `README.md`; everything else written there is ignored. Nothing under `packages/` may import or read from either.
 

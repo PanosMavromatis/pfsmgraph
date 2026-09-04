@@ -111,6 +111,19 @@ differing sdists indicate a real change. `exclude = ["/.gitignore"]` under
 `[tool.hatch.build.targets.sdist]` does *not* remove it -- tried and measured, the file
 still ships -- so this is filed in `docs/plan/DEFERRED.md` rather than fixed in passing.
 
+**All of the above was measured against a hatchling build, and no member is on hatchling
+any more** (2026-09-04: all five moved to meson-python, for the namespace reason in
+`docs/agents/core.md`). Nothing here is known to be false, and nothing here is known to
+still hold -- both findings are properties of hatchling's builder, not of this project.
+`pfsmgraph-dataseq` 0.1.0 shipped from hatchling, so **its next release is the first
+meson-built wheel this project publishes**, and the whole of this section has to be
+re-measured against it rather than assumed forward: whether the wheel is still
+byte-identical across builds, and what meson-python puts in an sdist. Re-verify the
+four-file invariant (`README.md`, the `LICENSE` copy, `Typing :: Typed`, and `py.typed`
+*inside* the package) against an actual built wheel in a clean venv at the same time --
+`py.typed` is the one most exposed by the switch, because meson does not glob and
+`install_sources` must name it explicitly.
+
 **So prefer `just release` over hand-publishing the artifacts already in `dist/`.** The
 alternative -- `just check && just publish` plus a manual tag -- preserves bytes that are
 already provably reproducible for the wheel, and pays for it by skipping the entire

@@ -149,3 +149,59 @@ whose loader had a baked path into a `builds-v0` temp dir uv had already deleted
 `align` alone failed while the other four worked, which reads exactly like a candidate-4
 defect and is a stale cache. `uv sync --reinstall` clears it, and a landing check must
 start from `rm -rf .venv` to mean anything.
+
+**2026-09-04 — the choice is landed and verified from a clean venv.** All five members now
+declare `build-backend = "mesonpy"`; `dataseq`, `hseg` and `dl` gained a `meson.build`
+apiece, and the two dead `[tool.hatch.build.targets.wheel]` blocks that were still sitting
+in `dataseq` and `dl` are gone. The suite is green at 280.
+
+*The scope was larger than the plan said, in two ways.* The subgoal read "revert recipe
+applied to **both** members", which was drafted while candidates 1–2 were still live —
+under the chosen candidate it is five, and the three pure members had no recipe to follow
+because nobody had expected them to move. And the root `dev` group needs **`numpy`**
+alongside `meson-python`/`cython`/`ninja`: it is a *build* requirement of `align`/`hmm`,
+and with `no-build-isolation-package` in force `build-system.requires` can no longer
+supply it. That is a general consequence of turning isolation off, not a quirk — every
+build dependency of every listed member has to be present in the environment.
+
+*Every one of the five build-system comments was wrong, and only three contained the word
+"hatchling".* `dataseq`'s said to switch to meson-python *only if* a compiled inner loop
+were found; `hseg`'s said "hatchling while hseg is pure orchestration"; `dl`'s said
+"Pure-Python (PRD §6)", which is still true and had simply stopped being an explanation.
+Sweeping for the stale *word* would have found three of five. Sweeping for the stale
+*claim* — what does this file assert about why it is on this backend? — found all five,
+plus `align/meson.build` saying ninja returns "when that ADR is reverted" (it returns
+because 0012 was superseded, which is a different thing) and the root dev group still
+explaining itself in terms of `align`/`hmm` moving *back*. The namespace argument is now
+written once, in `dataseq`'s `pyproject.toml`, with the other four pointing at it.
+
+*A mechanical trap, recorded because the next edit of this kind will hit it.* The old
+revert recipes contained `build-backend = "mesonpy"` as a **commented** line. A textual
+replacement bounded by that string therefore terminated inside the comment and left a
+duplicated `requires` / `build-backend` pair below the new block. TOML is last-key-wins, so
+the file still parsed and the backend was still correct — it would not have failed loudly,
+merely left contradictory text in the very files this session existed to stop
+contradicting themselves. `grep -c '^build-backend'` per file caught it. A file that
+documents its own replacement is a hazard for any edit anchored on content.
+
+*What the clean verification actually established.* `rm -rf .venv` and a plain `uv sync` —
+`--reinstall` would have been the wrong shortcut, since it reuses an environment that
+already has `ninja` on disk. uv reported "Prepared 5 packages without build isolation in
+2.06s", which answers the one open question the config does not state: turning isolation
+off means the five members need `meson-python`/`cython`/`ninja` present *before* they
+build, yet those arrive via the `dev` group in the same sync. uv sequences it correctly,
+but that ordering is emergent from the resolver rather than declared anywhere, so it had to
+be measured. All seven import paths resolve, five finders sit on `sys.meta_path`, and
+`pfsmgraph.__path__` remains a single synthetic loader entry — the namespace is still
+replaced, and it no longer matters. The dev-loop claim that decided the choice was checked
+rather than trusted: a name appended to `hseg/__init__.py` was visible with **no sync at
+all**.
+
+*Downstream consequence for the release runbook.* `docs/ops/release.md`'s reproducibility
+findings — byte-identical wheel, non-reproducible sdist carrying the repo-root
+`.gitignore` — were all measured against a **hatchling** build, and are properties of that
+builder rather than of this project. They are neither known false nor known to still hold.
+`pfsmgraph-dataseq` 0.1.0 shipped from hatchling, so its next release is the first
+meson-built wheel here, and the section has to be re-measured against it. The four-file
+invariant needs re-verifying at the same time, `py.typed` most of all: meson does not glob,
+so `install_sources` must name it explicitly.
