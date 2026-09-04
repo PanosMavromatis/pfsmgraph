@@ -6,12 +6,15 @@ Shared project knowledge for any coding agent working in this repository.
 
 **`dataseq` is implemented and released; `hmm` has its first code as of 2026-09-03; the other three members are still empty scaffolding.** In place: the uv workspace root `pyproject.toml` (virtual — no `[project]` table), `uv.lock`, all five `packages/*` members with their own `pyproject.toml`, the (currently dormant) `meson.build` files for `align` and `hmm`, and an empty `pfsmgraph/<pkg>/__init__.py` for the three members that have no code yet (plus `dl/rnn/` and `dl/transformer/`). The ADRs in `docs/design/adr/` are authoritative for the decisions they cover — the twelve initial records from the PRD, plus 0013 (how this family documents its public surfaces) and 0014 (how imported migration source is retained), both added 2026-09-01; the PRD remains the narrative design document.
 
-**What `dataseq` now contains.** Six modules under `packages/pfsmgraph-dataseq/src/pfsmgraph/dataseq/` (the container landed 2026-08-31, the encoder API 2026-09-01) and 74 tests — the first tests in this repository, and 74 of the suite's 160 today; 66 are `hmm`'s and the remaining 20 are the repo-root backend-matrix, API-docs and release-runbook tests. `_reserved.py` hard-codes the ADR 0011 block as module constants, with no class or parameter that could relocate it; `_vocabulary.py` holds the `Vocabulary` protocol and `SymbolTable`, a frozen first-appearance-ordered implementation that encodes strictly and decodes *totally*, reserved codes included; `_record.py` and `_dataset.py` are the ragged container, whose records carry true lengths and never padding; `_collate.py` is `pad_collate`, where padding is introduced and always returned with its mask. The container imports neither torch nor pandas — verified in a subprocess — and its one runtime dependency is `numpy`.
+**What `dataseq` now contains.** Six modules under `packages/pfsmgraph-dataseq/src/pfsmgraph/dataseq/` (the container landed 2026-08-31, the encoder API 2026-09-01) and 74 tests — the first tests in this repository, and 74 of the suite's 264 today; 165 are `hmm`'s and the remaining 25 are the repo-root backend-matrix, API-docs and release-runbook tests. `_reserved.py` hard-codes the ADR 0011 block as module constants, with no class or parameter that could relocate it; `_vocabulary.py` holds the `Vocabulary` protocol and `SymbolTable`, a frozen first-appearance-ordered implementation that encodes strictly and decodes *totally*, reserved codes included; `_record.py` and `_dataset.py` are the ragged container, whose records carry true lengths and never padding; `_collate.py` is `pad_collate`, where padding is introduced and always returned with its mask. The container imports neither torch nor pandas — verified in a subprocess — and its one runtime dependency is `numpy`.
 
-**What `hmm` now contains.** One private module, `_numeric.py`, and 66 tests — the numeric
+**What `hmm` now contains.** Three modules and 165 tests. `_numeric.py` is the numeric
 Utility code migrated from the Lush original, landed 2026-09-03 and complete for 0.1.0 at
-five functions. There is no public API
-yet: nothing is re-exported from `pfsmgraph/hmm/__init__.py`, which is still empty.
+five functions; `_params.py` is `HMMParams`, the ADR 0017 frozen parameter value, landed
+the same day; `_viterbi.py` is the decode, landed 2026-09-04 and **the project's first
+dynamic-programming kernel**. Four names are exported from
+`pfsmgraph/hmm/__init__.py` — `HMMParams`, `viterbi`, `ViterbiPath` and
+`ImpossibleSequenceError`.
 `bits(p)` is `-log2(p)`; `safe_divide(num, den)` yields `0.0` wherever the denominator
 is zero, matching the original for `0/0` and `x/0` alike;
 `stationary_distribution(transition_p)` is the solve behind the original's `state-p`;
@@ -63,6 +66,88 @@ the 8-state model's rows sum to `1 ± 1e-4`, lifting the smallest singular value
 from `6.6e-17` to `1.2e-5`, nine orders above `matrix_rank`'s tolerance, so it reports *full*
 rank. Renormalise the rows before asserting anything that assumes row-stochasticity — that
 restores the hypothesis rather than loosening the conclusion.
+The reader now lives in `packages/pfsmgraph-hmm/tests/_lush_fixtures.py`, shared by both test
+modules; its `load_params` is what a differential test of anything model-shaped should go
+through, because **a saved model is not loadable without the ADR 0011 renumbering**. Lush's
+alphabet starts its user symbols at code 2, so the fixtures' `(S, S, 6)` `output_p` becomes
+`(S, S, 12)` here, placed at `[..., USER_BASE:]`; every derived quantity is invariant under
+that, since `state_p` never reads `output_p` and zero-padding a symbol axis adds only
+`0·log2(1) = 0` terms to an entropy. A saved model's own `_alphabet` holds Lush pointer
+addresses (`#$11F50E0`) rather than names, **but the names are not lost — they are in the
+corpus**, at `set02a_200.sds/_alphabet`, which reads `0→begin, 1→end, 2→c, 3→d, 4→b, 5→a`.
+*(Corrected 2026-09-03. The earlier wording, "the symbol names are gone either way", was
+written from the model directory alone and is true only of it.)* The sharpened claim is the
+better evidence for the same conclusion: persistence split the mapping from the model, so
+the model alone stops denoting and has to be rejoined to the corpus that trained it, which
+is precisely ADR 0001's cost clause and `DEFERRED.md`'s serialization trigger.
+
+**The port has a decode oracle, and the Viterbi kernel was validated against it before it
+was written.** `save-viterbi-path` (`hmm-trainer.lsh:712-727`) wrote a `<model>.vpath.xls`
+beside each saved model — one `Output / States / Entropy` row per position, plus a leading
+`-` row for the state before the first symbol, which is ADR 0015's N+1 geometry printed to
+disk. All three tracked models have one, and they were tracked on 2026-09-03 together with
+the corpus. Concatenating the corpus's 200 `.seq` files reproduces each file's `Output`
+column exactly, and the `HMMLIB-ACCOUNT.md` §3 min-sum recurrence reproduces its `States`
+column at **1269/1269 positions on two of the three models**. So a differential test of the
+decode does not have to be invented, and — more to the point — **this branch cannot
+accidentally validate its kernel against itself**, which was the standing risk in porting a
+defect. The `.gitignore` widening that made this possible qualified the same
+`Training/<all others>` note a second time: "output of the algorithm being translated" is
+not a reason to decline a file when its inputs are tracked beside it, because that pairing
+is what a differential test is made of.
+
+**The δ-seeding defect is fixed, not reproduced, and the divergence is exactly one
+position.** `HMMLIB-ACCOUNT.md` §7 records that `update-viterbi-path` seeds δ with raw
+`init-state-p` into a bit-domain accumulator; here `delta[0] = bits(init_state_p)`. Measured
+against the three oracles: the corrected seed agrees at 1269/1269 on two models and
+1268/1269 on `m008_0001_008`, differing only at position 0, where the original prefers
+state 0 (`init_p` 0.3665) to state 5 (0.6335) — the two best outgoing arcs differ by 0.004
+bits, so the seed alone decides it and the original decides it backwards. **The defect
+reaches nothing downstream**, which is what makes the fix cheap: `run-add` is genuine
+Baum-Welch over α/β/ξ, the MDL score comes from `update-data-dl` (a clone of the *forward*
+pass), and `path-states`/`path-entropy` are read only by `save-viterbi-path` and
+`seq-state`'s printer — so the decode is annotation-only and neither revision 03's training
+nor revision 04's search moves. **The degenerate half of the defect is masked by the learned
+topology, and that is not a guarantee**: every state with `init_p == 0` in these models also
+cannot emit `begin` on any outgoing arc (0 of 4 reachable in `m001_0005_005`, 0 of 6 in
+`m008_0001_008`), so `+inf` absorbs before the δ = 0.0 seed can win. Revision 04's
+`split-state` halves initial probabilities without halving a topology, which decouples them
+— so the case the fixtures cannot exhibit is the one the next revision constructs. Note the
+contrast with the `-1` sentinel above, which was declined as *uncheckable*: that reasoning
+was sound when written and would have needed re-examining had the `.vpath.xls` files been
+found a revision earlier. §7's other defect, `psi` as a float matrix round-tripping state
+indices, is likewise not reproduced — `psi` is `np.int64`.
+
+**The decode landed 2026-09-04, and three of its properties are decisions rather than
+mechanics.** `_viterbi(init_p, transition_p, output_p, codes)` is the private kernel and
+`viterbi(params, record) -> ViterbiPath` the checked wrapper. **The kernel neither validates
+nor raises**: an impossible sequence comes back as `total_bits == inf` and the *wrapper*
+turns it into `ImpossibleSequenceError`, because every later ADR 0002 phase implements the
+same signature and a CUDA device function cannot raise a Python exception — keeping the
+kernel purely numeric is what leaves phases 2–4 a transliteration. `ImpossibleSequenceError`
+subclasses `ValueError` so `except ValueError` still works, and exists as a distinct type
+because revision 04's topology search decodes many sequences against many candidate
+topologies, where an impossible one is an ordinary *search outcome* rather than a malformed
+input. **`ViterbiPath` carries no per-position entropies** even though the original has a
+`path-entropy` slot and the oracle prints the column: it is
+`params.state_entropies[path.states]`, so ADR 0017's "computed, never stored" applies — and
+deriving it in the test turns the oracle's third column into a fourth independent check.
+The `(S, S, A)` precompute goal 2's probe used was **refused** in the kernel: it is
+`O(S²·A)`, and it *reads* like the hoisted emission factor ADR 0015 forbids while not being
+one.
+
+**The fixtures cannot exercise the cases the next revision constructs, and that has now
+happened twice.** Mutation-testing the decode found that reversing the tie-break breaks
+nothing — there are **0 exact ties in 3804 positions**, because learned float parameters do
+not collide — so the differential test alone would accept a last-wins port. The property
+still matters: `rand_p_vector(size, noise_width=0)` returns an exactly uniform vector, which
+ties at *every* position, and that is how revision 03 initialises. Same shape as the
+δ-seeding degenerate case above, which the learned topology masks and revision 04's
+`split-state` unmasks. **Construct those cases in tests rather than waiting for them**; a
+green differential suite is evidence about the corpus, not about the algorithm. The converse
+holds too and is worth not over-correcting: making `psi` float64 again breaks no test
+either, and *should not*, since every index below 2²⁴ is exactly representable — which is
+precisely why the master plan judged that defect harmless.
 
 **`entropy` deliberately does not reuse `bits`, and reuse would be a bug.** Entropy is
 `Σ p·bits(p)`, so the refactor looks obvious; but `bits(0)` is `+inf`, which is *correct* for
@@ -88,6 +173,33 @@ normalizing still yields a vector summing to 1 — undetectable downstream; and 
 type-checked before it is compared, because passing the array to fill is the natural porting
 mistake and `size < 1` on an array raises numpy's "truth value is ambiguous".
 
+**`HMMParams`'s symbol axis spans the whole vocabulary, and the six reserved fibres are
+required to be exactly zero.** `output_p` is `(S, S, vocab.size)`, so a code indexes it
+directly — `output_p[i, j, codes[t]]`, no offset anywhere, which is what leaves ADR 0002's
+phases 2–4 with no index arithmetic to port. The alternative, sizing the axis to the user
+symbols alone and subtracting `USER_BASE`, **fails silently**: `encode(...,
+on_unknown="unk")` is a documented `dataseq` path that puts `UNK` (code 1) into a record,
+and `1 - USER_BASE` is `-5`, a negative index numpy accepts without complaint, so the
+decode returns a confident path built from some other symbol's emission probabilities.
+Sized to the whole vocabulary the same record reaches a zero, `bits(0)` is `+inf`, and the
+path is reported impossible instead of wrong — emission of a reserved symbol becomes
+impossible by *arithmetic* rather than by convention. The cost is `6·S²` dead entries,
+120 KB at `S = 50`, scaling with the state count rather than with the corpus.
+**Two validation rules there are decisions, not mechanics.** A zero `transition_p` row is
+rejected with no exemption, because `merge-states` divides with `safe-/` and so revision 04
+can construct one (`HMMLIB-ACCOUNT.md` §5) — it should learn that at construction, where it
+has to decide what an unreachable state means, not downstream in a stationary solve that has
+no answer. An emission fibre on a **dead** arc is conversely not checked at all, since
+`bits(0)` on the transition absorbs the path; that exemption is load-bearing rather than
+theoretical, because the original's own saved models are full of all-zero fibres on
+zero-probability arcs and a blanket rule rejects the fixtures outright. `SUM_TOL` is `1e-5`,
+and it is the **lower** bound that binds: `float32` eps is `1.19e-7`, so a vector normalised
+in float32 drifts past `1e-6` over a symbol axis of a few dozen, and ADR 0017's own Negative
+section anticipates exactly that consumer in revision 03's `torch` backend. Finally, the
+**cached** arrays are frozen too — a `cached_property` returns the same object every time, so
+freezing only the inputs would leave `state_p` writable and reintroduce, one level out, the
+stored-and-stale failure ADR 0017 claims becomes unrepresentable.
+
 **`hmm` declares `numpy>=2.1` where `dataseq` declares `>=1.24`, and the divergence is
 deliberate** — it tracks the pure/compiled split, not drift. `hmm` and `align` are the
 meson-python members and both already spell `numpy>=2.1` in their commented-out
@@ -107,11 +219,14 @@ escalation; the repo-root `tests/` covers both. **The conftest must stay at the 
 are loaded during collection, so a hook sited there is registered too late and discarded
 with no warning at all (measured on pytest 9.1.1: of two conftests each defining it, only
 the root one printed). `tests/test_backends.py` asserts the placement precisely because
-that failure is silent. The registry is an **empty tuple**, and that is the steady state
-rather than a placeholder: ADR 0002 scopes backends to wherever dynamic programming
-appears, `dataseq` has none, so the matrix fills only when `align` or `hmm` lands a
-recurrence — until then every run opens with
-`backends: none registered — no DP kernel has reached ADR 0002 phase 1`. Backend
+that failure is silent. **The matrix stopped being empty on 2026-09-04**, when
+`hmm/_viterbi.py` reached ADR 0002 phase 1: `BACKENDS` holds one row,
+`Backend("python", "pfsmgraph.hmm._viterbi")`, and a run now opens with
+`backends: python ✓`. The row names the *kernel module*, not the package, because
+`import pfsmgraph.hmm` succeeds with or without a decode in it and a probe that cannot fail
+is not a probe; `hardware=None`, so a failed import escalates rather than skipping, since
+nothing external is needed to run pure Python. `EMPTY_HEADER` stays under test — the branch
+is still live and ADR 0003 requires that an empty matrix say so in as many words. Backend
 enumeration is deliberately test-only and reaches no shipped artifact, because enumerating
 backends is most of what a runtime backend-selection API needs and ADR 0003 leaves that
 question explicitly open.
@@ -210,7 +325,7 @@ Still to do, in PRD order (§11): `hmm` (Lush translation), then `align`, then `
 Toolchain: **uv** (workspace) + **pytest**. Requires `uv` and Python ≥ 3.10.
 
 - `uv sync` — create/refresh the venv; installs all five members editable (plain `.pth`) plus the `dev` group (`pytest`).
-- `uv run pytest` — run the suite (160 tests: 74 in `packages/pfsmgraph-dataseq/tests/`, 66 in `packages/pfsmgraph-hmm/tests/`, and 20 in the repo-root `tests/` — 13 covering the ADR 0003 backend matrix, 5 executing documented code blocks against their pasted output per ADR 0013, 2 checking that `docs/ops/release.md` names only recipes the root `justfile` defines). That verifier reads `docs/api/*/*.md` **and `packages/*/README.md`**: a member README becomes a PyPI long description under an immutable version, so it is the one documentation surface where drift cannot be corrected in place. Every run opens with the backend header. One narrow skip is by design: `test_torch_interop.py` verifies the `DataLoader` integration and skips when torch is absent, since torch is a dependency of no member.
+- `uv run pytest` — run the suite (264 tests: 74 in `packages/pfsmgraph-dataseq/tests/`, 165 in `packages/pfsmgraph-hmm/tests/`, and 25 in the repo-root `tests/` — 18 covering the ADR 0003 backend matrix, 5 executing documented code blocks against their pasted output per ADR 0013, 2 checking that `docs/ops/release.md` names only recipes the root `justfile` defines). That verifier reads `docs/api/*/*.md` **and `packages/*/README.md`**: a member README becomes a PyPI long description under an immutable version, so it is the one documentation surface where drift cannot be corrected in place. Every run opens with the backend header. One narrow skip is by design: `test_torch_interop.py` verifies the `DataLoader` integration and skips when torch is absent, since torch is a dependency of no member.
 - `uv build --package pfsmgraph-<pkg>` — build one member's sdist + wheel.
 - `uv lock` — refresh `uv.lock` (committed; one lockfile for the whole family).
 
@@ -272,7 +387,7 @@ These constrain any code written here. They are inherited from the proof-of-conc
 - **Fixed reserved symbol block** in `dataseq`, not configurable: `PAD`=0, `UNK`=1, `BOS`=2, `EOS`=3, `GAP`=4, `MSK`=5; user symbols from 6. `PAD` must be 0 because PyTorch's zero-fill idioms (`pad_sequence`, `torch.zeros()` buffers) would otherwise silently mean something other than "absent". Encoding is **strict by default** — unseen symbols raise; `UNK` fallback is explicit opt-in.
 - **The HMM is arc-emission (Mealy), not state-emission.** A symbol is emitted while *crossing* a transition, so the emission parameter is `output_p[i, j, symbol]` — indexed by source state, destination state and symbol — and never `B[state, symbol]`. A path over *N* symbols visits *N+1* states, which is why `dataseq`'s `seq-state` carries state arrays one longer than its symbol array. Every textbook, and every library (`hmmlearn`, `pomegranate`), is the other formulation, so this is the single fact most likely to be lost in translation; the emission factor also **cannot** be hoisted out of a Viterbi or forward inner loop, because it depends on both endpoints. See [ADR 0015](../design/adr/0015-arc-emission-mealy-formulation.md).
 - **Four-phase algorithm lifecycle** ([ADR 0016](../design/adr/0016-numba-cpu-parallel-phase.md) amends [ADR 0002](../design/adr/0002-three-phase-algorithm-lifecycle.md), 2026-09-03), applied in order wherever dynamic programming appears: pure Python (correctness) → Cython (performance) → Numba CPU-parallel, `prange` anti-diagonal (parallel correctness, no GPU required) → Numba CUDA anti-diagonal wavefront (scale).
-- **One parameterized test suite per algorithm**, run automatically against every available backend, so backend equivalence is enforced rather than assumed. Absent hardware (no CUDA device) skips, but *loudly* — the session header names every backend excluded and why; a backend that is implemented but not importable (missing or stale Cython build) is a hard failure, never a skip; a lifecycle phase not yet reached contributes no parameter at all. `PFSMGRAPH_REQUIRE_BACKENDS` escalates skips to failures for CI. See ADR 0003.
+- **One parameterized test suite per algorithm**, run automatically against every available backend, so backend equivalence is enforced rather than assumed. Absent hardware (no CUDA device) skips, but *loudly* — the session header names every backend excluded and why; a backend that is implemented but not importable (missing or stale Cython build) is a hard failure, never a skip; a lifecycle phase not yet reached contributes no parameter at all. `PFSMGRAPH_REQUIRE_BACKENDS` escalates skips to failures for CI. See ADR 0003. **The parameterization half is not in force yet, and cannot be until `align`** (found 2026-09-04): ADR 0003 also requires tests be written against the public API only, and `viterbi(params, record)` has nowhere to put a backend — adding one is the runtime backend-selection API that ADR's own Open section routes to `align`, so the two requirements are jointly unsatisfiable before then. Consequence to keep in mind when reading a green run: `backends: python ✓` means the kernel imports, **not** that any suite ran twice. ADR 0003 asks for one thing unconditionally in the meantime, and `test_viterbi.py` does it — a test that reaches a backend's internals lives in a labelled, explicitly non-shared section rather than among the public-API tests. Its corollary is easy to miss: **a tie-breaking rule is contract**, not an implementation detail, because two correct backends would otherwise legitimately disagree.
 - **Build backends are per-package, not family-wide.** meson-python for compiled members (`align`, the Baum-Welch core of `hmm`); hatchling for pure-Python members. meson-python editable installs need `ninja` present for rebuild-on-import. *(Currently `align`/`hmm` are on hatchling too, pending their first `.pyx` — see "Current state".)*
 - **A released member ships four files the version bump does not imply**, all inside
   `packages/pfsmgraph-<pkg>/`: a `README.md` (its PyPI long description — the root one is

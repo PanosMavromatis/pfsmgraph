@@ -5,11 +5,25 @@ built artifact contains it, which is deliberate: enumerating backends is most of
 what a runtime backend-selection API needs, and ADR 0003 leaves that API's
 behaviour explicitly open. Shipping the enumeration now would prejudge it.
 
-:data:`BACKENDS` is empty, and that is the correct steady state rather than a
-placeholder awaiting the next commit. ADR 0002 scopes the three-phase lifecycle
-to "wherever dynamic programming appears"; no DP kernel exists yet, and
-``dataseq`` contributes none at any maturity -- it is a container and an encoder.
-The matrix fills when ``align`` or ``hmm`` lands a recurrence.
+:data:`BACKENDS` holds one row as of 2026-09-04. It was empty until then, and
+that emptiness was the correct steady state rather than a placeholder: ADR 0002
+scopes the lifecycle to "wherever dynamic programming appears", and ``dataseq``
+contributes no backend at any maturity -- it is a container and an encoder. The
+condition named here for filling the matrix -- ``align`` or ``hmm`` landing a
+recurrence -- was met by ``pfsmgraph.hmm._viterbi``, the Viterbi decode at ADR
+0002 phase 1.
+
+**One row is as far as the matrix goes, and the algorithm suites are not yet
+parameterized over it.** ADR 0003 asks for one suite per algorithm run against
+every available backend, with the backend as a fixture parameter and the tests
+"written against the public API only". Both halves cannot hold yet:
+``viterbi(params, record)`` has nowhere to put a backend, and giving it one is
+the runtime backend-selection API that ADR 0003's own Open section defers --
+"settle this when ``align`` acquires a backend-selection API; it warrants its
+own record". So the header reports honestly today and the parameterization
+arrives with the seam, not before. The intervening cost is named rather than
+hidden: until then, this table says which phases *exist*, not which ones the
+suite exercises.
 """
 
 from __future__ import annotations
@@ -55,8 +69,17 @@ class Backend:
     hardware: str | None = None
 
 
-#: Adding a backend is adding a row. Empty today; see the module docstring.
-BACKENDS: Final[tuple[Backend, ...]] = ()
+#: Adding a backend is adding a row. See the module docstring.
+#:
+#: ``python`` carries no ``hardware``, so a failed import is escalated rather
+#: than skipped -- nothing external is required to run pure Python/numpy, so the
+#: only way ``pfsmgraph.hmm._viterbi`` fails to import is a broken working copy,
+#: which is precisely what a skip would conceal. The module named is the *kernel*
+#: rather than the package, because the row is a claim about one lifecycle phase
+#: of one algorithm: ``pfsmgraph.hmm`` imports fine with no decode in it.
+BACKENDS: Final[tuple[Backend, ...]] = (
+    Backend("python", "pfsmgraph.hmm._viterbi"),
+)
 
 
 @dataclass(frozen=True)

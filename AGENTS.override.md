@@ -40,10 +40,12 @@ code actually does, say so — that divergence is worth more than a style commen
 ### High-signal review targets
 
 **`dataseq` is implemented and released; `hmm` has begun; the other three members are still
-scaffolding (2026-09-03).** There is real code to review in two packages now.
+scaffolding (2026-09-04).** There is real code to review in two packages now.
 `packages/pfsmgraph-dataseq/` is six modules and 74 tests, covered further down.
-`packages/pfsmgraph-hmm/` is one private module and 66 tests — the numeric Utility code
-migrated from the Lush original, with no public API yet. Review it against
+`packages/pfsmgraph-hmm/` is three modules and 165 tests — the numeric Utility code migrated
+from the Lush original, `HMMParams`, and `_viterbi.py`, the project's first
+dynamic-programming kernel and the first row in the ADR 0003 backend matrix. Review it
+against
 `.scratch/hmm-lush/Code/Utility/util.lsh`, `Code/HMMlib/hmm.lsh:228-262`, and
 `HMMLIB-ACCOUNT.md` §3 and §4, and know the one fact
 that makes or breaks the reading: the quantities there are **description lengths in bits,
@@ -77,11 +79,51 @@ keeps a *negative* input reaching `log2` and going `nan` loudly, matching `bits`
 a missing default: reproducibility is structural on purpose (ADR 0017's frozen value, ADR
 0002's `prange`/CUDA phases), so "add `rng=None`" reverses a recorded decision.
 
+**`_params.py` carries four of its own, and the first is the one a reviewer will reach for.**
+Six of `output_p`'s symbol fibres are structurally zero, so "the symbol axis wastes
+`6·S²` entries — size it to the user symbols and offset by `USER_BASE`" is the obvious
+finding and it is a correctness regression. `encode(..., on_unknown="unk")` is a documented
+`dataseq` path that puts `UNK` (code 1) into a record; under the offset scheme `1 -
+USER_BASE` is `-5`, which numpy accepts as a valid index into the tail, so the decode returns
+a confident wrong path. Sized to the whole vocabulary it reaches a zero, and `bits(0)` is
+`+inf`. **The dead-arc exemption is not an incomplete check** — an emission fibre on an arc
+of probability zero cannot reach the recurrence, and the original's own saved models are full
+of them, so a blanket "every fibre sums to 1" rule rejects the fixtures. **A zero
+`transition_p` row is rejected on purpose**, not by omission of a special case: revision 04's
+`merge-states` can produce one, and construction is where that has to be decided.
+And **`SUM_TOL = 1e-5` is not slack** — an earlier `1e-6` was below float32 normalisation
+drift and would have rejected the output of the `torch` backend ADR 0017's own Negative
+section anticipates; the test asserts the bound's justification, not just its value.
+
+**`_viterbi.py` carries four more, and all four are the kind a reviewer reports on sight.**
+The kernel **validates nothing and raises nothing**, which looks like missing error
+handling and is the backend contract: every later ADR 0002 phase implements that signature
+and a CUDA device function cannot raise, so an impossible sequence returns
+`total_bits == inf` and only the wrapper raises. The inner loop **re-forms an `(S, S)` cost
+array at every position** instead of precomputing `(S, S, A)` once, which looks like an
+obvious missed hoist; it is `O(S²·A)` memory and, worse, it reads like the hoisted emission
+factor ADR 0015 forbids while not being one. **`psi`'s row 0 is written and never read** —
+so is the original's, whose author said so at `hmm-trainer.lsh:219`. And `bits(1.0)` is
+`-0.0`, so a zero-cost path reprs as `total_bits=-0.0000`; that is IEEE-754 and is
+consistent with `state_entropies`, not a sign error.
+
 Real findings would look different. Worth checking rather than assuming: that no migrated
 function has silently acquired a `_p` suffix (the original's `data-p`/`result-p` hold bits,
 not probabilities); that no comparison over description lengths reaches for `max`; and that
-`docs/agents/core.md`'s test counts still match `uv run pytest`, since they have moved three
-times in this branch alone. For the three members that have no code, documentation and
+`docs/agents/core.md`'s test counts still match `uv run pytest`, since they have moved four
+times in this branch alone.
+
+**A green differential suite is weaker evidence than it looks, and this is the highest-signal
+thing to probe in `hmm`.** The `.vpath.xls` oracles are real and the agreement is
+position-for-position, but the tracked models exercise a narrow slice: mutation testing found
+that reversing the Viterbi tie-break breaks **nothing**, because learned float parameters
+produce **0 exact ties in 3804 positions**. `test_ties_are_broken_toward_the_lower_state_index`
+exists for exactly that reason and is *not* redundant with the differential tests — deleting
+it as duplication is a finding. The same holds for
+`test_an_impossible_start_state_is_never_chosen`, which constructs the δ-seeding degenerate
+case the learned topology masks. Both pin behaviour the fixtures cannot reach; a change that
+"simplifies" either back into the parametrized oracle tests removes the only coverage of a
+case revision 03 or 04 will hit. For the three members that have no code, documentation and
 packaging coherence remain the highest-signal targets, which is where errors are cheapest to
 fix and most expensive to leave:
 
@@ -168,6 +210,15 @@ fix and most expensive to leave:
   `pytest_report_header` is a startup hook, and a conftest loaded during collection has its
   hook discarded with no warning. `tests/test_backends.py` pins the placement for that
   reason; treat a change that deletes those wiring tests as the same finding.
+  **The matrix holds one row as of 2026-09-04 and the suites are still not parameterized,
+  which is a constraint rather than the finding it looks like.** ADR 0003 wants the backend
+  as a fixture parameter *and* the tests written against the public API only;
+  `viterbi(params, record)` has nowhere to put a backend, and adding one is the
+  backend-selection API that ADR's Open section routes to `align`. So "a test that quietly
+  exercises only one backend" describes every test in `hmm` today, by design and with only
+  one backend to exercise. What *is* a finding: reading `backends: python ✓` as evidence
+  that anything ran twice, or folding `test_viterbi.py`'s labelled kernel-level section
+  back in among the public-API tests — ADR 0003 asks for that separation unconditionally.
 - **`docs/api/` and the test that executes it** (ADR 0013). The pages are hand-written, so
   their examples are the only guard against prose drifting from the code they describe;
   `tests/test_api_docs.py` executes every block and compares its output — pasted exception
@@ -263,16 +314,20 @@ lost this to a missing `ClassVar`). Each has a test; a change that weakens eithe
 
 Note also that **each import carries its own deny-by-default `.gitignore`**, and each admits a
 small fraction of what is on disk: `.scratch/dl/` tracks 34 files out of 2.2 GB,
-`.scratch/hmm-lush/` 181 out of 929 MB, `.scratch/py-rudimentary/` 73 out of 1.7 GB, and
+`.scratch/hmm-lush/` 391 out of 929 MB, `.scratch/py-rudimentary/` 73 out of 1.7 GB, and
 `.scratch/align-poc/` 11 out of 194 MB, plus two documents of our own at the `.scratch/` root
 (`README.md` and `RESERVED-BLOCK.md`). The per-import counts include our own written analysis,
 which lives alongside the source it describes. *(Counts measured 2026-08-31; the previous
 figures for the first two were each high by one. `align-poc` went 9 -> 10 -> 11 on
 2026-09-01, as the reserved-block renumbering tracked first `_python.py` and then
-`test_needleman_wunsch.py`. `hmm-lush` went 143 -> 144 -> 181: `HMMLIB-ACCOUNT.md` landed
-after the measurement, and the `hmm` numeric migration added 37 on 2026-09-03 — `util.c`
-plus three saved `.hmm` model directories at 12 files apiece. The other three are unchanged,
-re-measured the same day.)* If something in an imported tree looks conspicuously absent, that is the
+`test_needleman_wunsch.py`. `hmm-lush` went 143 -> 144 -> 181 -> 391: `HMMLIB-ACCOUNT.md` landed
+after the measurement; the `hmm` numeric migration added 37 on 2026-09-03 — `util.c` plus
+three saved `.hmm` model directories at 12 files apiece — and the Viterbi migration added
+210 more the same day, the corpus `set02a_200.sds` at 207 files plus the three
+`<model>.vpath.xls` decode oracles. **A large jump in this count is normal at a migration
+and is not a finding**; what would be a finding is a widening with no matching paragraph in
+the import's own `.gitignore`, since every negation there carries its reasoning inline. The
+other three are unchanged, re-measured the same day.)* If something in an imported tree looks conspicuously absent, that is the
 intended behaviour and not a finding — the exclusions carry their reasons inline in each of those
 files, and what they turn away is overwhelmingly not source: virtualenvs and tool caches in the
 first, saved model checkpoints from 2008–2011 training runs in the second.

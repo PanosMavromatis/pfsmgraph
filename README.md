@@ -2,7 +2,7 @@
 
 A composable ecosystem of Python packages for modeling symbolic data sequences. Probabilistic finite-state models (PFSMs) are the unifying core, bridging sequence alignment, hierarchical segmentation, HMMs (Baum-Welch), deep learning (RNNs, Transformers), interpretability, and graph operations.
 
-> **Status: one package released, one begun, three scaffolded.** The workspace layout, package boundaries, and build backends are in place. `pfsmgraph-dataseq` — the base layer every other member depends on — is implemented, tested, documented at [`docs/api/dataseq/`](docs/api/dataseq/README.md), and released at 0.1.0. `pfsmgraph-hmm` has begun: its migrated numeric helpers are in place and tested, but they are private and it offers no public API yet. The other three are still empty namespace subpackages, and all four unreleased names still hold dependency-free `0.0.0` placeholders. See [`docs/design/PRD.md`](docs/design/PRD.md) for the design and [`docs/design/adr/`](docs/design/adr/README.md) for the decision records, which are authoritative.
+> **Status: one package released, one begun, three scaffolded.** The workspace layout, package boundaries, and build backends are in place. `pfsmgraph-dataseq` — the base layer every other member depends on — is implemented, tested, documented at [`docs/api/dataseq/`](docs/api/dataseq/README.md), and released at 0.1.0. `pfsmgraph-hmm` has begun: its migrated numeric helpers are in place and tested, and it now exports the frozen parameter value `HMMParams` together with the Viterbi decode over it — the project's first dynamic-programming kernel, checked against the original implementation's own saved decodes. The other three are still empty namespace subpackages, and all four unreleased names still hold dependency-free `0.0.0` placeholders. See [`docs/design/PRD.md`](docs/design/PRD.md) for the design and [`docs/design/adr/`](docs/design/adr/README.md) for the decision records, which are authoritative.
 
 ## Packages
 
@@ -16,7 +16,7 @@ A composable ecosystem of Python packages for modeling symbolic data sequences. 
 | `pfsmgraph-hmm` | `pfsmgraph.hmm` | Baum-Welch, topology search via state merge/split | `dataseq`, `align` | meson-python&nbsp;† |
 | `pfsmgraph-dl` | `pfsmgraph.dl` | PyTorch models (`rnn`, `transformer` submodules) | `dataseq`, `align` | hatchling |
 
-† `align` and `hmm` are meson-python by design (they get Cython + CUDA kernels), but are **temporarily on hatchling** until the first kernel lands — meson-python's editable-install hook currently shadows the shared namespace. See [`packages/pfsmgraph-align/pyproject.toml`](packages/pfsmgraph-align/pyproject.toml).
+† `align` and `hmm` are meson-python by design (they get Cython + CUDA kernels), but are **temporarily on hatchling** until the first *compiled* kernel lands — meson-python's editable-install hook currently shadows the shared namespace. `hmm`'s Viterbi decode is pure Python/numpy, which is ADR 0002 phase 1 and does not fire this trigger; the first `.pyx` does. See [`packages/pfsmgraph-align/pyproject.toml`](packages/pfsmgraph-align/pyproject.toml).
 
 ‡ The only member with an implementation. Its public API is documented at [`docs/api/dataseq/`](docs/api/dataseq/README.md); the other four rows describe intent, not code.
 
@@ -53,7 +53,7 @@ Requires [uv](https://docs.astral.sh/uv/) and Python ≥ 3.10.
 
 ```bash
 uv sync                             # venv + all five members editable + dev tools
-uv run pytest                       # run the suite (160: 74 dataseq, 66 hmm, 20 root)
+uv run pytest                       # run the suite (264: 74 dataseq, 165 hmm, 25 root)
 uv build --package pfsmgraph-align  # build one distribution
 uv lock                             # refresh uv.lock (committed; one per family)
 ```
