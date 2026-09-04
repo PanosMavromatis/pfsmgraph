@@ -3,11 +3,11 @@
 # Compiled member, same rationale as pfsmgraph-align (PRD §6.1): meson-python
 # for rebuild-on-import under editable installs; `ninja` must be on PATH.
 #
-# Only the Baum-Welch core is cythonized. Topology search via state
-# merge/split is expected to stay plain Python (PRD §6). The exact module
-# layout for the compiled core is left to the Lush translation, which should
-# not be pre-hardened here (PRD §1.5) -- the path below is provisional and the
-# block is dormant until the .pyx actually exists.
+# The DP kernels follow ADR 0002's four-phase lifecycle, so the first .pyx here
+# is the Viterbi decode (revision 02), not the Baum-Welch core (revision 03).
+# Each phase is a separate module living beside the phase-1 reference, never a
+# replacement for it -- ADR 0003 selects between them by module path. Topology
+# search via state merge/split is expected to stay plain Python (PRD §6).
 #
 # PEP 420: installs sources under pfsmgraph/hmm/ only, never
 # pfsmgraph/__init__.py. Version comes from pyproject.toml's static
@@ -24,22 +24,33 @@ py = import('python').find_installation(pure: false)
 fs = import('fs')
 
 # --- Pure-Python sources -----------------------------------------------------
-# meson does not glob: append each new .py module to this list as it lands
-# (Baum-Welch Python reference, topology search, state merge/split, ...).
+# meson does not glob: append each new .py module to this list as it lands, and
+# any package data too -- py.typed arrives at the release commit and is not a
+# .py file. tests/test_meson_sources.py asserts this list matches what is on
+# disk; it drifted once already, silently, because the dormant block below meant
+# nothing ever built these files.
 py.install_sources(
   [
     'src/pfsmgraph/hmm/__init__.py',
+    'src/pfsmgraph/hmm/_numeric.py',
+    'src/pfsmgraph/hmm/_params.py',
+    'src/pfsmgraph/hmm/_viterbi.py',
   ],
   subdir: 'pfsmgraph/hmm',
 )
 
-# --- Compiled Baum-Welch core ----------------------------------------------
-# Provisional target: pfsmgraph.hmm._baum_welch, compiled from
-# src/pfsmgraph/hmm/_baum_welch.pyx, with a plain-Python wrapper alongside.
-# Confirm/relocate during the Lush translation; adjust the two paths below.
-bw_pyx = 'src/pfsmgraph/hmm/_baum_welch.pyx'
+# --- Compiled kernels --------------------------------------------------------
+# ADR 0002 phase 2 of the Viterbi decode. Named _viterbi_cython rather than
+# _viterbi because _viterbi.py is the phase-1 reference and the two must coexist:
+# ADR 0003 runs one suite against every available backend, so a compiled kernel
+# shadowing the reference would make equivalence untestable. Revision 03's
+# Baum-Welch core takes _baum_welch_cython on the same pattern.
+#
+# Dormant until the .pyx exists, then activates automatically. Cython is pulled
+# in with add_languages() only when needed, so project() above stays C-only.
+viterbi_pyx = 'src/pfsmgraph/hmm/_viterbi_cython.pyx'
 
-if fs.exists(bw_pyx)
+if fs.exists(viterbi_pyx)
   add_languages('cython', native: false)
 
   numpy_inc = run_command(
@@ -49,8 +60,8 @@ if fs.exists(bw_pyx)
   numpy_dep = declare_dependency(include_directories: include_directories(numpy_inc))
 
   py.extension_module(
-    '_baum_welch',
-    bw_pyx,
+    '_viterbi_cython',
+    viterbi_pyx,
     dependencies: [numpy_dep],
     cython_args: ['-3'],
     subdir: 'pfsmgraph/hmm',

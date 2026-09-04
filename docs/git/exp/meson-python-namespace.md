@@ -48,4 +48,31 @@ ADR 0012 predicted under "the `meson.build` files are unexercised".
 
 ## Notes
 
-<!-- Running log: decisions, things tried, things deferred. -->
+**2026-09-04 — the shadowing is measured, and ADR 0012 needs three corrections.** The
+loader claims `{'pfsmgraph'}` structurally (meson-python derives the claim from top-level
+installed names, and under PEP 420 that *is* `pfsmgraph`), so candidate 3 is an upstream
+design change rather than a bug report. `pfsmgraph.__path__` collapses to a single
+synthetic entry inside the loader file — replaced, not extended. And PRD §6.1's "`ninja`
+must be on `PATH`" is necessary but not sufficient: the loader bakes an absolute ninja
+path at build time, which under uv points into a deleted build-isolation directory, so
+`no-build-isolation-package` is required too.
+
+**2026-09-04 — the drift is repaired and guarded.** `hmm`'s `install_sources` named 1 of
+4 modules; meson's install plan now carries all four. `tests/test_meson_sources.py`
+guards it, mutation-tested against both a dropped module and an unlisted `py.typed` —
+the latter being the release-commit case a "every module is listed" guard would miss.
+The extension block now targets `_viterbi_cython.pyx`; `_viterbi` alone would collide
+with the phase-1 reference the ADR 0003 registry names.
+
+**2026-09-04 — candidate 2 is refuted.** Two meson-python finders chain rather than
+conflict: `align` imports fine behind `hmm`'s finder. The boundary is meson-python versus
+plain `.pth`, so a combined compiled distribution would still shadow `dataseq`, `hseg`
+and `dl`. A fourth candidate — all five members on meson-python — follows from the same
+measurement. Likely explanation for the original claim: without `no-build-isolation`,
+every import dies `FileNotFoundError`, which looks like everything conflicting with
+everything.
+
+**Still open.** The sequencing question this doc records as deliberately unresolved now
+leans one way: every finding above was obtained with the extension blocks dormant, so
+ADR 0012's "the information needed to choose arrives with the first `.pyx`" appears to be
+wrong about its own premise. Decide it explicitly rather than by drift.

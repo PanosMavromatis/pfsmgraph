@@ -370,7 +370,7 @@ rather than a habit rewrite.
 | Upload fails halfway | Re-run; `--check-url` skips what's already there. |
 | `400 File already exists` | Version is spent. Bump and rebuild. |
 | Wheel contains `pfsmgraph/__init__.py` | Namespace collision with siblings. Fix the build, bump, re-release. |
-| Wheel contains no `py.typed` | Marker is at the distribution root, not inside the package. Bump, re-release. |
+| Wheel contains no `py.typed` | Marker is at the distribution root, not inside the package. Under meson-python, also check `meson.build`'s `install_sources` names it — meson does not glob, and `py.typed` is not a `.py` file. Bump, re-release. |
 | sdist fails on unpack | `LICENSE` is a symlink. Replace with a real copy, bump, re-release. |
 | `just verify` fails on import | Check the import path is `pfsmgraph.<pkg>`, not `pfsmgraph_<pkg>`. |
 | `just preflight` rejects the version | `pyproject.toml` declares something else. The argument is not the source of truth. |
