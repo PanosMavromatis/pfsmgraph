@@ -116,9 +116,12 @@ any more** (2026-09-04: all five moved to meson-python, for the namespace reason
 in [ADR 0018](../design/adr/0018-family-wide-meson-python-build-backend.md), which lists
 this re-measurement among its costs). Nothing here is known to be false, and nothing here is known to
 still hold -- both findings are properties of hatchling's builder, not of this project.
-`pfsmgraph-dataseq` 0.1.0 shipped from hatchling, so **its next release is the first
-meson-built wheel this project publishes**, and the whole of this section has to be
-re-measured against it rather than assumed forward: whether the wheel is still
+`pfsmgraph-dataseq` 0.1.0 shipped from hatchling and is the only real release so far, so
+**no wheel published from this repository has been built by meson-python yet**. The first
+one will be whichever member releases next, and the master plan schedules that as
+`pfsmgraph-hmm` 0.1.0 -- `dataseq` has no next release scheduled, so do not wait for it.
+The whole of this section has to be re-measured against that first meson build rather than
+assumed forward: whether the wheel is still
 byte-identical across builds, and what meson-python puts in an sdist. Re-verify the
 four-file invariant (`README.md`, the `LICENSE` copy, `Typing :: Typed`, and `py.typed`
 *inside* the package) against an actual built wheel in a clean venv at the same time --

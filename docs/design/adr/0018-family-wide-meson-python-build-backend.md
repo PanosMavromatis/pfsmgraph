@@ -107,10 +107,13 @@ Two operational requirements are part of the decision rather than incidental to 
   glob, so `py.typed` must be named explicitly. A PEP 561 marker that fails to reach a
   wheel does so silently, and a type checker then discards every annotation in the
   package.
-- **`pfsmgraph-dataseq` 0.1.0 was published from hatchling.** Its next release therefore
-  ships the first meson-built wheel this project has produced, and the four-file
-  invariant must be re-verified against an actual built wheel installed into a clean
-  venv rather than assumed to carry over.
+- **No wheel this project has published was built by meson-python.** The only real
+  release so far is `pfsmgraph-dataseq` 0.1.0, and it went out from hatchling, so the
+  four-file invariant must be re-verified against an actual built wheel installed into a
+  clean venv rather than assumed to carry over. **That burden lands on whichever member
+  releases next, which the master plan schedules as `pfsmgraph-hmm` 0.1.0** -- not on
+  `dataseq`, whose next release is not scheduled at all. Attaching it to `dataseq` would
+  point the warning at an event nobody is walking toward.
 - **`docs/ops/release.md`'s reproducibility findings were measured against hatchling** —
   the byte-identical wheel rebuild and the non-reproducible sdist. They are properties of
   that builder. Nothing there is now known false; nothing there is known to still hold.
