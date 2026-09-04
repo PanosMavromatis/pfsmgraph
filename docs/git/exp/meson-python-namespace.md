@@ -91,3 +91,61 @@ deferring. Candidate 1's own crux is now pinned too: whether `[tool.uv]` mirrors
 `--no-editable-package` the way it mirrors `no-build-isolation-package`. If it does not,
 that candidate is not "a manual reinstall step in the dev loop" as 0012 describes it but
 a non-default `uv sync` every contributor and CI job must remember.
+
+**2026-09-04 — the candidates are measured and the choice is made: all five members on
+meson-python (candidate 4).** Both live candidates work. Candidate 1 — `align` and `hmm`
+non-editable — leaves no finder in `sys.meta_path` at all, composes the namespace from a
+real `site-packages/pfsmgraph/` portion plus three `.pth` entries, passes 271, and
+*retires* the baked-`ninja` footgun rather than inheriting it, since a non-editable
+install has no loader and never rebuilds. Candidate 4 puts five `MesonpyMetaFinder`s in
+the chain and passes 280.
+
+The crux pinned in the previous entry resolved sideways and is worth recording as stated,
+because the conclusion survived the premise: `[tool.uv]` does **not** mirror
+`--no-editable-package` — uv's own unknown-field error enumerates the accepted keys and it
+is absent — and there is no env var for it either, though the all-or-nothing
+`--no-editable` has `UV_NO_EDITABLE`. But `[tool.uv.sources]` accepts an `editable` key,
+which a *virtual* workspace root honours, so `{ workspace = true, editable = false }` is
+persistent under a plain `uv sync` and the "non-default invocation" objection dissolved.
+What replaced it is worse. A member-level `[tool.uv.sources]` declaration beats the
+root's, and `hmm`, `hseg` and `dl` each declare `pfsmgraph-align = { workspace = true }`;
+setting `editable = false` only at the root left `align` editable, and its surviving
+finder broke **all five** imports. The setting has to be repeated at every declaration
+site, and the next member that copies a one-line source declaration silently breaks the
+workspace. Separately, a non-editable member goes stale with no error on a source edit —
+plain `uv sync` reports `Checked 26 packages` and serves the old copy — because uv's
+default cache key for a local path is its `pyproject.toml`, not its sources;
+`[tool.uv] cache-keys = [{ file = "src/**/*.py" }]` repairs it, after which `uv run` alone
+rebuilds in ~2.7 s.
+
+So the decision was made on failure loudness, which is the criterion this repository has
+already applied to the misplaced `py.typed`, the inert `.gitignore` rule over a tracked
+path, and the workspace version footgun. Candidate 4's characteristic mistake — a module
+missing from `install_sources` — is a `ModuleNotFoundError` at import and is already
+guarded: `tests/test_meson_sources.py` is parameterised over `packages/*/meson.build` and
+went 7 → 16 tests by itself when the three new files appeared. Candidate 1's two mistakes
+are both silent and one is workspace-wide. The dev loop reinforces rather than decides:
+0.15 s with no sync at all against 2.7 s, and the gap widens at the first `.pyx`, where
+candidate 1 degrades to a full recompile per edit. That inverts ADR 0012's implicit cost
+model, which read non-editable installation as the cheap fallback.
+
+Candidate 3 is closed too, and not merely because upstream cannot be waited on:
+meson-python documents the stub-and-finder mechanism without mentioning PEP 420 anywhere
+and no issue describes the shadowing, while the nearest published report
+(`microsoft/pylance-release#3002`) is the same shape in a different toolchain — evidence
+that the interaction is generic to finder-based editable installs rather than a
+meson-python defect. There is nothing here to file as a bug; a finder-composition feature
+request is worth making on its own merits, not as a candidate.
+
+Two things the superseding ADR must argue rather than assume: this overrides **ADR 0008**'s
+per-package build backends, three members acquiring meson-python and a hand-maintained
+source list for no compiled code; and `pfsmgraph-dataseq` **0.1.0 is already published from
+hatchling**, so its next release ships a meson-built wheel and the four-file release
+invariant needs re-verifying against an actual built wheel in a clean venv.
+
+One trap for whoever lands it: `no-build-isolation-package` does **not** invalidate uv's
+build cache. Switching a member onto it reused an editable wheel built *with* isolation,
+whose loader had a baked path into a `builds-v0` temp dir uv had already deleted — so
+`align` alone failed while the other four worked, which reads exactly like a candidate-4
+defect and is a stale cache. `uv sync --reinstall` clears it, and a landing check must
+start from `rm -rf .venv` to mean anything.

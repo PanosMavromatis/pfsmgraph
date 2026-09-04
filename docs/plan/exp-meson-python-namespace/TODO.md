@@ -137,26 +137,169 @@ reverting ADR 0012 by whichever of its three candidates survives contact.
   > meson-python, all editable) costs nothing extra today. So if candidate 1 wins, the
   > apply step may still want deferring even though the decision does not.
 
-- [ ] Evaluate the three **live** candidates and choose. No compiled member is required,
+- [x] Evaluate the three **live** candidates and choose. No compiled member is required,
       per the sequencing decision above.
-  - [ ] **Settle candidate 1's precondition first:** can uv install one workspace member
+  > **Q:** Both live candidates work and the suite is green under each — candidate 1
+  > (compiled members non-editable, no finder at all, 271 passed) and candidate 4 (all
+  > five on meson-python, five finders chaining, 280 passed). Which resolves ADR 0012?
+  > **A:** **Candidate 4 — all five members on meson-python.**
+  > **Done:** Chosen on failure loudness and dev loop, not on elegance. Candidate 1 has
+  > the cleaner mental model — no finder exists, PEP 420 resolution stays ordinary, and
+  > the baked-`ninja` footgun is retired — but both of its characteristic mistakes fail
+  > *silently*, and one of them fails **globally**: `editable = false` omitted at any one
+  > of four declaration sites resurrects a finder that breaks all five members, and a
+  > missing `cache-keys` serves a stale module with no error. Candidate 4's characteristic
+  > mistake is a missing `meson.build` entry, which is a `ModuleNotFoundError` at import
+  > and is already caught by `tests/test_meson_sources.py` — the guard this branch built
+  > two goals ago, which extended itself from 7 to 16 tests the moment the three new
+  > `meson.build` files appeared. That is the same criterion this project has applied to
+  > the misplaced `py.typed`, the inert `.gitignore` rule and the workspace version
+  > footgun: prefer the arrangement whose mistakes are detectable, and pay for it.
+  > The dev loop reinforces it rather than deciding it — 0.15 s with no sync against
+  > 2.7 s, and the gap *widens* at the first `.pyx`, where candidate 1 degrades to a full
+  > recompile per edit while candidate 4 keeps rebuild-on-import. Note this reverses the
+  > naive reading of ADR 0012, which treated non-editable installation as the low-cost
+  > fallback and rebuild-on-import as the thing being given up.
+  > **What the superseding ADR must argue, not assume.** (1) It overrides **ADR 0008**'s
+  > per-package build backends, which is a real conflict and not a technicality: three
+  > members with no compiled code acquire meson-python and a hand-maintained
+  > `install_sources` list. The argument is that ADR 0008's purpose is served by the
+  > *distributions* staying independent, which they do — what is shared is a build
+  > backend, not a release cadence — and that the alternative is a silent, workspace-wide
+  > failure mode. (2) `pfsmgraph-dataseq` **0.1.0 is already published, built with
+  > hatchling**; its next release ships a meson-built wheel, so the four-file release
+  > invariant (README, LICENSE copy, `Typing :: Typed`, `py.typed` inside the package)
+  > must be re-verified against an actual built wheel in a clean venv at that point. The
+  > `py.typed` is already listed in its new `install_sources` and the meson-sources test
+  > covers the listing, but the listing is not the wheel.
+  - [x] **Settle candidate 1's precondition first:** can uv install one workspace member
         non-editable while the other four stay editable? `uv sync --no-editable-package
         <PKG>` exists in uv 0.12.9, but the candidate needs it to hold for a plain
         `uv sync`, so the question is whether `[tool.uv]` mirrors the flag the way it
         mirrors `no-build-isolation-package`. If it does not, candidate 1 costs a
         non-default sync invocation that every contributor and every CI job must
         remember, which is a different proposition from what ADR 0012 records.
-  - [ ] **Candidate 1 — non-editable install of the compiled members.** No finder exists
+    > **Result:** **The precondition holds, but not by the mechanism the question
+    > assumed, and the dev-loop cost is worse than ADR 0012 records.** Measured on uv
+    > 0.12.9. (1) `[tool.uv]` does **not** mirror `--no-editable-package`: uv's own
+    > unknown-field error enumerates the accepted keys, and `no-editable-package` is
+    > absent where `no-build-isolation-package` is present. Nor is there an env var —
+    > `--no-editable` carries `[env: UV_NO_EDITABLE=]` but is all-or-nothing across the
+    > whole workspace, and the per-package flag carries none. (2) The mechanism that
+    > *does* work is better than either: `[tool.uv.sources]` accepts an `editable` key,
+    > so `pfsmgraph-hmm = { workspace = true, editable = false }` in the workspace-root
+    > `pyproject.toml` is honoured by a plain `uv sync`. Verified on a two-member probe
+    > workspace: the `editable = false` member lands as a real copied directory in
+    > `site-packages` with no `.pth`, while its sibling keeps its
+    > `_editable_impl_<name>.pth`. So nothing non-default has to be remembered by a
+    > contributor or a CI job, and the objection this subgoal was written to test does
+    > not apply.
+    > **(3) The cost is not "a manual reinstall step" — it is silent staleness.** With the
+    > member non-editable, editing only a `.py` and running plain `uv sync` reports
+    > `Checked 2 packages`, rebuilds nothing, and leaves the previous copy installed; the
+    > import then returns the *old* value with no error and no warning. uv's default cache
+    > key for a local source is its `pyproject.toml`, not its sources. The repair is
+    > `[tool.uv] cache-keys = [{ file = "src/**/*.py" }]` in the member's own
+    > `pyproject.toml`, after which a plain `uv sync` does rebuild and reinstall on a
+    > `.py` edit. Controlled both ways, with the confound removed — the first measurement
+    > of the fix changed `pyproject.toml` in the same step, which is itself the default
+    > cache key, so it was re-run touching only the `.py`: with `cache-keys` the edit
+    > propagates, without it the module stays stale.
+    > **Bearing on the choice:** candidate 1 is viable and cheaper to invoke than
+    > believed, but it needs *two* pieces of configuration rather than none, and the
+    > failure mode of forgetting the second is a silently stale module — the same class
+    > as the stale `.so` this branch already flagged as an open question for the `.pyx`,
+    > arriving a revision early and for pure Python.
+  - [x] **Candidate 1 — non-editable install of the compiled members.** No finder exists
         at all, so nothing is shadowed; costs a manual reinstall step in the dev loop,
         close to the setuptools status quo ante.
-  - [ ] **Candidate 4 — all five members on meson-python.** Every member gets a finder and
+    > **Result:** **Works, end to end, and removes a requirement rather than adding one.**
+    > With `align` and `hmm` reverted to meson-python and both declared
+    > `editable = false`, a clean `uv sync` yields `site-packages/pfsmgraph/` holding
+    > `align/` and `hmm/` as real directories, three `_editable_impl_*.pth` for the pure
+    > members, **no meson loader and no meson finder in `sys.meta_path` at all**.
+    > `pfsmgraph.__path__` composes to four portions and all five members import. Suite
+    > green at 271. Notably `[tool.uv] no-build-isolation-package` is **not** needed: it
+    > existed to keep the *editable* loader's baked absolute `ninja` path valid for
+    > rebuild-on-import, and a non-editable install has no loader and never rebuilds. So
+    > candidate 1 retires the footgun measured in goal 1 instead of inheriting it.
+    > **Two costs, both discovered by measurement rather than reasoning.**
+    > **(a) `editable = false` is not centrally declarable, and getting it wrong fails
+    > workspace-wide.** The first attempt set it only in the workspace root; `hmm` went
+    > non-editable but `align` stayed editable, and its surviving finder then broke *all
+    > five* imports with the baked-`ninja` `FileNotFoundError`. The cause is that
+    > `hmm`, `hseg` and `dl` each declare `pfsmgraph-align = { workspace = true }` in
+    > their own `[tool.uv.sources]`, and a member-level declaration beats the root's;
+    > `hmm` was unaffected only because no member depends on it. Making it work took
+    > `editable = false` repeated at all four declaration sites. The failure mode is
+    > therefore: a future member that depends on `align` and copies the existing
+    > one-line source declaration silently re-editables it and breaks the whole
+    > workspace — the same shape as the `install_sources` drift this branch already
+    > fixed, and not guarded by anything.
+    > **(b) Silent staleness, confirmed on the real workspace.** Editing
+    > `hmm/__init__.py` and running plain `uv sync` reports `Checked 26 packages` and
+    > leaves the stale copy installed; the marker is absent with no error.
+    > `uv sync --reinstall-package pfsmgraph-hmm` repairs it, and so does
+    > `[tool.uv] cache-keys = [{ file = "src/**/*.py" }]` in the member — after which
+    > **`uv run` alone suffices**, rebuilding and reinstalling in ~2.7 s before running.
+    > That is the dev loop actually in use here (`uv run pytest`), so with `cache-keys`
+    > the ergonomics are acceptable today. What it becomes at the first `.pyx` is a full
+    > recompile per edit rather than a 2.7 s pure-Python wheel rebuild, since uv builds
+    > into a fresh directory with no incremental reuse — which is precisely the
+    > dev-loop-friction question this plan recorded as arriving with the real kernel.
+  - [x] **Candidate 4 — all five members on meson-python.** Every member gets a finder and
         they chain, which is what this branch measured. Not in ADR 0012. Cuts against
         ADR 0008's per-package backends, and hands three pure-Python members a compiled
         member's build backend for no compiled code.
-  - [ ] **Candidate 3 — an upstream fix**: a finder that defers to other finders for
+    > **Result:** **Works, and has the better dev loop of the two.** Three new
+    > `meson.build` files were written for `dataseq`, `hseg` and `dl` — `project()` with
+    > no languages, `find_installation(pure: true)` — and all five members moved to
+    > `mesonpy`. After a clean sync all five import, `sys.meta_path` holds five
+    > `MesonpyMetaFinder`s, and the suite is green at **280**. `pfsmgraph.__path__` is
+    > still a single synthetic entry, which no longer matters: the namespace is replaced,
+    > but every member now has a finder that claims its own submodule, so nothing depends
+    > on path-based discovery any more. That is the fourth option stated positively —
+    > the fix is not to stop the finder replacing `__path__`, it is to leave no member
+    > relying on `__path__`.
+    > **The dev loop is the strongest argument for it.** Editing an existing `.py` is
+    > visible with **no sync at all** (`uv run --no-sync`, 0.15 s) because the finder maps
+    > to the source tree; candidate 1 needs a 2.7 s rebuild-and-reinstall for the same
+    > edit, growing to a full recompile once a `.pyx` exists. Adding a *new* module does
+    > require a `meson.build` edit — unlisted, it is `ModuleNotFoundError` — but once
+    > listed, rebuild-on-import picks it up with no sync either. Crucially that failure is
+    > **loud**, and `tests/test_meson_sources.py` already guards it: parameterised over
+    > `packages/*/meson.build`, it went 7 → 16 tests by itself when the three files
+    > appeared, which is where 271 → 280 comes from. Contrast candidate 1's staleness,
+    > which is silent and guarded by nothing.
+    > **Costs, stated fairly.** Every member now needs `no-build-isolation-package` and
+    > the root `dev` group needs `meson-python`, `cython`, `ninja`, `numpy` — the goal-1
+    > footgun is retained rather than retired, where candidate 1 removes it. Three
+    > pure-Python members acquire a compiled member's build backend and a hand-maintained
+    > source list for no compiled code, which is what cuts against ADR 0008.
+    > **One trap found, and it is not candidate 4's fault but will bite anyone
+    > reproducing this:** `no-build-isolation-package` does **not** invalidate uv's build
+    > cache. Switching a member to it reused an editable wheel built *with* isolation,
+    > whose loader had a baked `.../builds-v0/.tmpXXXX/bin/ninja` path uv had already
+    > deleted, so `align` alone failed while the other four worked — a state that looks
+    > like a candidate-4 defect and is a stale cache. `uv sync --reinstall` clears it.
+  - [x] **Candidate 3 — an upstream fix**: a finder that defers to other finders for
         prefixes it does not own. Now known to be a design change rather than a bug
         report, since the `{'pfsmgraph'}` claim is derived structurally from the PEP 420
         layout rather than chosen.
+    > **Result:** **Not viable as this branch's resolution, and not for the obvious
+    > reason.** The obvious objection — we cannot block on someone else's release — is
+    > true but secondary. The finding is that upstream does not treat this as a defect:
+    > meson-python's own editable-installs guide documents the stub-and-finder mechanism
+    > without mentioning PEP 420 anywhere, and there is no open issue describing the
+    > shadowing. The nearest published report is `microsoft/pylance-release#3002`, which
+    > is the same shape (an editable namespaced install shadowing siblings sharing the
+    > prefix) in a different toolchain, which is evidence that the interaction is generic
+    > to finder-based editable installs rather than a meson-python bug. Combined with
+    > goal 1's structural finding — the `{'pfsmgraph'}` claim is derived from the
+    > top-level installed name, and under PEP 420 that name *is* the shared namespace —
+    > there is nothing here to report as broken. Filing upstream would be a feature
+    > request for finder composition, worth doing on its own merits but not a candidate
+    > for this decision. Keep as a note in the superseding ADR, not as an open option.
   > **Note:** ADR 0012's candidate 2 — a single combined compiled distribution, "so only
   > one meson-python finder ever exists" — is **refuted**, not merely deprioritised. Its
   > premise was the two-finder conflict, which this branch could not reproduce. One finder
