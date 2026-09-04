@@ -9,14 +9,15 @@ Shared project knowledge for any coding agent working in this repository.
 
 **`dataseq` is implemented and released; `hmm` has its first code as of 2026-09-03; the other three members are still empty scaffolding.** In place: the uv workspace root `pyproject.toml` (virtual — no `[project]` table), `uv.lock`, all five `packages/*` members with their own `pyproject.toml`, the (currently dormant) `meson.build` files for `align` and `hmm`, and an empty `pfsmgraph/<pkg>/__init__.py` for the three members that have no code yet (plus `dl/rnn/` and `dl/transformer/`). The ADRs in `docs/design/adr/` are authoritative for the decisions they cover — the twelve initial records from the PRD, plus 0013 (how this family documents its public surfaces) and 0014 (how imported migration source is retained), both added 2026-09-01; the PRD remains the narrative design document.
 
-**What `dataseq` now contains.** Six modules under `packages/pfsmgraph-dataseq/src/pfsmgraph/dataseq/` (the container landed 2026-08-31, the encoder API 2026-09-01) and 74 tests — the first tests in this repository, and 74 of the suite's 204 today; 110 are `hmm`'s and the remaining 20 are the repo-root backend-matrix, API-docs and release-runbook tests. `_reserved.py` hard-codes the ADR 0011 block as module constants, with no class or parameter that could relocate it; `_vocabulary.py` holds the `Vocabulary` protocol and `SymbolTable`, a frozen first-appearance-ordered implementation that encodes strictly and decodes *totally*, reserved codes included; `_record.py` and `_dataset.py` are the ragged container, whose records carry true lengths and never padding; `_collate.py` is `pad_collate`, where padding is introduced and always returned with its mask. The container imports neither torch nor pandas — verified in a subprocess — and its one runtime dependency is `numpy`.
+**What `dataseq` now contains.** Six modules under `packages/pfsmgraph-dataseq/src/pfsmgraph/dataseq/` (the container landed 2026-08-31, the encoder API 2026-09-01) and 74 tests — the first tests in this repository, and 74 of the suite's 259 today; 165 are `hmm`'s and the remaining 20 are the repo-root backend-matrix, API-docs and release-runbook tests. `_reserved.py` hard-codes the ADR 0011 block as module constants, with no class or parameter that could relocate it; `_vocabulary.py` holds the `Vocabulary` protocol and `SymbolTable`, a frozen first-appearance-ordered implementation that encodes strictly and decodes *totally*, reserved codes included; `_record.py` and `_dataset.py` are the ragged container, whose records carry true lengths and never padding; `_collate.py` is `pad_collate`, where padding is introduced and always returned with its mask. The container imports neither torch nor pandas — verified in a subprocess — and its one runtime dependency is `numpy`.
 
-**What `hmm` now contains.** Two modules and 110 tests. `_numeric.py` is the numeric
+**What `hmm` now contains.** Three modules and 165 tests. `_numeric.py` is the numeric
 Utility code migrated from the Lush original, landed 2026-09-03 and complete for 0.1.0 at
 five functions; `_params.py` is `HMMParams`, the ADR 0017 frozen parameter value, landed
-the same day. **The package has a public API as of `_params.py`** — `HMMParams` is
-re-exported from `pfsmgraph/hmm/__init__.py`, which is no longer empty, and is the only
-name exported so far.
+the same day; `_viterbi.py` is the decode, landed 2026-09-04 and **the project's first
+dynamic-programming kernel**. Four names are exported from
+`pfsmgraph/hmm/__init__.py` — `HMMParams`, `viterbi`, `ViterbiPath` and
+`ImpossibleSequenceError`.
 `bits(p)` is `-log2(p)`; `safe_divide(num, den)` yields `0.0` wherever the denominator
 is zero, matching the original for `0/0` and `x/0` alike;
 `stationary_distribution(transition_p)` is the solve behind the original's `state-p`;
@@ -120,6 +121,37 @@ was sound when written and would have needed re-examining had the `.vpath.xls` f
 found a revision earlier. §7's other defect, `psi` as a float matrix round-tripping state
 indices, is likewise not reproduced — `psi` is `np.int64`.
 
+**The decode landed 2026-09-04, and three of its properties are decisions rather than
+mechanics.** `_viterbi(init_p, transition_p, output_p, codes)` is the private kernel and
+`viterbi(params, record) -> ViterbiPath` the checked wrapper. **The kernel neither validates
+nor raises**: an impossible sequence comes back as `total_bits == inf` and the *wrapper*
+turns it into `ImpossibleSequenceError`, because every later ADR 0002 phase implements the
+same signature and a CUDA device function cannot raise a Python exception — keeping the
+kernel purely numeric is what leaves phases 2–4 a transliteration. `ImpossibleSequenceError`
+subclasses `ValueError` so `except ValueError` still works, and exists as a distinct type
+because revision 04's topology search decodes many sequences against many candidate
+topologies, where an impossible one is an ordinary *search outcome* rather than a malformed
+input. **`ViterbiPath` carries no per-position entropies** even though the original has a
+`path-entropy` slot and the oracle prints the column: it is
+`params.state_entropies[path.states]`, so ADR 0017's "computed, never stored" applies — and
+deriving it in the test turns the oracle's third column into a fourth independent check.
+The `(S, S, A)` precompute goal 2's probe used was **refused** in the kernel: it is
+`O(S²·A)`, and it *reads* like the hoisted emission factor ADR 0015 forbids while not being
+one.
+
+**The fixtures cannot exercise the cases the next revision constructs, and that has now
+happened twice.** Mutation-testing the decode found that reversing the tie-break breaks
+nothing — there are **0 exact ties in 3804 positions**, because learned float parameters do
+not collide — so the differential test alone would accept a last-wins port. The property
+still matters: `rand_p_vector(size, noise_width=0)` returns an exactly uniform vector, which
+ties at *every* position, and that is how revision 03 initialises. Same shape as the
+δ-seeding degenerate case above, which the learned topology masks and revision 04's
+`split-state` unmasks. **Construct those cases in tests rather than waiting for them**; a
+green differential suite is evidence about the corpus, not about the algorithm. The converse
+holds too and is worth not over-correcting: making `psi` float64 again breaks no test
+either, and *should not*, since every index below 2²⁴ is exactly representable — which is
+precisely why the master plan judged that defect harmless.
+
 **`entropy` deliberately does not reuse `bits`, and reuse would be a bug.** Entropy is
 `Σ p·bits(p)`, so the refactor looks obvious; but `bits(0)` is `+inf`, which is *correct* for
 a description length — an impossible event costs infinitely many bits — and *wrong* for an
@@ -190,11 +222,14 @@ escalation; the repo-root `tests/` covers both. **The conftest must stay at the 
 are loaded during collection, so a hook sited there is registered too late and discarded
 with no warning at all (measured on pytest 9.1.1: of two conftests each defining it, only
 the root one printed). `tests/test_backends.py` asserts the placement precisely because
-that failure is silent. The registry is an **empty tuple**, and that is the steady state
-rather than a placeholder: ADR 0002 scopes backends to wherever dynamic programming
-appears, `dataseq` has none, so the matrix fills only when `align` or `hmm` lands a
-recurrence — until then every run opens with
-`backends: none registered — no DP kernel has reached ADR 0002 phase 1`. Backend
+that failure is silent. The registry is still an **empty tuple**, but as of 2026-09-04 that
+is a lag rather than the steady state: ADR 0002 scopes backends to wherever dynamic
+programming appears, and the condition the module docstring names — "the matrix fills when
+`align` or `hmm` lands a recurrence" — **has now been met**, since `hmm/_viterbi.py` is a
+phase-1 kernel. Adding the row is the next goal of the `feat/hmm-viterbi-python` plan, so
+today every run still opens with
+`backends: none registered — no DP kernel has reached ADR 0002 phase 1` and that line is
+now *stale rather than accurate*. Do not read it as evidence that no kernel exists. Backend
 enumeration is deliberately test-only and reaches no shipped artifact, because enumerating
 backends is most of what a runtime backend-selection API needs and ADR 0003 leaves that
 question explicitly open.
@@ -293,7 +328,7 @@ Still to do, in PRD order (§11): `hmm` (Lush translation), then `align`, then `
 Toolchain: **uv** (workspace) + **pytest**. Requires `uv` and Python ≥ 3.10.
 
 - `uv sync` — create/refresh the venv; installs all five members editable (plain `.pth`) plus the `dev` group (`pytest`).
-- `uv run pytest` — run the suite (204 tests: 74 in `packages/pfsmgraph-dataseq/tests/`, 110 in `packages/pfsmgraph-hmm/tests/`, and 20 in the repo-root `tests/` — 13 covering the ADR 0003 backend matrix, 5 executing documented code blocks against their pasted output per ADR 0013, 2 checking that `docs/ops/release.md` names only recipes the root `justfile` defines). That verifier reads `docs/api/*/*.md` **and `packages/*/README.md`**: a member README becomes a PyPI long description under an immutable version, so it is the one documentation surface where drift cannot be corrected in place. Every run opens with the backend header. One narrow skip is by design: `test_torch_interop.py` verifies the `DataLoader` integration and skips when torch is absent, since torch is a dependency of no member.
+- `uv run pytest` — run the suite (259 tests: 74 in `packages/pfsmgraph-dataseq/tests/`, 165 in `packages/pfsmgraph-hmm/tests/`, and 20 in the repo-root `tests/` — 13 covering the ADR 0003 backend matrix, 5 executing documented code blocks against their pasted output per ADR 0013, 2 checking that `docs/ops/release.md` names only recipes the root `justfile` defines). That verifier reads `docs/api/*/*.md` **and `packages/*/README.md`**: a member README becomes a PyPI long description under an immutable version, so it is the one documentation surface where drift cannot be corrected in place. Every run opens with the backend header. One narrow skip is by design: `test_torch_interop.py` verifies the `DataLoader` integration and skips when torch is absent, since torch is a dependency of no member.
 - `uv build --package pfsmgraph-<pkg>` — build one member's sdist + wheel.
 - `uv lock` — refresh `uv.lock` (committed; one lockfile for the whole family).
 

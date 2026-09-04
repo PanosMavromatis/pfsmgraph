@@ -37,10 +37,11 @@ code actually does, say so — that divergence is worth more than a style commen
 ### High-signal review targets
 
 **`dataseq` is implemented and released; `hmm` has begun; the other three members are still
-scaffolding (2026-09-03).** There is real code to review in two packages now.
+scaffolding (2026-09-04).** There is real code to review in two packages now.
 `packages/pfsmgraph-dataseq/` is six modules and 74 tests, covered further down.
-`packages/pfsmgraph-hmm/` is two modules and 110 tests — the numeric Utility code migrated
-from the Lush original, plus `HMMParams`, which is the package's first public name. Review it
+`packages/pfsmgraph-hmm/` is three modules and 165 tests — the numeric Utility code migrated
+from the Lush original, `HMMParams`, and `_viterbi.py`, the project's first
+dynamic-programming kernel. Review it
 against
 `.scratch/hmm-lush/Code/Utility/util.lsh`, `Code/HMMlib/hmm.lsh:228-262`, and
 `HMMLIB-ACCOUNT.md` §3 and §4, and know the one fact
@@ -91,11 +92,35 @@ And **`SUM_TOL = 1e-5` is not slack** — an earlier `1e-6` was below float32 no
 drift and would have rejected the output of the `torch` backend ADR 0017's own Negative
 section anticipates; the test asserts the bound's justification, not just its value.
 
+**`_viterbi.py` carries four more, and all four are the kind a reviewer reports on sight.**
+The kernel **validates nothing and raises nothing**, which looks like missing error
+handling and is the backend contract: every later ADR 0002 phase implements that signature
+and a CUDA device function cannot raise, so an impossible sequence returns
+`total_bits == inf` and only the wrapper raises. The inner loop **re-forms an `(S, S)` cost
+array at every position** instead of precomputing `(S, S, A)` once, which looks like an
+obvious missed hoist; it is `O(S²·A)` memory and, worse, it reads like the hoisted emission
+factor ADR 0015 forbids while not being one. **`psi`'s row 0 is written and never read** —
+so is the original's, whose author said so at `hmm-trainer.lsh:219`. And `bits(1.0)` is
+`-0.0`, so a zero-cost path reprs as `total_bits=-0.0000`; that is IEEE-754 and is
+consistent with `state_entropies`, not a sign error.
+
 Real findings would look different. Worth checking rather than assuming: that no migrated
 function has silently acquired a `_p` suffix (the original's `data-p`/`result-p` hold bits,
 not probabilities); that no comparison over description lengths reaches for `max`; and that
-`docs/agents/core.md`'s test counts still match `uv run pytest`, since they have moved three
-times in this branch alone. For the three members that have no code, documentation and
+`docs/agents/core.md`'s test counts still match `uv run pytest`, since they have moved four
+times in this branch alone.
+
+**A green differential suite is weaker evidence than it looks, and this is the highest-signal
+thing to probe in `hmm`.** The `.vpath.xls` oracles are real and the agreement is
+position-for-position, but the tracked models exercise a narrow slice: mutation testing found
+that reversing the Viterbi tie-break breaks **nothing**, because learned float parameters
+produce **0 exact ties in 3804 positions**. `test_ties_are_broken_toward_the_lower_state_index`
+exists for exactly that reason and is *not* redundant with the differential tests — deleting
+it as duplication is a finding. The same holds for
+`test_an_impossible_start_state_is_never_chosen`, which constructs the δ-seeding degenerate
+case the learned topology masks. Both pin behaviour the fixtures cannot reach; a change that
+"simplifies" either back into the parametrized oracle tests removes the only coverage of a
+case revision 03 or 04 will hit. For the three members that have no code, documentation and
 packaging coherence remain the highest-signal targets, which is where errors are cheapest to
 fix and most expensive to leave:
 

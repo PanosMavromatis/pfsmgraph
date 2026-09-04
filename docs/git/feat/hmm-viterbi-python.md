@@ -137,3 +137,50 @@ from reasoning and corrected by measurement; here it was a whole *decision* fram
 judgement call that turned out to be an empirical question, and the evidence had been
 sitting untracked in `.scratch/` since import. Worth carrying into goal 3: before deciding
 what the fixtures can support, look at what is actually in the directory.
+
+**2026-09-04 — goal 3, the decode.** `_viterbi.py` and 55 tests; suite 204 → 259. The
+package exports four names where it exported one. Goal 2 had already validated the
+recurrence at 1269/1269, so this goal owed only packaging — and **both of its real findings
+came out of the packaging rather than the algorithm.**
+
+The public shape: private `_viterbi(init_p, transition_p, output_p, codes)` returning
+`(states, total_bits)`, public `viterbi(params, record) -> ViterbiPath`, and
+`ImpossibleSequenceError(ValueError)` when no path has finite description length. The kernel
+neither validates nor raises, which is the backend contract rather than an omission: a CUDA
+device function cannot raise a Python exception, so impossibility is numeric on the way out
+and an exception only at the boundary.
+
+**Mutation testing falsified a comment written minutes earlier in the same file.** Six
+mutations; four caught (max-product, the seeding defect reinstated, the emission losing its
+source index, an off-by-one backtrace). The tie-break mutation passed — contradicting the
+comment claiming that matching Lush's first-wins tie-break is "what makes a
+position-for-position differential test possible at all". Measured: **0 exact ties in 3804
+positions**. Learned float parameters do not collide, so a last-wins port passes the
+differential suite unchanged. The property is real and the fixtures cannot reach it; what
+will is revision 03's own initialisation, since `rand_p_vector(size, noise_width=0)` returns
+an exactly uniform vector that ties at every position. Now pinned by a constructed model.
+
+That is the **second** instance of one shape on this branch. Goal 2 found the δ-seeding
+degenerate case masked by learned topology and unmaskable until revision 04's `split-state`;
+goal 3 found the tie-break unreachable until revision 03's initialisation. The general
+lesson, and the one worth carrying: **a green differential suite is evidence about the
+corpus, not about the algorithm.** Construct the next revision's cases now.
+
+The counter-example matters as much. The `psi`-as-float mutation also survived, and *should
+have*: every index below 2²⁴ is exactly representable, so it changes nothing observable —
+which is precisely the master plan's reason for calling that defect harmless. The test now
+says so rather than implying coverage it does not have.
+
+Two smaller things. A dead branch — "no live start state" — was found by smoke-testing and
+deleted rather than documented, since `HMMParams` requires `init_state_p` to sum to 1 and so
+forbids the case. And two stale claims in `_lush_fixtures.py` were corrected in passing: its
+`SUM_TOL` citation predated goal 1's `1e-6 → 1e-5`, and it still said the models' symbol
+names were unrecoverable, which goal 2 disproved from the corpus.
+
+Process, twice bitten. An `Edit` swallowed the kernel's `def` line and Pyright's
+"`_viterbi` is not defined" was *correct* — after several genuinely spurious import warnings
+in the same session, which is how a real diagnostic gets waved through. And `cp` is aliased
+to `cp -i` here, so the first mutation run's restores silently no-opped, four mutations
+compounded into one file, and the run produced confident-looking numbers that meant nothing.
+`command cp` plus a `diff -q` against the backup after each restore is the fix; the general
+form is that a restore step needs its own assertion.

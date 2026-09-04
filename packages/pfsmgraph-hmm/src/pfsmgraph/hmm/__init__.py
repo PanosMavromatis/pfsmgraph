@@ -15,5 +15,6 @@ Baum-Welch arrives in 0.2.0.
 """
 
 from ._params import HMMParams
+from ._viterbi import ImpossibleSequenceError, ViterbiPath, viterbi
 
-__all__ = ["HMMParams"]
+__all__ = ["HMMParams", "ImpossibleSequenceError", "ViterbiPath", "viterbi"]
