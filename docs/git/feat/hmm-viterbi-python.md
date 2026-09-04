@@ -184,3 +184,40 @@ to `cp -i` here, so the first mutation run's restores silently no-opped, four mu
 compounded into one file, and the run produced confident-looking numbers that meant nothing.
 `command cp` plus a `diff -q` against the backup after each restore is the fix; the general
 form is that a restore step needs its own assertion.
+
+**2026-09-04 — goal 4, the first backend row.** `BACKENDS` is
+`(Backend("python", "pfsmgraph.hmm._viterbi"),)`, a run opens with `backends: python ✓`, and
+the `EMPTY_HEADER` era that began 2026-09-01 is over. Suite 259 → 264; five tests added at
+the repo root rather than three changed, because the extra two assert against the *real*
+matrix — that the registered module resolves, and that `PFSMGRAPH_REQUIRE_BACKENDS=python`
+passes, which is what a CI runner does.
+
+`test_registry_is_empty_until_a_dp_kernel_lands` failed exactly as its own comment said it
+would: "this fails when align or hmm adds the first row, which is exactly when the
+surrounding docs need revisiting". It did, and they were. A test written to fail on a
+specific future event, carrying the reason in its body, turned out to be worth more than a
+`TODO` — its replacement carries the same warning forward for the second row.
+
+**The goal's finding is that ADR 0003 cannot be fully satisfied here, and the obstruction is
+inside ADR 0003.** It requires the backend be a fixture parameter *and* that tests be
+"written against the public API only". `viterbi(params, record)` has nowhere to put a
+backend, and giving it one is the runtime backend-selection API the same ADR's Open section
+routes away: "settle this when `align` acquires a backend-selection API; it warrants its own
+record." Jointly unsatisfiable in revision 02. Recorded in `_backends.py`'s docstring with
+the cost named — until the seam exists, the table says which phases *exist*, not which ones
+the suite exercises, and `backends: python ✓` means the kernel imports rather than that
+anything ran twice.
+
+What ADR 0003 asks for unconditionally was done: the two tests calling `_viterbi` directly
+now sit in a labelled section, the "separate, explicitly non-shared home" its Negative
+section requires for a test reaching one backend's internals.
+
+**And ADR 0003 turns out to have anticipated goal 3's tie-break finding, with a better
+reason than goal 3 gave.** Its Negative section: "Ties and other under-specified outcomes
+must be pinned down. Where a DP traceback has multiple optimal paths, the algorithm's
+tie-breaking rule becomes part of the contract, because otherwise two correct backends
+legitimately disagree." Goal 3 justified that test as mutation coverage. It is *contract* —
+a Cython wavefront breaking ties the other way would be a correct backend giving a different
+answer. Worth noting as a pattern across this branch: three times now, reading the source
+document more closely than the summary of it produced a stronger claim than the one being
+argued for.

@@ -312,7 +312,84 @@ Markers: `[ ]` not started · `[~]` in progress · `[x]` complete · `[!]` block
     > `SUM_TOL` as `1e-6` (goal 1 moved it to `1e-5`), and it still said the models' symbol
     > names were unrecoverable, which goal 2 disproved from the corpus.
 
-- [ ] Register `python` as the first ADR 0003 backend
-  - [ ] Add the row to `_backends.py`, with `hardware=None` so a failed import escalates rather than skips
-  - [ ] Update the repo-root backend tests that currently assert an empty matrix and the `EMPTY_HEADER` line
-  - [ ] Confirm the parameterized suite shape works with one backend, since backend *equivalence* has nothing to compare against until phase 2
+- [x] Register `python` as the first ADR 0003 backend
+  > **Done:** The matrix is no longer empty. `backends: python ✓` is what a run now opens
+  > with, ending the `EMPTY_HEADER` era that began 2026-09-01. Suite 259 → 264.
+  >
+  > **The goal's real finding is that ADR 0003 cannot be fully satisfied here, and the
+  > obstruction is in ADR 0003.** It asks for one suite per algorithm, parameterized over
+  > backends, with tests written against the public API only; it also defers the
+  > backend-selection API to `align`. Without that API the public surface has nowhere to put
+  > a backend, so the two requirements are jointly unsatisfiable in revision 02. Recorded in
+  > `_backends.py`'s docstring rather than worked around, and the cost is named there: until
+  > the seam exists, the table says which phases *exist*, not which ones the suite exercises.
+  >
+  > That distinction is worth keeping, because the header now reads as a stronger claim than
+  > it is. `backends: python ✓` means the kernel imports, not that anything ran twice.
+  >
+  > **Two smaller things fell out.** The row names the *kernel module* rather than the
+  > package, because `import pfsmgraph.hmm` succeeds with or without a decode in it — a probe
+  > that cannot fail is not a probe. And ADR 0003's Negative section turns out to have
+  > anticipated goal 3's tie-break finding and to justify it more strongly: a tie-break is
+  > **contract**, since two correct backends would otherwise legitimately disagree.
+  > **Q:** ADR 0003 wants one suite per algorithm parameterized over backends, but its own
+  > Open section defers the backend-selection API to `align` ("it warrants its own record"),
+  > and `viterbi(params, record)` has nowhere to put a backend today. How far should this
+  > goal go — register the row and record the tension, build the parameterized fixture over
+  > a private kernel registry now, or add a public `backend=` parameter?
+  > **A:** Register only, and record the tension. Add the `python` row, fix the root tests,
+  > verify the one-backend mechanism end to end, and label the kernel-level tests in
+  > `test_viterbi.py` as the "separate, explicitly non-shared home" ADR 0003 already
+  > requires for a test that reaches one backend's internals. Nothing is guessed, and the
+  > constraint is written where phase 2 will hit it. The public `backend=` parameter was
+  > declined because it would settle ADR 0003's open question in revision 02, when that ADR
+  > routes it to `align`; the private kernel registry was declined because it would make the
+  > algorithm suite test `_viterbi` rather than `viterbi`, which is exactly what that ADR's
+  > Negative section warns against.
+  - [x] Add the row to `_backends.py`, with `hardware=None` so a failed import escalates rather than skips
+    > **Done:** `Backend("python", "pfsmgraph.hmm._viterbi")`. The module named is the
+    > **kernel, not the package**, and that is the substantive choice: `import pfsmgraph.hmm`
+    > succeeds whether or not a decode exists in it, so the package would be a row that
+    > cannot fail — and a row that cannot fail is not a probe. `hardware=None` because
+    > nothing external is needed to run pure Python, so a failed import means a broken
+    > working copy, which is exactly what ADR 0003 forbids concealing behind a skip.
+  - [x] Update the repo-root backend tests that currently assert an empty matrix and the `EMPTY_HEADER` line
+    > **Done:** Three failed as designed — `test_registry_is_empty_until_a_dp_kernel_lands`
+    > carried a comment saying it *would* fail when `align` or `hmm` added the first row,
+    > "which is exactly when the surrounding docs need revisiting". It did, and they were.
+    > Its replacement asserts the exact one-row tuple and carries the same forward warning
+    > for the second row.
+    >
+    > `EMPTY_HEADER` is **kept under test** rather than deleted with its last caller: the
+    > branch stays live, and ADR 0003 requires that an empty matrix say so in as many words,
+    > because a missing line is indistinguishable from a hook that was never registered.
+    > Five tests added rather than three changed — the extra two assert against the *real*
+    > matrix rather than a synthetic one: that the registered module actually resolves, and
+    > that `PFSMGRAPH_REQUIRE_BACKENDS=python` passes, which is what a CI runner does.
+    > Suite 259 → 264, and the header now reads `backends: python ✓`.
+  - [x] Confirm the parameterized suite shape works with one backend, since backend *equivalence* has nothing to compare against until phase 2
+    > **Done, and the answer is that it does not work yet — for a reason in ADR 0003's own
+    > text.** The mechanism half is confirmed end to end: the header prints
+    > `backends: python ✓`, `detect()` resolves the row, and the escalation now names a real
+    > registry (`registered: ['python']` where it said `none`).
+    >
+    > The suite half cannot be built. ADR 0003 wants the backend as a fixture parameter with
+    > tests "written against the public API only" — but `viterbi(params, record)` has nowhere
+    > to put a backend, and giving it one is the runtime backend-selection API that the same
+    > ADR's Open section routes elsewhere: "settle this when `align` acquires a
+    > backend-selection API; it warrants its own record." **So the two halves of ADR 0003
+    > cannot both hold until `align`**, and revision 02 is not the place to settle it.
+    >
+    > What was done instead is the part ADR 0003 asks for unconditionally: the two tests that
+    > call `_viterbi` directly now sit in a labelled section, the "separate, explicitly
+    > non-shared home" that ADR's Negative section requires for a test reaching one backend's
+    > internals. The constraint is written where phase 2 will hit it, in `_backends.py`'s
+    > docstring and in that section's comment.
+    >
+    > **ADR 0003 also retro-justifies goal 3's tie-break test, more strongly than goal 3
+    > did.** Its Negative section: "Ties and other under-specified outcomes must be pinned
+    > down. Where a DP traceback has multiple optimal paths, the algorithm's tie-breaking
+    > rule becomes part of the contract, because otherwise two correct backends legitimately
+    > disagree." Goal 3 justified that test as mutation coverage; it is **contract**, and a
+    > Cython wavefront breaking ties the other way would be a correct backend giving a
+    > different answer.

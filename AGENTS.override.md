@@ -44,7 +44,7 @@ scaffolding (2026-09-04).** There is real code to review in two packages now.
 `packages/pfsmgraph-dataseq/` is six modules and 74 tests, covered further down.
 `packages/pfsmgraph-hmm/` is three modules and 165 tests — the numeric Utility code migrated
 from the Lush original, `HMMParams`, and `_viterbi.py`, the project's first
-dynamic-programming kernel. Review it
+dynamic-programming kernel and the first row in the ADR 0003 backend matrix. Review it
 against
 `.scratch/hmm-lush/Code/Utility/util.lsh`, `Code/HMMlib/hmm.lsh:228-262`, and
 `HMMLIB-ACCOUNT.md` §3 and §4, and know the one fact
@@ -210,6 +210,15 @@ fix and most expensive to leave:
   `pytest_report_header` is a startup hook, and a conftest loaded during collection has its
   hook discarded with no warning. `tests/test_backends.py` pins the placement for that
   reason; treat a change that deletes those wiring tests as the same finding.
+  **The matrix holds one row as of 2026-09-04 and the suites are still not parameterized,
+  which is a constraint rather than the finding it looks like.** ADR 0003 wants the backend
+  as a fixture parameter *and* the tests written against the public API only;
+  `viterbi(params, record)` has nowhere to put a backend, and adding one is the
+  backend-selection API that ADR's Open section routes to `align`. So "a test that quietly
+  exercises only one backend" describes every test in `hmm` today, by design and with only
+  one backend to exercise. What *is* a finding: reading `backends: python ✓` as evidence
+  that anything ran twice, or folding `test_viterbi.py`'s labelled kernel-level section
+  back in among the public-API tests — ADR 0003 asks for that separation unconditionally.
 - **`docs/api/` and the test that executes it** (ADR 0013). The pages are hand-written, so
   their examples are the only guard against prose drifting from the code they describe;
   `tests/test_api_docs.py` executes every block and compares its output — pasted exception

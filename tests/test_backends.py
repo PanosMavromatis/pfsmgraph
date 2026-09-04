@@ -30,15 +30,46 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 # --- the matrix as it stands -------------------------------------------------
 
-def test_registry_is_empty_until_a_dp_kernel_lands():
-    # Not a placeholder: ADR 0002 scopes backends to dynamic programming and
-    # dataseq has none. This fails when align or hmm adds the first row, which
-    # is exactly when the surrounding docs need revisiting.
-    assert BACKENDS == ()
+def test_the_python_backend_is_the_whole_matrix():
+    # Filled 2026-09-04 by pfsmgraph.hmm._viterbi, the first DP kernel to reach
+    # ADR 0002 phase 1. This was `BACKENDS == ()` until then, and its comment
+    # said it would fail when align or hmm added the first row -- which is what
+    # happened, and is why the surrounding docs were revisited in the same
+    # commit. Adding the *second* row should break this one the same way.
+    assert BACKENDS == (Backend("python", "pfsmgraph.hmm._viterbi", None),)
 
 
-def test_header_reports_an_empty_matrix_explicitly():
-    assert format_header(detect()) == EMPTY_HEADER
+def test_the_python_backend_escalates_rather_than_skips():
+    # hardware=None is the whole claim: nothing external is needed to run pure
+    # Python, so a failed import is a broken working copy and never a skip.
+    (python,) = BACKENDS
+    assert python.hardware is None
+
+
+def test_the_registered_module_is_the_kernel_not_the_package():
+    # `import pfsmgraph.hmm` succeeds whether or not a decode exists in it, so
+    # the package would be a row that cannot fail. The row is a claim about one
+    # lifecycle phase of one algorithm, so it names the module carrying it.
+    (python,) = BACKENDS
+    assert python.module.rsplit(".", 1)[-1] == "_viterbi"
+
+
+def test_the_registered_backend_actually_resolves():
+    # The row is not aspirational: this is the import probe running against the
+    # real matrix rather than a synthetic one.
+    assert detect() == (Availability("python", True, None),)
+
+
+def test_the_header_names_the_registered_backend():
+    assert format_header(detect()) == "backends: python ✓"
+
+
+def test_an_empty_matrix_would_still_print_explicitly():
+    # EMPTY_HEADER is no longer what a run prints, but the branch is still live:
+    # ADR 0003 requires that a matrix with nothing in it says so in as many
+    # words, because a missing line is indistinguishable from a hook that was
+    # never registered. Kept under test so the message cannot rot unnoticed.
+    assert format_header(()) == EMPTY_HEADER
     assert "none registered" in EMPTY_HEADER
 
 
@@ -91,6 +122,12 @@ def test_required_and_available_passes():
     assert check_required(STATES, {REQUIRE_ENV: "python"}) is None
 
 
+def test_requiring_python_passes_against_the_real_matrix():
+    # The CI escalation, resolved against BACKENDS rather than a fixture: this
+    # is what PFSMGRAPH_REQUIRE_BACKENDS=python does on a runner today.
+    assert check_required(detect(), {REQUIRE_ENV: "python"}) is None
+
+
 def test_required_but_skipped_is_escalated():
     with pytest.raises(BackendError, match="would have skipped"):
         check_required(STATES, {REQUIRE_ENV: "python,cuda"})
@@ -118,9 +155,13 @@ def test_conftest_is_at_the_repo_root():
 
 
 def test_header_actually_reaches_the_session_output(pytester):
+    # End to end in a subprocess, so it exercises the real startup path rather
+    # than calling the hook by hand. The copied _backends.py resolves
+    # pfsmgraph.hmm._viterbi out of the same venv, which is also a check that
+    # the row survives being probed from outside the repo root.
     for name in ("conftest.py", "_backends.py"):
         shutil.copy(REPO_ROOT / name, pytester.path / name)
     pytester.makepyfile(test_trivial="def test_trivial(): pass")
     result = pytester.runpytest_subprocess()
-    result.stdout.fnmatch_lines(["backends: none registered*"])
+    result.stdout.fnmatch_lines(["backends: python*"])
     result.assert_outcomes(passed=1)

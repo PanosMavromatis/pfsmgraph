@@ -21,6 +21,11 @@ disagreement is asserted in both directions: every position after the seed
 agrees on all three models, and position 0 of `m008_0001_008` diverges *toward
 the more probable start state*. A test that only asserted agreement would pass
 just as well against a port that reproduced the bug.
+
+Everything here is written against the public API except the final section,
+which is labelled and says why. The suite is not yet parameterized over ADR 0003
+backends: there is only one, and parameterizing needs a backend-selection seam
+that ADR 0003's own Open section defers to `align`. See that section's comment.
 """
 
 from __future__ import annotations
@@ -243,40 +248,6 @@ def test_the_divergence_prefers_the_more_probable_start_state():
     assert init_p[ours] > init_p[theirs]
 
 
-def test_an_impossible_start_state_is_never_chosen():
-    """The degenerate half of the defect, which the tracked fixtures cannot show.
-
-    Every `init_p == 0` state in the saved models also cannot emit `begin` on
-    any outgoing arc, so `+inf` absorbs before the buggy `delta = 0.0` seed can
-    win -- the learned topology masks it. Revision 04's `split-state` halves
-    initial probabilities without halving a topology, which decouples the two,
-    so the case is constructed here instead of waited for.
-
-    State 0 is unreachable as a start (`init_p == 0`) and is otherwise the
-    cheapest state to be in. Under the original's seeding it starts there,
-    because a raw `init_p` of 0.0 is the *best* possible value in a domain where
-    smaller is better.
-    """
-    init_p = np.array([0.0, 1.0])
-    transition_p = np.array([[1.0, 0.0], [0.5, 0.5]])
-    user_output = np.zeros((2, 2, 2))
-    user_output[:, :, 0] = 1.0  # every live arc emits "a" with certainty
-    params = build(init_p, transition_p, user_output)
-
-    ours = viterbi(params, record(0, 0, 0))
-    assert ours.states[0] == 1
-
-    # 2 ** -init_p has bits() equal to init_p itself, so passing it to the
-    # kernel reproduces the original's seeding exactly -- no flag, and no second
-    # code path to keep alive. See HMMLIB-ACCOUNT.md section 7.
-    theirs, _ = _viterbi(
-        2.0**-init_p, params.transition_p, params.output_p, ours.states.dtype.type(
-            [code(0)] * 3
-        ),
-    )
-    assert theirs[0] == 0, "the defect this test exists to rule out did not reproduce"
-
-
 # --- min-sum, not max-product -----------------------------------------------
 
 
@@ -466,27 +437,6 @@ def test_no_path_with_an_infinite_total_ever_reaches_a_caller():
     )
     with pytest.raises(ImpossibleSequenceError):
         viterbi(params, SequenceRecord(np.array([UNK], dtype=np.int32)))
-
-
-def test_the_kernel_itself_reports_impossibility_numerically():
-    """The backend contract: kernels do not raise, they return `+inf`.
-
-    Asserted directly because it is what lets ADR 0002's later phases be
-    transliterations -- a CUDA device function cannot raise a Python exception.
-    """
-    params = build(
-        np.array([0.5, 0.5]),
-        np.array([[0.5, 0.5], [0.5, 0.5]]),
-        np.full((2, 2, 2), 0.5),
-    )
-    states, total = _viterbi(
-        params.init_state_p,
-        params.transition_p,
-        params.output_p,
-        np.array([UNK], dtype=np.int32),
-    )
-    assert np.isinf(total)
-    assert states.shape == (2,)
 
 
 # --- the symbol-axis guard ---------------------------------------------------
@@ -694,3 +644,88 @@ def test_the_decode_is_a_function_not_a_method():
     """
     assert not hasattr(HMMParams, "viterbi")
     assert callable(viterbi)
+
+
+# --- kernel-level: deliberately NOT parameterized ----------------------------
+#
+# Everything above this line is written against the public API, which is what
+# ADR 0003 requires of a suite it will one day run against every backend:
+# "adding a backend adds a parameter value, not a file". The two tests below
+# call `_viterbi` directly, so they can never be parameter values -- ADR 0003
+# names that case and asks for exactly this, "a separate, explicitly non-shared
+# home".
+#
+# The suite is not parameterized yet, and that is a constraint rather than an
+# omission. Parameterizing it needs somewhere to put a backend, and
+# `viterbi(params, record)` has none; giving it one is the runtime
+# backend-selection API ADR 0003's Open section routes to `align` -- "settle
+# this when align acquires a backend-selection API; it warrants its own record".
+# So the header reports honestly today and the fixture arrives with the seam.
+#
+# Neither test below is dispensable, and neither belongs above the line. The
+# first constructs the delta-seeding degenerate case the tracked fixtures cannot
+# exhibit; the second pins the backend contract itself, which is a claim about
+# kernels rather than about decoding.
+
+
+def test_an_impossible_start_state_is_never_chosen():
+    """The degenerate half of the seeding defect, which the fixtures cannot show.
+
+    Every `init_p == 0` state in the saved models also cannot emit `begin` on
+    any outgoing arc, so `+inf` absorbs before the buggy `delta = 0.0` seed can
+    win -- the learned topology masks it. Revision 04's `split-state` halves
+    initial probabilities without halving a topology, which decouples the two,
+    so the case is constructed here instead of waited for.
+
+    State 0 is unreachable as a start (`init_p == 0`) and is otherwise the
+    cheapest state to be in. Under the original's seeding it starts there,
+    because a raw `init_p` of 0.0 is the *best* possible value in a domain where
+    smaller is better.
+
+    The first assertion is public-API and would migrate above the line when the
+    suite is parameterized; the second is what makes it mean anything, and
+    cannot.
+    """
+    init_p = np.array([0.0, 1.0])
+    transition_p = np.array([[1.0, 0.0], [0.5, 0.5]])
+    user_output = np.zeros((2, 2, 2))
+    user_output[:, :, 0] = 1.0  # every live arc emits "a" with certainty
+    params = build(init_p, transition_p, user_output)
+
+    ours = viterbi(params, record(0, 0, 0))
+    assert ours.states[0] == 1
+
+    # 2 ** -init_p has bits() equal to init_p itself, so passing it to the
+    # kernel reproduces the original's seeding exactly -- no flag, and no second
+    # code path to keep alive. See HMMLIB-ACCOUNT.md section 7.
+    theirs, _ = _viterbi(
+        2.0**-init_p,
+        params.transition_p,
+        params.output_p,
+        np.array([code(0)] * 3, dtype=np.int32),
+    )
+    assert theirs[0] == 0, "the defect this test exists to rule out did not reproduce"
+
+
+def test_the_kernel_itself_reports_impossibility_numerically():
+    """The backend contract: kernels do not raise, they return `+inf`.
+
+    Asserted directly because it is what lets ADR 0002's later phases be
+    transliterations -- a CUDA device function cannot raise a Python exception,
+    so impossibility has to survive the trip out as a number. Every backend
+    registered in `_backends.py` owes this behaviour, which is why the test is
+    about kernels rather than about this one.
+    """
+    params = build(
+        np.array([0.5, 0.5]),
+        np.array([[0.5, 0.5], [0.5, 0.5]]),
+        np.full((2, 2, 2), 0.5),
+    )
+    states, total = _viterbi(
+        params.init_state_p,
+        params.transition_p,
+        params.output_p,
+        np.array([UNK], dtype=np.int32),
+    )
+    assert np.isinf(total)
+    assert states.shape == (2,)
