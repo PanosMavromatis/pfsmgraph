@@ -1,8 +1,15 @@
 # 0008. Build backends are per-package; meson-python for compiled members
 
-- **Status:** Accepted — but see [ADR 0012](0012-align-and-hmm-temporarily-on-hatchling.md),
-  which suspends the meson-python half of this decision in practice until the first
-  Cython kernel lands.
+- **Status:** Superseded by
+  [ADR 0018](0018-family-wide-meson-python-build-backend.md), 2026-09-04, which makes the
+  build backend family-wide. **Both** decisions below are overridden — D8 (the
+  meson-python/hatchling split) and D7 (the principle that there is no family-wide
+  backend and none is sought), since there now is one. Previously qualified by
+  [ADR 0012](0012-align-and-hmm-temporarily-on-hatchling.md), which suspended the
+  meson-python half in practice; 0012 is superseded by the same record. What stands here
+  and is why this one is still worth opening: the build-needs table in Context, which
+  describes which packages have dynamic programming and is unaffected by who builds them,
+  and the setuptools findings in Evidence.
 - **Date:** 2026-06-29
 - **Source:** PRD §6, §6.1 — decisions D7, D8
 

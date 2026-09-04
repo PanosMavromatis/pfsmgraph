@@ -46,7 +46,7 @@ no-build-isolation-package = [
 # environment, and ninja additionally has to *stay* there, since the editable
 # loader bakes its absolute path (PRD §6.1).
 #
-#   meson-python - build backend for all five members (ADR 0012's successor)
+#   meson-python - build backend for all five members (ADR 0018)
 #   cython       - align's NW kernel and hmm's Baum-Welch core; dormant until
 #                  the first .pyx, but the build requires it now
 #   ninja        - the loader's rebuild-on-import hook shells out to it

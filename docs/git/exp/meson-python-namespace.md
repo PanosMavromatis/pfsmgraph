@@ -205,3 +205,34 @@ builder rather than of this project. They are neither known false nor known to s
 meson-built wheel here, and the section has to be re-measured against it. The four-file
 invariant needs re-verifying at the same time, `py.typed` most of all: meson does not glob,
 so `install_sources` must name it explicitly.
+
+**2026-09-04 — the decision is recorded, and the branch is done.** [ADR
+0018](../../design/adr/0018-family-wide-meson-python-build-backend.md), *The build backend
+is family-wide: all five members on meson-python*. It is the first record in this
+directory to **supersede** rather than amend, and it retires two: **0012**, which had been
+`Accepted (temporary)` and expected to expire when the first `.pyx` landed, and **0008**,
+whose D7 *and* D8 it overrides — D7 is the principle that there is no family-wide backend
+and none is sought, so a family-wide backend does not qualify it, it reverses it.
+
+0012's status line records something a bare "Superseded" would have lost: it did **not**
+expire as written. The `.pyx` never landed; the premise was falsified instead, because the
+finder is injected by the editable install rather than by compilation. Its `Source` line
+also pointed at revert recipes that the previous commit consumed, so it now says so — the
+body is left intact, since a superseded record is history and only the dangling pointer
+needed marking. In the index, footnote `†` was retired *in place* rather than deleted, so
+the fact that 0008 was once merely *qualified* survives the supersession.
+
+**The sweep found a third variety of doc rot, and the worst of the three.** The first two
+were a stale *word* (`hatchling`) and a stale *claim* ("not yet landed"). This one was in
+`docs/agents/codex.md`, which instructs a reviewer to "check specifically that ADR statuses
+still match reality" and then stated that reality as of 2026-09-01. A stale assertion
+leaves a gap; a stale **oracle** inverts the check — a reviewer following it would have
+reported the correct new state as the defect. Fixed, and given a note that PRD §2's D8 row
+and §6.1's backend table are deliberately left describing the superseded split, so that
+finding is not re-reported either.
+
+Also worth recording as a near miss: at `/smart-merge` step 1 the new ADR was still
+**untracked**, and every git comparison in that workflow — `git log main..HEAD`, the diff
+stat, the PR diff — renders identically whether an untracked file exists or not. The
+pointers added to it that same turn were all in *modified* files, so they would have merged
+cleanly and pointed at nothing.

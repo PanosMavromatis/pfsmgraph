@@ -6,7 +6,7 @@
 # installs; `ninja` must be on PATH in the dev environment for that hook to fire
 # (PRD §6.1). ADR 0012 removed it from the workspace-root [dependency-groups].dev
 # along with meson-python and cython; it returns not because that ADR was
-# reverted but because it was superseded -- all five members are meson-python
+# reverted but because it was superseded (ADR 0018) -- all five are meson-python
 # now, pure ones included, for reasons that have nothing to do with compilation
 # (packages/pfsmgraph-dataseq/pyproject.toml). Note that PATH alone is not
 # sufficient -- measured on exp/meson-python-namespace, the generated editable

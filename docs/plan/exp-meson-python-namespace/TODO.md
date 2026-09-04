@@ -361,5 +361,48 @@ reverting ADR 0012 by whichever of its three candidates survives contact.
     > nothing here, because the interactive `cp -i` alias prompted and defaulted to "no" —
     > `git checkout --` is the reliable revert for a scratch probe.)
 
-- [ ] Record the resolution as a new ADR superseding 0012, and clear the footnotes it
+- [x] Record the resolution as a new ADR superseding 0012, and clear the footnotes it
       planted in `README.md` and `docs/agents/core.md`.
+  > **Q:** ADR 0008 carries two decisions — D7 (the principle: backends are per-package,
+  > no family-wide backend is sought) and D8 (the choice: meson-python for compiled,
+  > hatchling for pure). ADR 0018 overrides both. How should 0008's status read?
+  > **A:** Superseded by 0018 outright. Both D7 and D8 are dead — there *is* now a
+  > family-wide backend, which is precisely what D7 denied seeking. The status line says
+  > so, and also says what survives (the build-needs Context table, the setuptools
+  > Evidence), so a reader knows why the record is still worth opening.
+  > **Q:** PRD §9 states "One carries a non-`Accepted` status: **ADR 0012** is
+  > `Accepted (temporary)`, expiring when the first `.pyx` lands" — false as of this ADR.
+  > The goal text names only `README.md` and `core.md`. Touch the PRD?
+  > **A:** Update that one sentence only. It is a claim about the ADR set's own state
+  > rather than a design decision, so amending it does not breach "amend decisions in the
+  > ADRs, not the PRD". §2's D8 row and §6.1's backend table stay as written — those are
+  > superseded *decisions*, and §9 already establishes that the ADRs win.
+  > **Done:** [ADR 0018](../../design/adr/0018-family-wide-meson-python-build-backend.md),
+  > *The build backend is family-wide: all five members on meson-python* — 195 lines, with
+  > all three of ADR 0012's candidates given their measured fate (1 rejected on *how* it
+  > fails, 2 refuted, 3 found not to be a defect upstream) and the Evidence section marking
+  > observed apart from reasoned. Status changes: **0012 → Superseded**, with its status
+  > line recording that it did *not* expire as written — the `.pyx` never landed and the
+  > premise was falsified instead — and naming the two claims in its body now known false;
+  > **0008 → Superseded**, both D7 and D8, since a family-wide backend is precisely what D7
+  > denied seeking. 0012's `Source` line pointed at revert recipes that the previous commit
+  > consumed, so it now says so; the body is left intact, because a superseded record is
+  > history and only the dangling pointer needed marking.
+  > The index gained the 0018 row, a `¶` footnote, and a Reading-order entry; footnote `†`
+  > was retired *in place* rather than deleted, so the fact that 0008 was once merely
+  > qualified survives. PRD §9's ADR-status sentence was corrected (§2's D8 row and §6.1's
+  > table deliberately left as written — superseded decisions, and §9 already says the ADRs
+  > win). The footnote half of this goal was mostly discharged by the previous commit, but
+  > those passages predated the record and argued the case inline; `README.md`, `core.md`
+  > (×3), the root and `dataseq` `pyproject.toml`s and `align/meson.build` now point at
+  > ADR 0018 as authoritative.
+  > **One stale claim found outside the goal's stated scope**, and it was the worst of the
+  > three this branch has turned up: `docs/agents/codex.md` instructs a reviewer to "check
+  > specifically that ADR statuses still match reality" and then stated that reality as of
+  > 2026-09-01 — so a reviewer following it would have flagged the *correct* new state as a
+  > defect. A checklist whose reference value is stale inverts the check rather than
+  > weakening it. Fixed, and given a note that PRD §2/§6.1 are deliberate history so the
+  > finding is not re-reported.
+  > Suite green at **280**, `uv lock --check` clean, all five backends parse as `mesonpy`,
+  > no broken intra-ADR links. `AGENTS.override.md` 494 → 498; `AGENTS.md` unchanged at 470
+  > despite three `core.md` edits, since that file's paragraphs are single long lines.

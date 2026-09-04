@@ -127,10 +127,14 @@ fix and most expensive to leave:
 - **`docs/design/adr/` vs. `docs/design/PRD.md` vs. `docs/agents/core.md`.** Three documents
   describe one design. Claim drift between them is the live risk — the ADRs are authoritative
   where they overlap the PRD, and `core.md` must not contradict either. Check specifically that
-  ADR statuses (`Proposed` vs. `Accepted`) still match reality. As of 2026-09-01 the only
-  non-`Accepted` record is **0012**, `Accepted (temporary)` until the first `.pyx`; 0010 was
-  promoted when the encoder API landed. A document still describing 0010 as `Proposed`, or
-  `SymbolTable` as provisional, is stale and worth a finding.
+  ADR statuses (`Proposed` vs. `Accepted` vs. `Superseded`) still match reality. As of
+  2026-09-04 every record is `Accepted` except **0008** and **0012**, both `Superseded` by
+  **0018** (the build backend is family-wide: all five members on meson-python); 0010 was
+  promoted when the encoder API landed. A document still describing 0010 as `Proposed`,
+  `SymbolTable` as provisional, or `align`/`hmm` as being on hatchling is stale and worth a
+  finding. Note that PRD §2's D8 row and §6.1's backend table are *deliberately* left
+  describing the superseded split -- §9 says the ADRs win where the two disagree, so those
+  are history rather than drift, and re-reporting them wastes a finding.
 - **`packages/*/pyproject.toml` dependency bounds.** ADR 0006's workspace footgun: a
   `{ workspace = true }` source satisfies *any* constraint, so a wrong `>=` bound cannot fail
   locally and only breaks a pip user post-publish. The four bounds naming

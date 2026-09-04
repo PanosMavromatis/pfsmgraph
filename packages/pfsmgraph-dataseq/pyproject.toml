@@ -45,10 +45,13 @@ Documentation = "https://github.com/PanosMavromatis/pfsmgraph/blob/main/docs/api
 # meson.build and this backend, pure ones included; this file's own comment is
 # the one the other four point at.
 #
-# Measured on exp/meson-python-namespace 2026-09-04. Supersedes ADR 0012, which
-# deferred the choice to the first .pyx, and overrides ADR 0008's per-package
-# build backends -- the finder is injected by the editable install rather than
-# by compilation, so it appears with no compiled code anywhere in the workspace.
+# Measured on exp/meson-python-namespace 2026-09-04 and recorded as ADR 0018,
+# which supersedes ADR 0012 (it deferred the choice to the first .pyx) and
+# overrides ADR 0008's per-package build backends. The finder is injected by the
+# editable install rather than by compilation, so it appears with no compiled
+# code anywhere in the workspace -- which is why 0012's trigger never had to
+# fire. ADR 0018 carries the measurements and the two rejected alternatives;
+# this comment is the short form, sited where the change is visible.
 #
 # The wheel layout that [tool.hatch.build.targets.wheel] used to describe is now
 # meson.build's install_sources: src/pfsmgraph/dataseq/ -> pfsmgraph/dataseq/,

@@ -112,8 +112,9 @@ differing sdists indicate a real change. `exclude = ["/.gitignore"]` under
 still ships -- so this is filed in `docs/plan/DEFERRED.md` rather than fixed in passing.
 
 **All of the above was measured against a hatchling build, and no member is on hatchling
-any more** (2026-09-04: all five moved to meson-python, for the namespace reason in
-`docs/agents/core.md`). Nothing here is known to be false, and nothing here is known to
+any more** (2026-09-04: all five moved to meson-python, for the namespace reason recorded
+in [ADR 0018](../design/adr/0018-family-wide-meson-python-build-backend.md), which lists
+this re-measurement among its costs). Nothing here is known to be false, and nothing here is known to
 still hold -- both findings are properties of hatchling's builder, not of this project.
 `pfsmgraph-dataseq` 0.1.0 shipped from hatchling, so **its next release is the first
 meson-built wheel this project publishes**, and the whole of this section has to be
