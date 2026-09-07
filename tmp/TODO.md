@@ -48,8 +48,13 @@ marketplace later; nothing here builds it, but nothing here may make it harder (
   and pfsmgraph's `docs/agents/claude.md` says an imported tree's `CLAUDE.md` is renamed
   to `.orig` on arrival. These are not imports — they are live sibling repositories whose
   `CLAUDE.md` is precisely the guidance wanted while editing them (component placement,
-  `${CLAUDE_PLUGIN_ROOT}`, version bumps, `allowed-tools` discipline). They stay. Object in
-  A1's Q&A if this is wrong.
+  `${CLAUDE_PLUGIN_ROOT}`, version bumps, `allowed-tools` discipline). **They stay, confirmed
+  2026-09-07.** The accepted cost is that a pfsmgraph session reading any file under `tmp/`
+  pulls that plugin's instructions into context; that is tolerable precisely because those
+  instructions are about editing the plugin, which is what a session down there is doing.
+  Whether this exception gets written into `docs/agents/claude.md` as a rule — imported tree
+  renames, live sibling repository parked for editing keeps — was left open and is a
+  candidate hand-back (F4), not a blocker.
 - **Don't relitigate ADR 0016.** The lifecycle is five stages — formalization, then four
   implementation phases: Python, Cython, Numba CPU-parallel (`prange`), Numba CUDA. The
   plugin implements that; it does not reopen it. The one thing ADR 0016 leaves open that
@@ -194,10 +199,16 @@ logging them is that the plugin's README can later cite *why*, not just *what*.
   - [ ] `dp-compile`: no `docs/plan/`, history is straight to `main`. Recommend a
         sequence of focused commits to `main`, not bootstrapping plan machinery into a
         repository that is being rewritten end to end — the record of *why* is this file.
-  - [ ] pfsmgraph side: the user named the branch `revise-plugins`. If `/new-branch`
-        creates it, decline the branch plan (or make `docs/plan/revise-plugins/TODO.md` a
-        one-line pointer here), because rung 2 would otherwise resolve to it whenever the
-        path argument is forgotten.
+  - [ ] pfsmgraph side: the user named the branch `revise-plugins`. **Settled 2026-09-07 —
+        pointer plan.** `/new-branch` creates `docs/plan/revise-plugins/TODO.md` as usual,
+        and its body is then replaced with a one-line pointer to `tmp/TODO.md`. Rung 2 still
+        resolves, but to something that says immediately where the real plan is, which beats
+        both alternatives: declining the plan makes rung 2 miss and fall through to the
+        pfsmgraph *master* plan (a different wrong file, merely a more obvious one), and a
+        duplicated real plan would drift from this file the moment work starts while
+        describing commits made in other repositories. Keep the `**Status**:` stamp so
+        `/smart-merge` has something to mark `merged`, and keep the master-plan backlink so
+        `/file-plans` can place it later.
 
 ## Section B — Rename and generalise `tokalign-dev` → `dp-compile`
 
@@ -350,11 +361,23 @@ started.
       `/smart-commit` → `/smart-merge`), the manifest, the five-stage table under ADR 0016
       numbering, the two entrances (D), prerequisites, and the removal of the `tokalign`
       "Decisions" and "Naming" sections.
-- [ ] Refresh the live copy. `.claude/skills/workflow-claude/` in pfsmgraph is an
-      untracked byte-identical copy of the clone and goes stale at the first edit.
-      Re-sync after E4 (or replace it with a symlink into `tmp/` — decide; a symlink means
-      the clone can never move), and confirm `settings.local.json`'s absolute-path
-      allow-list entries still resolve.
+- [ ] Replace the live copy with a symlink. **Settled 2026-09-07.**
+      `.claude/skills/workflow-claude/` in pfsmgraph is an untracked byte-identical copy of
+      the clone and goes stale at the first edit; a re-sync step fails *silently*, since a
+      stale copy still loads and still works, just from the old text. Symlink it to
+      `tmp/workflow-claude` so drift is unrepresentable and edits take effect with no sync
+      at all. The accepted cost is that the clone can no longer move or be deleted without
+      breaking the live plugin — note it in the plugin's own README, since a future clone
+      elsewhere would hit it.
+  - [ ] `settings.local.json`'s allow-list is **not** a cost here, contrary to the concern
+        raised when this was posed. Permission patterns match the command *text*, not the
+        resolved inode, and the two entries spell
+        `.claude/skills/workflow-claude/scripts/…` — a path the symlink keeps valid. Verify
+        once by running `check-agents-md.sh` through that path after the swap rather than
+        assuming it.
+  - [ ] Do the swap at E6 time, not earlier. The copies are byte-identical today, so there
+        is nothing to gain from swapping mid-session and a live plugin directory is not
+        worth disturbing for no benefit.
 
 ## Section F — Verification, commit, hand-back
 
