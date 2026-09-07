@@ -232,8 +232,12 @@ __marimo__/
 .com.apple.timemachine.donotpresent
 .apdisk
 
-# Local repo housekeeping
-tmp/
+# Local repo housekeeping. `tmp/*` rather than `tmp/`: git never descends into an
+# ignored directory, so a bare `tmp/` would make the negation below inert. The
+# clones parked here (plugin repositories) stay ignored; only the meta-plan for
+# revising them is tracked from this root.
+tmp/*
+!tmp/TODO.md
 
 # Codex working-tree review output (see docs/agents/codex.md)
 REVIEW.md

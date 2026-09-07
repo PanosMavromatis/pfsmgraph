@@ -1,0 +1,383 @@
+# Master plan — plugin revisions (`tokalign-dev` → `dp-compile`, with `workflow-claude`)
+
+**Status**: active
+**Created**: 2026-09-04
+**Driven by**: `/hitl-step N tmp/TODO.md` — always pass the path. This file sits outside
+`docs/plan/`, so no resolution rung finds it on its own; without the argument `/hitl-step`
+resolves the pfsmgraph branch plan or master plan instead and works the wrong file.
+
+## What this file is
+
+Meta-work for pfsmgraph: the plan for revising two Claude Code plugins that live in their
+own repositories, parked as clones under the gitignored `tmp/`. **This is the only file
+under `tmp/` that pfsmgraph tracks** — the root `.gitignore` reads `tmp/*` with a
+`!tmp/TODO.md` negation for exactly that reason (a bare `tmp/` would ignore the directory
+itself, and git never descends into an ignored directory, so no negation beneath it could
+work). Every plugin edit is committed in the plugin's own repository, from its own root.
+The Q&A logged inline here is the record of *why* the plugins changed; the plugin repos'
+histories are the record of *what* changed.
+
+Markers are `/hitl-step`'s: `[ ]` not started, `[~]` in progress, `[x]` done, `[!]`
+blocked, `[-]` descoped.
+
+## The three roots
+
+| Root | Remote / tip at plan creation | Commit convention | Notes |
+|---|---|---|---|
+| `tmp/tokalign-dev/` | `PanosMavromatis/tokalign-dev`, `main` at `5a78334`, clean | imperative subject, no prefix, body explains why (from its history; its `CLAUDE.md` is silent) | to be renamed; version `0.1.0`; own `CLAUDE.md` (template-derived, `@README.md`); `dev/smoke-test.sh` wraps `claude plugin validate` |
+| `tmp/workflow-claude/` | `PanosMavromatis/workflow-claude`, `main` at `59661bc`, clean | conventional commits (`feat(scope):`, `chore(plan):`, `docs:`) | dogfoods its own commands: `docs/plan/DO.md` master plan, revisions 02–04 closed, lands work via PRs; strict `allowed-tools` and script-proposes/command-writes conventions in its `CLAUDE.md` |
+| `.claude/skills/workflow-claude/` (pfsmgraph, untracked) | byte-identical to the clone at plan creation (`diff -rq` clean) | — | the copy this session actually runs; `settings.local.json` allow-lists its scripts by absolute path. Goes stale the moment the clone is edited (see E6) |
+
+Neither plugin is marketplace-installed: `workflow-claude` loads via `--plugin-dir`, and
+neither repo carries a `marketplace.json`. Both are destined for one organisation
+marketplace later; nothing here builds it, but nothing here may make it harder (F4).
+
+## Ground rules
+
+- **Commit and push from each plugin's root, never from pfsmgraph's.** A `cd` inside one
+  Bash call is fine (`cd tmp/workflow-claude && git …`); if the harness makes that awkward,
+  ask the user to run it. pfsmgraph's `/smart-commit` rule (agent docs) does not apply
+  inside the plugin repos — neither has a `docs/agents/` tree — but each repo's *own*
+  commit convention does, and it overrides `/smart-commit`'s conventional-commit template
+  where the two differ (`tokalign-dev`).
+- **pfsmgraph is not edited by this plan** beyond this file. Everything the revised plugin
+  needs *from* pfsmgraph — a manifest, a `docs/agents/claude.md` section, a `DEFERRED.md`
+  closure, a recovered `FORMALIZATION.md` — is collected as a hand-back in F4 and lands on
+  a pfsmgraph branch afterwards, through pfsmgraph's own process.
+- **Known deviation, recorded rather than fixed:** both clones carry a root `CLAUDE.md`,
+  and pfsmgraph's `docs/agents/claude.md` says an imported tree's `CLAUDE.md` is renamed
+  to `.orig` on arrival. These are not imports — they are live sibling repositories whose
+  `CLAUDE.md` is precisely the guidance wanted while editing them (component placement,
+  `${CLAUDE_PLUGIN_ROOT}`, version bumps, `allowed-tools` discipline). They stay. Object in
+  A1's Q&A if this is wrong.
+- **Don't relitigate ADR 0016.** The lifecycle is five stages — formalization, then four
+  implementation phases: Python, Cython, Numba CPU-parallel (`prange`), Numba CUDA. The
+  plugin implements that; it does not reopen it. The one thing ADR 0016 leaves open that
+  the plugin *must* take a position on is phase-3 file naming (A5).
+
+## Findings at plan time (so they are not rediscovered)
+
+- `tokalign-dev` is four real skills and four stubs. Real: `algorithm-formalize` (348
+  lines), `algorithm-prototype` (218), `cython-translation` (255), `benchmarking` (188).
+  Stubs, ten lines each, "TODO: implement": `gpu-parallelization`, `scoring-matrix`,
+  `alignment-viz`, `package-release` — and **every reference and example file under the
+  stubs is zero bytes** (`anti-diagonal-parallelism.md`, `numba-cuda-patterns.md`,
+  `example-numba-impl.py`, …). So the old phase 3 was never implemented in the plugin, and
+  both ADR 0016 phases 3 and 4 are written from scratch, not amended.
+- Coupling to `tokalign`, counted by `grep -c tokalign` per file: `algorithm-formalize`
+  21, `README.md` 14, `cython-translation` 8, `CLAUDE.md` 8,
+  `pseudocode-conventions-DP.md` 6, `next-phase.md` 6, `validate-equivalence.py` 5,
+  `cython-for-dp.md` 4, `algorithm-prototype` 4, `test-patterns.md` 4,
+  `example-formalization.md` 3, `phase-check.md` 3, `new-algorithm.md` 3, and 1–2 in
+  seven more. The word count understates it: the *structural* couplings are the
+  `src/tokalign/algorithms/<name>/` layout, the `_types.py` trio
+  (`Alphabet`/`ScoringMatrix`/`AlignmentResult`), `_registry.py`, `conftest.py`'s
+  `get_available_backends()`, `setup.py build_ext --inplace`, `uv run --extra dev`,
+  `benchmarks/run_benchmark.py`, and a **pre-ADR-0011 reserved block** (indices 0–3
+  reserved, `GAP` = 3, user symbols from 4 — pfsmgraph is 0–5 and from 6, and `tokalign`
+  itself was renumbered onto that on 2026-09-01).
+- Two assumptions are alignment-specific and would be *wrong* for `hmm`, not merely
+  narrow: "normalize to max (similarity)" — pfsmgraph's Viterbi is a **min-sum over
+  bits**, and a port that reaches for `max` inverts every comparison (`core.md`); and the
+  anti-diagonal wavefront as *the* parallel decomposition — an HMM recurrence is 1-D over
+  time with dense state coupling and may have no anti-diagonals (ADR 0016 Open; master
+  plan line 194).
+- Phase-file naming disagrees three ways: the plugin says `_numba.py` for the GPU phase;
+  ADR 0016 proposes `_cpu_parallel.py` and says the proof-of-concept used `_cuda.py`
+  (it did not — `.scratch/align-poc/tokalign` has `_numba.py`; hand-back in F4); pfsmgraph
+  `hmm` names algorithm-first and flat: `_viterbi.py`, `_viterbi_cython.pyx`.
+- Staleness is mtime-based and transitive (`phase-detection.md`). mtime is reset by every
+  `git checkout`, and a formalization *recovered from* code is necessarily newer than the
+  code, which would mark phase 1 stale and have `/next-phase` regenerate the reference
+  implementation from a document derived from it — exactly backwards. A3 exists for this.
+- pfsmgraph's backend matrix is a registry, not discovery: one `Backend(name, module,
+  hardware)` row per implemented phase in the repo-root `_backends.py`, with ADR 0003's
+  loud-skip/hard-fail semantics; and the algorithm suites are **not yet parameterised
+  over it** (no backend-selection API until `align`), so a phase skill has to know both
+  states of that world.
+- `DEFERRED.md` carries, under "No trigger yet": *how the Claude Code development plugin
+  fits the multi-package family — one family-wide dev plugin, or one per package.* This
+  plan answers it (one generic plugin, per-repo manifest). Closing the entry is a hand-back.
+
+## Section A — Decisions to settle before editing
+
+Each goal here is Q&A. Recommendations are stated so the answer can be "yes"; the point of
+logging them is that the plugin's README can later cite *why*, not just *what*.
+
+- [ ] Settle the plugin's name, version and rename mechanics.
+  - [ ] Name. Recommend `dp-compile` (the user's suggestion): the emphasis stays on
+        dynamic-programming kernels, and "compile" reads as the progressive lowering from
+        prose to pseudocode to Python to compiled and JIT phases. Alternatives if that
+        reads as Cython-only: `dp-lifecycle`, `dp-phases`.
+  - [ ] Version. `plugin.json` is `0.1.0`; its `CLAUDE.md` says bump on every change users
+        should pick up. Recommend `0.2.0` under the new name (same repository, same
+        history; a reset to `0.1.0` would make the cached `tokalign-dev@0.1.0` and
+        `dp-compile@0.1.0` look like the same thing).
+  - [ ] GitHub rename: `gh repo rename dp-compile` from the clone root is the user's
+        action (external; `!` prefix), followed by `git remote set-url` and a local
+        directory rename to `tmp/dp-compile/` — `plugin.json` `name` must match the
+        directory name. Decide whether the rename lands first (cleanest: every later
+        commit is already under the new name) or last.
+  - [ ] Commit convention for the renamed repo: keep imperative-no-prefix (its history)
+        or adopt conventional commits (`workflow-claude`'s). Recommend keep, and *write it
+        into its `CLAUDE.md`* so `/smart-commit`'s template is overridden explicitly
+        rather than by the history's example.
+- [ ] Settle how a consumer repository describes itself to the plugin (the manifest).
+      The plugin cannot know where a repo keeps its kernels, what its phase files are
+      called, how it builds, how it tests, or how a backend is registered — and every one
+      of those differs between `tokalign` and pfsmgraph.
+  - [ ] Mechanism. Options: a repo-root `dp-compile.toml`; a `[tool.dp-compile]` table
+        in `pyproject.toml` (per member in a workspace); derivation from `docs/agents/`
+        prose. Recommend the root file: pfsmgraph's root `pyproject.toml` is virtual, a
+        per-member table would need a discovery walk, and prose is not a contract. When
+        the file is absent, defaults reproduce the `tokalign` layout, so the
+        proof-of-concept keeps working unmodified.
+  - [ ] Contents. At minimum, per repository: build command, test command, the invariant
+        documents every phase skill must read before writing (pfsmgraph:
+        `docs/agents/core.md` and the ADRs it names), the encoder and reserved-block
+        pointer, and the backend registration recipe (pfsmgraph: a row in `_backends.py`
+        plus `meson.build` `install_sources`/extension entries; `tokalign`: import
+        auto-discovery). Per algorithm: its root, its layout pattern (per-algorithm
+        directory with fixed filenames, or flat module with phase suffix), where
+        `FORMALIZATION.md` lives (beside the code, or under `docs/`), and any differential
+        oracle (D3).
+  - [ ] Draft pfsmgraph's manifest as the worked example, kept under the plugin's
+        `examples/` until F4 hands it back.
+- [ ] Settle the staleness mechanism (replaces mtime).
+  - [ ] Options: keep mtime with a `touch` discipline; a provenance header in every
+        derived artifact recording its source path and content hash
+        (`derived-from: _viterbi.py sha256:…` in a comment or front-matter); git commit
+        order. Recommend the provenance header: survives checkout, encodes *direction*
+        (a recovered formalization says it derives from the code, so the code is not
+        stale relative to it), and is visible in a diff.
+  - [ ] Define the header format per file type (`.md`, `.py`, `.pyx`) and the rule
+        `phase-check` applies: stale iff the recorded hash differs from the current hash
+        of the named source; transitive as before.
+  - [ ] Legacy fallback: files without a header use mtime, with a warning naming the
+        file, so existing `tokalign` artifacts keep working.
+- [ ] Settle the fate of the `tokalign`-only components.
+  - [ ] The three domain stubs — `scoring-matrix`, `alignment-viz`, `package-release`.
+        Recommend delete: they are ten lines each over zero-byte references; scoring
+        matrices and alignment visualisation belong to an alignment-domain plugin or the
+        consumer, and `package-release` duplicates the consumer's own release path
+        (pfsmgraph has `just release` and a runbook).
+  - [ ] `validate-equivalence.py` (hardwired to `tokalign._types` and the `align()`
+        signature). Recommend script out, guidance in: the Cython/parallel skills end by
+        writing a fuzz/property test *into the consumer's suite*, using the consumer's own
+        types and encoder, where ADR 0003's parameterisation can pick it up.
+  - [ ] `run-benchmark.sh` (walks up to `pyproject.toml`, calls
+        `benchmarks/run_benchmark.py`). Recommend keep the skill, take the command from
+        the manifest, drop the wrapper.
+  - [ ] The pre-commit hook (`setup.py build_ext --inplace`, `--extra dev`, `pytest
+        tests/ -x`). Fires on *every* `git commit` in every repo where the plugin is
+        loaded, including inside `/smart-commit` (hooks stack). Recommend: keep only if
+        it becomes manifest-driven and no-ops with a message when no manifest exists;
+        otherwise drop it and make "tests green before commit" a step the phase skills
+        state. Decide here; E3 implements.
+- [ ] Settle phase-file naming for phases 3 and 4, where ADR 0016 left it open.
+      Recommend the plugin's canonical phase names be `python`, `cython`, `cpu_parallel`,
+      `cuda`, and the manifest's layout pattern decide whether they are filenames
+      (`_cython.pyx`) or suffixes (`_viterbi_cython.pyx`). Backend-matrix names follow
+      (`python · cython · cpu-parallel · cuda`). `_numba.py` is retired: it names the
+      library, and two phases now share the library.
+- [ ] Settle how `dp-compile` detects `workflow-claude`, and what absence means.
+      Installed-plugins JSON cannot be trusted (`--plugin-dir` loads never appear there).
+      Recommend the precedent `/smart-merge` already uses for MCP: *you can see your own
+      tools, so judge from that* — each `dp-compile` command opens by checking its tool
+      list for `workflow-claude:` skills and, if none, stops with the install line
+      (`claude --plugin-dir <path>/workflow-claude` today; the marketplace line later).
+      Never degrade silently.
+- [ ] Settle the branch and plan workflow *inside* each plugin repository.
+  - [ ] `workflow-claude`: it has a master plan and closed revisions, and lands work via
+        PRs. Recommend `/open-revision 05-dp-compile-interop` (label to taste) and one
+        branch, since its edits are small and its convention is its own.
+  - [ ] `dp-compile`: no `docs/plan/`, history is straight to `main`. Recommend a
+        sequence of focused commits to `main`, not bootstrapping plan machinery into a
+        repository that is being rewritten end to end — the record of *why* is this file.
+  - [ ] pfsmgraph side: the user named the branch `revise-plugins`. If `/new-branch`
+        creates it, decline the branch plan (or make `docs/plan/revise-plugins/TODO.md` a
+        one-line pointer here), because rung 2 would otherwise resolve to it whenever the
+        path argument is forgotten.
+
+## Section B — Rename and generalise `tokalign-dev` → `dp-compile`
+
+- [ ] Rename everything that carries the old identity.
+  - [ ] `plugin.json` name, description, version (per A1); local directory; `origin`.
+  - [ ] Every `tokalign-dev:` namespace reference — the `Skill` tool calls in
+        `new-algorithm.md`, `next-phase.md`, `cython-translation/SKILL.md`; the smoke
+        test; `README.md`; `CLAUDE.md`.
+  - [ ] Acceptance: `grep -rn 'tokalign-dev' --exclude-dir=.git .` returns nothing.
+- [ ] Introduce the manifest (A2) and a shared `commands/references/manifest.md` that
+      every command and skill reads first, replacing `phase-detection.md`'s hardcoded
+      `src/tokalign/algorithms/<name>/`. Defaults reproduce `tokalign`. Include the
+      pfsmgraph example.
+- [ ] Strip `tokalign` from the four real skills and the four commands — the structural
+      couplings, not just the word.
+  - [ ] Paths and layout → manifest (formalize, prototype, cython, benchmarking, all four
+        commands, `phase-detection.md`).
+  - [ ] `_types.py` trio and `_registry.py` → manifest-named encoder, result type and
+        registration recipe. The wrapper/kernel split stays as an invariant — pfsmgraph
+        sharpens it: the kernel neither validates nor raises, the wrapper turns
+        `inf` into `ImpossibleSequenceError` — and the skill should state the generic
+        form (kernel purely numeric so phases 2–4 are transliterations).
+  - [ ] Objective and semiring stated explicitly in the formalization (max-product,
+        min-sum, max-plus, …) and **never normalised** by the skill; delete "normalize to
+        max (similarity)". Cite the `hmm` bits trap as the reason.
+  - [ ] Reserved block never hardcoded: delete "indices 0–3", "GAP = 3", "user symbols
+        from 4"; the manifest points at the consumer's encoder documentation (pfsmgraph:
+        ADR 0011 and `docs/api/dataseq/`).
+  - [ ] Build and test commands → manifest (pfsmgraph: meson-python rebuild-on-import,
+        `uv run pytest`, `meson.build` listing; no `setup.py`, no extras).
+  - [ ] `test-patterns.md` → both worlds: import auto-discovery (`tokalign`) and a
+        registry row with `hardware` and loud-skip semantics (pfsmgraph, ADR 0003), plus
+        the not-yet-parameterised state where a backend-reaching test lives in a labelled
+        non-shared section (`test_viterbi.py` precedent).
+  - [ ] Affine gaps, alignment types, `gap_open`/`gap_extend` → an alignment-family
+        example inside a generic skill, not the skill's assumption.
+- [ ] Generalise the formalization conventions and template.
+  - [ ] `pseudocode-conventions-DP.md` header and voice; keep its DP-only scope and the
+        "do not force a non-DP algorithm into this template" rule.
+  - [ ] Template metadata: replace the alignment-specific rows (Alignment type, Gap model)
+        with generic ones plus an algorithm-family block; add **Objective** (semiring and
+        direction) and **Parallel decomposition** (consumed by C2) as mandatory sections;
+        keep the TC-XX test-specification discipline and its three precision levels.
+  - [ ] Keep the Needleman-Wunsch example as the example, labelled as one family's
+        instance.
+- [ ] The mechanical tail: `dev/smoke-test.sh` `expected` array, `hooks/` per A4,
+      `CLAUDE.md` (drop the `{{template}}` residue, add the commit convention per A1),
+      `plugin.json` version; `claude plugin validate` green.
+
+## Section C — Implement the ADR 0016 chain
+
+- [ ] `phase-detection.md` and its three consumers for five stages.
+  - [ ] Nominal-phase table 0–4; staleness rules gain the `cpu_parallel` link between
+        `cython` and `cuda`; filenames from the manifest; staleness per A3.
+  - [ ] `/next-phase` routes 2 → 3 to the new CPU-parallel skill and 3 → 4 to GPU;
+        `/phase-check` reports four backends; `/benchmark` counts them.
+  - [ ] Every "do not create X yet" list in the formalize, prototype and Cython skills
+        names the two new files.
+- [ ] New skill `cpu-parallelization` (phase 3: `@njit(parallel=True)` with `prange`).
+  - [ ] The decomposition comes from `FORMALIZATION.md`'s Parallel decomposition section,
+        never invented here. Anti-diagonal for 2-D alignment DP; for a 1-D-over-time
+        recurrence with dense state coupling (HMM) the candidates are
+        states-within-a-timestep, batch over sequences, or an associative scan in the
+        (min, +) semiring — and "no anti-diagonals" is a valid answer the skill must
+        accept, because master plan line 194 settles that question against the Viterbi
+        kernel, not here.
+  - [ ] Race-freedom is checked against the phase-1 oracle (same discipline as every
+        phase), and **the tie-breaking rule is contract** (`core.md`): the per-cell
+        reduction over predecessors stays sequential so first-wins survives `prange`.
+  - [ ] `numba` becomes a hard runtime dependency of the package (ADR 0016), declared via
+        the manifest's dependency recipe; `numba-cuda` does not.
+  - [ ] Registration: a backend row with `hardware=None` (a failed import escalates).
+- [ ] Write `gpu-parallelization` (phase 4) for real — currently a stub over zero-byte
+      references.
+  - [ ] `numba-cuda` behind the consumer's GPU extra (ADR 0004); backend row with
+        `hardware="CUDA device"`, so absence skips loudly; CI escalation is the
+        consumer's (`PFSMGRAPH_REQUIRE_BACKENDS`-style) and comes from the manifest.
+  - [ ] Reuse phase 3's decomposition verbatim; what is left to debug is
+        hardware-specific — coalescing, occupancy, `cuda.jit` semantics — and the skill
+        says so, so it does not re-derive the algorithm.
+  - [ ] Fill `references/anti-diagonal-parallelism.md`, `numba-cuda-patterns.md` and the
+        example.
+- [ ] Benchmarking over four backends: JIT warm-up applies to phase 3 as to phase 4;
+      crossover reporting names all three transitions; command from the manifest.
+- [ ] Equivalence discipline per phase, written into the consumer: extend the
+      parameterised suite where one exists, or add to the labelled non-shared section
+      where it does not (pfsmgraph until `align`'s backend-selection API), plus the
+      property test that replaces `validate-equivalence.py` (A4).
+
+## Section D — Legacy-code entry: recovering a formalization from an implementation
+
+The `hmm` case: the reference implementation was translated from Lush, no natural-language
+or pseudocode statement of the algorithm ever existed, and the closest thing to a
+specification is `HMMLIB-ACCOUNT.md` plus three `.vpath.xls` oracles the original wrote.
+The plugin's chain assumes prose → pseudocode → Python; this section gives it a second
+entrance so every algorithm ends up with a pseudocode reference regardless of where it
+started.
+
+- [ ] New skill (name to settle: `algorithm-recover`, `formalize-from-code`, or a mode
+      of `algorithm-formalize`).
+  - [ ] Input: an existing phase-1 implementation, optionally the legacy source it was
+        translated from and any differential fixtures. Output: `FORMALIZATION.md` with a
+        provenance header (A3) naming the code as its source.
+  - [ ] Section mapping: "Source Pseudocode" becomes "Source implementation" (cited by
+        path and commit); "Adaptations from Source" becomes "Deviations of the
+        implementation from the legacy source" — for `hmm`: the δ-seeding fix, the `-1`
+        log-zero sentinel not reproduced, `psi` as `int64`, `safe_divide`'s zero
+        convention; Objective states the semiring the code actually uses (min-sum over
+        bits); TC-XX cases are *extracted* from the existing tests and fixtures, not
+        invented.
+  - [ ] Same hard stop for human review as the forward skill; the recovered document
+        becomes the living specification from then on, and later edge cases fold into it.
+- [ ] `/new-algorithm` gains an entry-mode question: from source material (forward), from
+      an existing implementation (reverse), or from existing pseudocode (skip to phase 1
+      with the supplied `FORMALIZATION.md`). Phase detection treats a recovered
+      formalization as derived, so phase 1 is not stale (A3).
+- [ ] Differential oracles as a first-class input. Where a legacy implementation left
+      outputs beside its inputs (the `.vpath.xls` files), the formalization records the
+      oracle's location and the differential test as a relational TC, and every later
+      phase inherits it — the plugin must not let a kernel validate against itself.
+- [ ] Dry run on pfsmgraph's Viterbi: recover a `FORMALIZATION.md` from
+      `packages/pfsmgraph-hmm/src/pfsmgraph/hmm/_viterbi.py` into the scratchpad (not
+      into pfsmgraph — landing it is a hand-back), and check it against
+      `HMMLIB-ACCOUNT.md` §3 and `core.md`'s arc-emission, N+1, min-sum and tie-break
+      facts. This is the acceptance test for the three goals above.
+
+## Section E — Interoperation with `workflow-claude`
+
+- [ ] Presence check (A6) at the head of every `dp-compile` command, and a
+      "Prerequisites" section in its README with the install line. Absence stops with
+      instructions; it never degrades.
+- [ ] Delegation, implemented rather than described. `dp-compile` owns the algorithm
+      lifecycle and nothing else: commits go through `/smart-commit` (its end-of-phase
+      text says so instead of prompting for a commit itself), branches through
+      `/new-branch`, phase progression is recorded as branch-plan subgoals worked by
+      `/hitl-step`, merges through `/smart-merge`, and documentation is never touched by
+      `dp-compile` (`/agents-docs-update` owns it). Decide what, if anything,
+      `/next-phase` writes into the branch plan; keep it minimal.
+- [ ] Hook coexistence (A4's decision): if the pre-commit hook survives, it fires inside
+      `/smart-commit`'s `git commit` (hooks stack — the same composition the conflict
+      report describes for `security-guidance`) and must no-op with a message where no
+      manifest exists. Document the interaction in `workflow-claude`'s
+      `_meta/plugin-conflict-report.md` (new section) and in `dp-compile`'s README.
+- [ ] `workflow-claude` edits, expected to be small: README "Companion plugins" pointer;
+      conflict-report section; a `CLAUDE.md` line. Record any functional change that
+      turns out to be needed (a documented detection contract, say) rather than slipping
+      it in. Landed through its own revision (A7).
+- [ ] `dp-compile` README rewrite: the combined workflow (`/open-revision` →
+      `/new-branch` → `/new-algorithm` and `/next-phase` inside `/hitl-step` →
+      `/smart-commit` → `/smart-merge`), the manifest, the five-stage table under ADR 0016
+      numbering, the two entrances (D), prerequisites, and the removal of the `tokalign`
+      "Decisions" and "Naming" sections.
+- [ ] Refresh the live copy. `.claude/skills/workflow-claude/` in pfsmgraph is an
+      untracked byte-identical copy of the clone and goes stale at the first edit.
+      Re-sync after E4 (or replace it with a symlink into `tmp/` — decide; a symlink means
+      the clone can never move), and confirm `settings.local.json`'s absolute-path
+      allow-list entries still resolve.
+
+## Section F — Verification, commit, hand-back
+
+- [ ] `./dev/smoke-test.sh` and `claude plugin validate` green in `dp-compile`.
+      `workflow-claude` has no suite; if `/step` or `/hitl-step` were touched, run its
+      byte-identical Step 1 check from its `CLAUDE.md`.
+- [ ] Live-session check, run by the user: `claude --plugin-dir tmp/dp-compile
+      --plugin-dir tmp/workflow-claude` in pfsmgraph with the example manifest in place;
+      `/dp-compile:phase-check viterbi` reports phase 1; the same session without
+      `workflow-claude` trips the presence check. Record results as `> **Ran:**` lines.
+- [ ] Commit and push each repository from its own root per A7; version and GitHub
+      rename per A1.
+- [ ] Hand-back list for pfsmgraph, executed on a pfsmgraph branch afterwards, not here:
+  - [ ] Land the manifest at the pfsmgraph root.
+  - [ ] Close `DEFERRED.md`'s "how the development plugin fits the multi-package family"
+        entry: one generic plugin, per-repo manifest, this plan as the record.
+  - [ ] A `dp-compile` section in `docs/agents/claude.md` (it names a Claude Code
+        feature, so `claude.md` not `core.md`).
+  - [ ] ADR 0016 Open: phase-3 naming settled per A5; and correct its claim that the
+        proof-of-concept used `_cuda.py` (it used `_numba.py`).
+  - [ ] Land the recovered Viterbi `FORMALIZATION.md` from D4 where the manifest says.
+  - [ ] Master plan lines 192–196 (phases 2–4 of Viterbi): note they run under
+        `dp-compile`, so the first real use of the revised plugin is on the kernel it was
+        revised for.
+  - [ ] Marketplace: nothing to build yet; note in both READMEs that the `--plugin-dir`
+        line is interim.
