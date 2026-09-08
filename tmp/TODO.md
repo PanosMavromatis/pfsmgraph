@@ -24,7 +24,7 @@ blocked, `[-]` descoped.
 
 | Root | Remote / tip at plan creation | Commit convention | Notes |
 |---|---|---|---|
-| `tmp/tokalign-dev/` | `PanosMavromatis/tokalign-dev`, `main` at `5a78334`, clean | imperative subject, no prefix, body explains why (from its history; its `CLAUDE.md` is silent) | to be renamed; version `0.1.0`; own `CLAUDE.md` (template-derived, `@README.md`); `dev/smoke-test.sh` wraps `claude plugin validate` |
+| `tmp/dp-compile/` | `PanosMavromatis/dp-compile`, `main` at `3b7fc67` | imperative subject, no prefix, body explains why (settled in A1; to be *written into* its `CLAUDE.md` at B4, since the repo states it nowhere) | **renamed from `tokalign-dev` 2026-09-08**, old URL redirects; version `0.2.0`; own `CLAUDE.md` (template-derived, `@README.md`); `dev/smoke-test.sh` wraps `claude plugin validate` |
 | `tmp/workflow-claude/` | `PanosMavromatis/workflow-claude`, `main` at `59661bc`, clean | conventional commits (`feat(scope):`, `chore(plan):`, `docs:`) | dogfoods its own commands: `docs/plan/DO.md` master plan, revisions 02–04 closed, lands work via PRs; strict `allowed-tools` and script-proposes/command-writes conventions in its `CLAUDE.md` |
 | `.claude/skills/workflow-claude/` (pfsmgraph, untracked) | byte-identical to the clone at plan creation (`diff -rq` clean) | — | the copy this session actually runs; `settings.local.json` allow-lists its scripts by absolute path. Goes stale the moment the clone is edited (see E6) |
 
@@ -39,7 +39,7 @@ marketplace later; nothing here builds it, but nothing here may make it harder (
   ask the user to run it. pfsmgraph's `/smart-commit` rule (agent docs) does not apply
   inside the plugin repos — neither has a `docs/agents/` tree — but each repo's *own*
   commit convention does, and it overrides `/smart-commit`'s conventional-commit template
-  where the two differ (`tokalign-dev`).
+  where the two differ (`dp-compile`).
 - **pfsmgraph is not edited by this plan** beyond this file. Everything the revised plugin
   needs *from* pfsmgraph — a manifest, a `docs/agents/claude.md` section, a `DEFERRED.md`
   closure, a recovered `FORMALIZATION.md` — is collected as a hand-back in F4 and lands on
@@ -492,23 +492,20 @@ logging them is that the plugin's README can later cite *why*, not just *what*.
 ## Section B — Rename and generalise `tokalign-dev` → `dp-compile`
 
 - [ ] Rename everything that carries the old identity.
-  - [ ] `plugin.json` name, description, version (per A1); local directory; `origin`.
-        **A1 settled that this runs first, before any content work.** `gh repo rename` is
-        the user's to run — it is outward-facing and touches the GitHub account, not the
-        working copy:
-
-        ```bash
-        cd tmp/tokalign-dev
-        gh repo rename dp-compile   # leaves a redirect, so the old URL keeps resolving
-        git remote -v               # gh normally rewrites origin itself — verify, don't assume
-        cd .. && mv tokalign-dev dp-compile
-        ```
-
-        Then `plugin.json` in the same commit: `name` to `dp-compile` (it **must** match
-        the directory name), `version` to `0.2.0`, and a `description` that no longer says
-        "the tokalign package". Everything after this point happens under
-        `tmp/dp-compile/`, so update the pfsmgraph-side references in this plan too — the
-        three-roots table at the top still says `tmp/tokalign-dev/`.
+  - [x] **Done 2026-09-08 — `dp-compile` commit `3b7fc67`.** The user ran the rename
+        sequence (`gh repo rename dp-compile`, `git remote -v`, directory move); verified
+        afterwards: `tmp/dp-compile/` in place, `origin` at `dp-compile.git`, the clone
+        clean, pfsmgraph still ignoring it, and **the old name redirects** — querying
+        `PanosMavromatis/tokalign-dev` returns `dp-compile`, so nothing pinned to the old
+        URL breaks. `plugin.json` landed in the same commit: `name` to `dp-compile` (it
+        must match the directory name, asserted before committing), `version` to `0.2.0`,
+        and a description that names no project and no longer says "prototype → Cython →
+        GPU phases" — that was three phases, and the lifecycle has been four since ADR 0016
+        inserted the CPU-parallel one. It also drops the packaging claim, whose skill is
+        one of A4's three deletions.
+        Not pushed yet. The `[commands]` and `[phases]` machinery the description implies
+        does not exist yet either — B2 and B3 build it, and the description is a statement
+        of the plugin's purpose rather than of what it can do today.
   - [ ] Every `tokalign-dev:` namespace reference — the `Skill` tool calls in
         `new-algorithm.md`, `next-phase.md`, `cython-translation/SKILL.md`; the smoke
         test; `README.md`; `CLAUDE.md`.
