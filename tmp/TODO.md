@@ -1285,7 +1285,7 @@ started.
   > **Scope note:** the conflict-report section is also listed under E4. It landed here
   > because E3 owns its *content*; E4's branch plan now carries it as a ticked subgoal, with
   > the README pointer and `CLAUDE.md` line still open there.
-- [~] `workflow-claude` edits, expected to be small: README "Companion plugins" pointer;
+- [x] `workflow-claude` edits, expected to be small: README "Companion plugins" pointer;
       conflict-report section; a `CLAUDE.md` line. Record any functional change that
       turns out to be needed (a documented detection contract, say) rather than slipping
       it in. Landed through its own revision (A7).
@@ -1325,10 +1325,24 @@ started.
   > have different causes, and both are now addressed: the missing category, and two checks
   > that were stated but not made mechanical (Step 4 now says to re-read the subgoals
   > rather than recall them; Step 6 re-derives a section-completion claim at every indent).
-  > **The live copy stays on `main` deliberately.** `.claude/skills/workflow-claude/` is a
-  > second clone of the same repository, and pointing it at an unmerged branch would put
-  > unreviewed work into the load path. It updates when the branch merges — and E6, which
-  > replaces that copy with a symlink, is what stops this being a standing question.
+  > **The live copy stayed on `main` deliberately until the merge**, since pointing
+  > `.claude/skills/workflow-claude/` — a second clone of the same repository — at an
+  > unmerged branch would have put unreviewed work into the load path. **Merged and pulled
+  > 2026-09-08**: PR #19, merge commit `959425c`, and that clone now carries it, so the
+  > `> **Note:**` vocabulary and the two mechanical checks are live in this session. E6,
+  > which replaces the copy with a symlink, is what stops this being a standing question.
+  > **Merged 2026-09-08 via `/smart-merge`, `--merge` strategy, MCP path.** Two things the
+  > run confirmed about the command itself. Its title guidance ("imperative, no prefix") is
+  > wrong for this repository, whose merged PRs are all conventional — history is the
+  > authority, the same override `dp-compile`'s `CLAUDE.md` records for commit subjects. And
+  > its two documented API traps both fired exactly as written: `get_status` returned
+  > `state: "pending"` with `total_count: 0` — nothing reported, not work in flight — and
+  > `get_check_runs` returned 403, which is a property of a fine-grained PAT rather than a
+  > misconfiguration, so the `gh pr checks` fallback was announced and used.
+  > **The no-backlink case was reported rather than skipped.** A7 made this branch
+  > standalone, so `docs/plan/DO.md` has no `> **Branch:**` line to close and was left
+  > untouched — which the command insists be said aloud, since a legitimately absent
+  > backlink and a lost one look identical from outside.
 - [ ] `dp-compile` README rewrite: the combined workflow (`/open-revision` →
       `/new-branch` → `/new-algorithm` and `/next-phase` inside `/hitl-step` →
       `/smart-commit` → `/smart-merge`), the manifest, the five-stage table under ADR 0016
