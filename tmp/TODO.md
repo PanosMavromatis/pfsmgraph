@@ -919,10 +919,33 @@ logging them is that the plugin's README can later cite *why*, not just *what*.
   > which assumes the consumer's harness accepts it. On a harness that errors that is
   > noise; on one that ignores unknown arguments it silently returns an ordinary timing run
   > labelled as a memory profile.
-- [ ] Equivalence discipline per phase, written into the consumer: extend the
+- [x] Equivalence discipline per phase, written into the consumer: extend the
       parameterised suite where one exists, or add to the labelled non-shared section
       where it does not (pfsmgraph until `align`'s backend-selection API), plus the
       property test that replaces `validate-equivalence.py` (A4).
+  > **Done:** 2026-09-08. Written once, in
+  > `skills/algorithm-prototype/references/test-patterns.md` under **Equivalence
+  > discipline, phase by phase**, with the three phase skills pointing at it rather than
+  > restating it. That file already owned the question of how a repository's suite sees
+  > backends (Models A and B, and the third state), so the discipline belongs beside it.
+  > **The organising idea made the section small: the discipline is cumulative, and each
+  > phase adds exactly one new class of failure.** Phase 1 is the oracle; phase 2 adds
+  > boundary and type errors from translation; phase 3 adds races and a tie-break lost to
+  > concurrency; phase 4 adds barrier placement and device-only behaviour. Stated that way
+  > it is a four-row table plus one paragraph each, and — the reason it is stated once —
+  > three copies of a *cumulative* rule cannot stay in step, since each copy would have to
+  > repeat everything above it.
+  > This also resolves a phrasing that had crept into two skills: the phase-3 and phase-4
+  > checks read as complete lists, when they are additions to what the parameterised suite
+  > already runs against a newly registered backend.
+  > **Two stale claims found in `test-patterns.md` and corrected**, both of the shape this
+  > plan keeps cataloguing. Its TC-XX section still said "indices 0-3 are reserved and user
+  > symbols start at index 4" — the `tokalign` numbering that was renumbered onto ADR 0011
+  > in September 2026, and the same claim B4 removed from `algorithm-formalize` while this
+  > copy survived. Replaced with the rule rather than the numbers: ask the encoder, never
+  > hardcode, because a hardcoded code addresses a real position and returns a confident
+  > answer computed from the wrong symbol. And the parameterisation `ids` example still
+  > labelled backends `"numba"`.
 
 ## Section D — Legacy-code entry: recovering a formalization from an implementation
 
