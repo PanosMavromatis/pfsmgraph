@@ -1500,8 +1500,10 @@ started.
   > Left as written: it costs nothing and would be needed the moment either Step 1 gains a
   > cross-reference to its sibling. Recorded so a future reader does not mistake it for
   > load-bearing, or delete it as dead.
-- [ ] Live-session check, run by the user. **The command below is not the one this goal
-      was written with** — see the correction note under it.
+- [x] Live-session check. **The command below is not the one this goal
+      was written with** — see the correction note under it. Run partly by the user
+      (positive) and partly by Claude via `claude -p` (negative), which is why the goal no
+      longer says "run by the user".
   - [x] **Ordering problem, found while drafting the manifest in A2.** This check needs
         `dp-compile.toml` at pfsmgraph's root, but the hand-back defers landing it to a later
         pfsmgraph branch, and the ground rules say this plan edits nothing in pfsmgraph
@@ -1579,7 +1581,7 @@ started.
     > reverse-entrance information the row set exists to carry. (Recast from a checkbox to a
     > note: it is a criterion, not work, and this file's own first ground rule forbids the
     > checkbox form for exactly that reason.)
-  - [ ] **Negative check — the presence line.** It cannot be done by omitting a flag any
+  - [x] **Negative check — the presence line.** It cannot be done by omitting a flag any
         more, since the symlink loads `workflow-claude` unconditionally in pfsmgraph. Run it
         from a directory that has no `.claude/skills/` instead; one is prepared at
         `<scratchpad>/f2-no-workflow/` with a copy of the manifest and no project settings.
@@ -1590,7 +1592,56 @@ started.
         to a full report (note-and-continue); `/dp-compile:next-phase viterbi` must print it
         and **stop at the delegation point**, naming what it did not do. A `/next-phase`
         that runs to completion is a failure even though nothing errored.
-  - [ ] Record results as `> **Ran:**` lines.
+    > **Ran:** 2026-09-08, by Claude rather than the user — `claude -p "<slash command>"`
+    > runs non-interactively and slash commands resolve there, so the check needed no
+    > hand-editing of this file. Read-only (`--allowedTools "Read Glob Grep"`,
+    > `--permission-prompts none`), from a fixture directory holding the manifest and
+    > symlinks to the real `docs/`, `packages/`, `.scratch/` and `_backends.py`, so every
+    > manifest path resolved (12 of 12) and the *only* difference from pfsmgraph was the
+    > missing `.claude/`.
+    > **Both severities behaved as A6 designed, which is the assertion.**
+    > `/phase-check` printed *"`workflow-claude` is not installed; this command delegates
+    > nothing, so the report is unaffected"* and then produced the full five-row report —
+    > note-and-continue. `/next-phase` did the phase detection, then stopped under a
+    > heading of its own — *"Left undone by the missing plugin: no commit hand-off, and no
+    > plan line — both are `workflow-claude`'s … I have not run `git commit`, `git add` or
+    > `git checkout -b`, and I won't offer to."* Stop-at-the-delegation, with the
+    > substitution refused explicitly rather than silently.
+    > **`/next-phase` also got the two things D1 and D2 exist for right**, unprompted: it
+    > named the target as **phase 0, not phase 2** — "a rule that walked phase *numbers*
+    > would see phase 1 present and advance to `cython`" — and routed to
+    > `algorithm-recover` on the discriminator, citing `_viterbi.py`'s own reference to
+    > `hmm-trainer.lsh` as evidence there is no source material to formalize forward from.
+    > **Finding: the prescribed absence message degraded in both runs, and neither named
+    > the three load paths.** `commands/references/workflow-claude.md` specifies the line
+    > verbatim — printed once, at the head, naming a marketplace install, `--plugin-dir`,
+    > *and* `.claude/skills/` — with E3's argument that naming only `--plugin-dir` sends a
+    > user to fix something that is not how they loaded it. Neither run named any of the
+    > three, and `/next-phase` moved the notice from the head to a closing section. The
+    > *behaviour* was right both times; the *message* was paraphrased away. That is the
+    > cost of the advisory layer stated plainly — `dp-compile` enforces deterministically
+    > through a hook and orchestrates through prose, and prose is what a model compresses
+    > when it is busy. Worth recording against any future decision to make this line
+    > load-bearing.
+    > **Resolved: the two runs' disagreement about the oracles was my fixture, not a plugin
+    > defect — and recording it as a defect was one edit away.** `/phase-check` reported all
+    > three oracles exercised; `/next-phase` in the same fixture reported *no viterbi suite
+    > at all*. The tempting reading was a manifest gap, since `[commands].test_one` takes a
+    > `{path}` the manifest never says how to compute. A third run, read-only in the **real**
+    > tree, settles it the other way: suite green at **280 passed**, and "three differential
+    > oracles are declared and exercised". The fixture was the cause — `packages/` was a
+    > symlink there and the run itself noted that `Glob` does not follow symlinks, so the
+    > package-level tests were unreachable by the tool that looks for them.
+    > **Two lessons, and the second is the one worth keeping.** A fixture built from symlinks
+    > is not equivalent to the tree it mirrors, and the inequivalence is invisible until a
+    > tool that walks rather than reads hits it. And a disagreement between two runs is
+    > evidence that *something* is wrong, not evidence about *what* — the cheap next step was
+    > a third run in a cleaner environment, not a finding written up from two.
+    > **The underlying observation stands, downgraded to a note:** the manifest does not
+    > define where an algorithm's tests live, so `{path}` is inferred. That inference works
+    > in a real tree and is not a gap today. It is worth knowing it exists, because the
+    > oracle gate (D3) rests on it.
+  - [x] Record results as `> **Ran:**` lines.
 - [x] Commit and push each repository from its own root per A7; version and GitHub
       rename per A1.
   > **Ran:** all three repositories audited from their own roots. Every one is clean with
@@ -1778,9 +1829,34 @@ appearing in it is the correct result, not a miss.
       `_viterbi_cython` pattern, and fix the factual claim in the same edit rather than
       leaving a closed decision resting on a wrong sentence.
 - [ ] Land the recovered Viterbi `FORMALIZATION.md` from D4 where the manifest says.
+      > **Note:** F2's read-only real-tree run drafted this document in full and was
+      > correctly **denied the write** — nothing reached disk, and phase 0 is not done. It
+      > verified every line citation the kernel's docstrings claim
+      > (`hmm-trainer.lsh:216-218`, `:219`, `:197-198`, `:712-727`, `util.lsh:431-444`) and
+      > measured rather than quoted: oracle agreement **3806/3807** across three models,
+      > divergence at position 0 of `m008_0001_008` and nowhere else, seed margin
+      > **0.004218 bits**, and **0 exact ties in 3804** recurrence positions. Regenerate
+      > rather than reuse, but these numbers are checkable against it.
+- [ ] **Two test-coverage gaps in `pfsmgraph-hmm`, found by F2's live run.** Both sit at the
+      validation boundary rather than in the recurrence, which is why the 165-test suite
+      misses them.
+      > **TC-19 — a code exactly equal to the vocabulary size.** Existing tests use `99` and
+      > `-5`, both far from the edge, so a guard written `>` where it should be `>=` passes
+      > the entire suite while letting the boundary code through to the emission lookup.
+      > Verified as correct today (`A = 8`; code 7 decodes, code 8 raises) — but nothing
+      > pins it, so the next edit is free to break it silently.
+      > **TC-20 — impossibility at position 0.** Every existing impossibility test places the
+      > dead symbol at position 1, so `ImpossibleSequenceError`'s position report is never
+      > checked at its own lower boundary.
 - [ ] Master plan lines 192–196 (phases 2–4 of Viterbi): note they run under
       `dp-compile`, so the first real use of the revised plugin is on the kernel it was
       revised for.
+      > **Note: phase 3 has no anti-diagonal, and F2's run says so with a reason.** The
+      > Viterbi recurrence is 1-D over time with dense S×S coupling, so there are **no
+      > anti-diagonals at all** — the decomposition ADR 0016 names is not merely unchosen
+      > here, it does not exist for this kernel. ADR 0016's own Open section anticipated
+      > this. Carry "undetermined" forward as the honest answer rather than letting phase 3
+      > discover that an invented decomposition is a race.
 - [ ] Marketplace: nothing to build yet — **verified 2026-09-07, no `marketplace.json`
       exists in any of the user's repositories**, and `claude-plugin-tools` is unrelated.
       Note in both READMEs that the `--plugin-dir` line is interim.
