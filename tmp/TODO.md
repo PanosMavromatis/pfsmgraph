@@ -34,6 +34,16 @@ marketplace later; nothing here builds it, but nothing here may make it harder (
 
 ## Ground rules
 
+**A finding is a `>` note, never a `- [ ]` line.** Learned 2026-09-08, after seven
+findings and deferral notes in Section B were written as unchecked checkboxes and then
+reported for two sections as outstanding work. Nothing was actually pending — every one had
+been discharged by A4, C1 or C2 — but a checkbox is a promise that something will be done,
+and a running `grep -c '^- \[ \]'` counts only top-level items, so an indented note was
+invisible to the count *and* looked open to a reader. Where a note records a real deferral,
+mark it `[-]` with the goal that will pick it up; where it records something observed,
+it is a `>` blockquote.
+
+
 - **Commit and push from each plugin's root, never from pfsmgraph's.** A `cd` inside one
   Bash call is fine (`cd tmp/workflow-claude && git …`); if the harness makes that awkward,
   ask the user to run it. pfsmgraph's `/smart-commit` rule (agent docs) does not apply
@@ -521,13 +531,15 @@ logging them is that the plugin's README can later cite *why*, not just *what*.
         a plugin ... for the `tokalign` package", and its `plugin.json` example block still
         carried the old description and `0.1.0` — an example disagreeing with the file it
         documents. Both now match the real manifest, asserted rather than eyeballed.
-  - [ ] **One pre-existing bug is preserved rather than fixed, because it dies with its
-        file.** `cython-translation/SKILL.md` invokes the equivalence script as
+  - [x] **One pre-existing bug is preserved rather than fixed, because it dies with its
+        file.** *(Resolved by A4's deletion; verified 2026-09-08 — the plugin-relative
+        path appears nowhere.)* `cython-translation/SKILL.md` invokes the equivalence script as
         `dp-compile/skills/…`, a path assuming the plugin sits *inside* the consumer's
         repository rather than at `${CLAUDE_PLUGIN_ROOT}`. A4 removes that script, so
         fixing the path would be work on a file scheduled for deletion — but if that
         removal is ever reversed, the path is wrong and this note is where it is recorded.
-  - [ ] **Standing smoke-test warning, pre-existing and a false positive.** Verified by
+  - [x] **Standing smoke-test warning, pre-existing and a false positive.** *(Settled at
+        C1: live with it. Recorded in `CLAUDE.md` as expected-and-do-not-fix.)* Verified by
         stashing and re-running: `claude plugin validate` reports "No frontmatter block
         found" for `commands/references/phase-detection.md`, which is an `@`-included
         reference document rather than a command — but the validator scans every `.md`
@@ -566,11 +578,14 @@ logging them is that the plugin's README can later cite *why*, not just *what*.
   > oracles exist; the only four that do not are exactly the unwritten phases. The `cython`
   > template independently agrees with what `packages/pfsmgraph-hmm/meson.build` already
   > declares.
-  - [ ] **Deferred to C1, deliberately: `phase-detection.md` still hardcodes
+  - [x] **Discharged at C1** — the file was rewritten whole, and `src/tokalign` appears
+        nowhere in it. *(Original note: deferred deliberately; `phase-detection.md` hardcodes
         `src/tokalign/algorithms/<name>/`.** Rewriting it here would mean rewriting it
         again at C1, which changes its phase table from three stages to five and replaces
         the effective-phase rule outright (A3). One rewrite, done once, at C1.
-  - [ ] **Second standing smoke-test warning.** `manifest.md` joins `phase-detection.md` as
+  - [x] **Second standing smoke-test warning.** *(Settled at C1 together with the first —
+        and there turned out to be a third, the plugin-root `CLAUDE.md` notice. All three
+        are recorded in `CLAUDE.md`.)* `manifest.md` joins `phase-detection.md` as
         a frontmatter-less `.md` under `commands/`, so the validator now warns twice. Adding
         frontmatter is *not* the fix — it would register these reference documents as
         commands. C1 decides between living with it permanently and restructuring where
@@ -642,7 +657,9 @@ logging them is that the plugin's README can later cite *why*, not just *what*.
         block, the Cython wrapper/kernel pair, and the whole `test-patterns.md` worked
         template. Deleting them was rejected: an abstract template teaches nothing, and
         the shapes are exactly what a reader needs.
-  - [ ] **Still coupled, and out of B3's scope by design** — `pseudocode-conventions-DP.md`
+  - [x] **Still coupled, and out of B3's scope by design** *(all five now resolved: both
+        references rewritten at B4, both examples carry the one-family label — verified
+        2026-09-08 — and `package-release/` was deleted by A4.)* — `pseudocode-conventions-DP.md`
         and `formalization-template.md` (the next goal rewrites both),
         `example-formalization.md` and `example-cython-impl.pyx` (kept as one family's
         instance, but their headers need the label), and `package-release/SKILL.md`
@@ -688,7 +705,9 @@ logging them is that the plugin's README can later cite *why*, not just *what*.
         records that **it predates the current template**, so a reader does not mistake
         its section list for the canonical one; that is cheaper than regenerating the
         example and more honest than leaving the discrepancy silent.
-  - [ ] **What still names the old project, and why each is fine:** `README.md` (E5
+  - [x] **What still names the old project, and why each is fine:** *(now two files, not
+        six: `README.md`, which E5 owns, and `manifest.md`, where it is intentional. The
+        other four were deleted or rewritten.)* `README.md` (E5
         rewrites it), `phase-detection.md` (C1), `validate-equivalence.py`,
         `run-benchmark.sh` and `package-release/SKILL.md` (A4 deletes all three), and
         `manifest.md` — where it is *intentional*, since the second worked manifest is
@@ -718,7 +737,8 @@ logging them is that the plugin's README can later cite *why*, not just *what*.
       Both are now written up alongside the `commands/references/*.md` warning, so nobody
       "fixes" the validator complaint by adding frontmatter and turning two `@`-included
       fragments into invocable commands.
-  - [ ] **Deferred to C2:** the smoke-test array gains
+  - [x] **Discharged at C2**, and it gained the reference file too. *(Original note:
+        deferred; the smoke-test array gains
         `skills/cpu-parallelization/SKILL.md` when that skill exists. Adding it now would
         make the smoke test fail on a file nobody has written.
 
