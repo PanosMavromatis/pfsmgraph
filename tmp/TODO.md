@@ -30,7 +30,7 @@ blocked, `[-]` descoped.
 
 Neither plugin is marketplace-installed: `workflow-claude` loads via `--plugin-dir`, and
 neither repo carries a `marketplace.json`. Both are destined for one organisation
-marketplace later; nothing here builds it, but nothing here may make it harder (F4).
+marketplace later; nothing here builds it, but nothing here may make it harder (Section H).
 
 ## Ground rules
 
@@ -50,10 +50,25 @@ it is a `>` blockquote.
   inside the plugin repos — neither has a `docs/agents/` tree — but each repo's *own*
   commit convention does, and it overrides `/smart-commit`'s conventional-commit template
   where the two differ (`dp-compile`).
-- **pfsmgraph is not edited by this plan** beyond this file. Everything the revised plugin
-  needs *from* pfsmgraph — a manifest, a `docs/agents/claude.md` section, a `DEFERRED.md`
-  closure, a recovered `FORMALIZATION.md` — is collected as a hand-back in F4 and lands on
-  a pfsmgraph branch afterwards, through pfsmgraph's own process.
+- **pfsmgraph is not edited by this plan** beyond this file, *with one exception settled
+  2026-09-08*. Everything else the revised plugin needs *from* pfsmgraph — a `DEFERRED.md`
+  closure, an ADR 0016 correction, a recovered `FORMALIZATION.md` — is collected as a
+  hand-back in **Section H** and lands on a pfsmgraph branch afterwards, through
+  pfsmgraph's own process.
+
+  **The exception: the root `dp-compile.toml` and its `docs/agents/claude.md` section.**
+  F2 cannot run without the manifest, and F2's own subgoal had already framed this as a
+  decision to take here rather than discover late. Two things settled its shape.
+  *Measured, not assumed:* the manifest arms the pre-commit gate on exactly four paths
+  (`_viterbi{,_cython,_cpu_parallel,_cuda}`), only one of which exists, and this branch
+  touches none of them — staging `tmp/TODO.md`, the manifest itself, or even a phase-0
+  formalization all pass the gate silently, since the hook excludes phase 0 by design. All
+  thirteen paths the manifest names resolve. So the file is inert here and correct as
+  config. *And the exception is not self-limiting,* which is why it covers two files rather
+  than one: committing a new root file through `/smart-commit` runs `/agents-docs-update`,
+  whose whole purpose is to notice an undocumented project fact, so the docs edit arrives
+  by the repository's own machinery whether or not the rule admits it. Better to scope it
+  deliberately than to have it appear as a surprise in a diff.
 - **Known deviation, recorded rather than fixed:** both clones carry a root `CLAUDE.md`,
   and pfsmgraph's `docs/agents/claude.md` says an imported tree's `CLAUDE.md` is renamed
   to `.orig` on arrival. These are not imports — they are live sibling repositories whose
@@ -64,7 +79,7 @@ it is a `>` blockquote.
   instructions are about editing the plugin, which is what a session down there is doing.
   Whether this exception gets written into `docs/agents/claude.md` as a rule — imported tree
   renames, live sibling repository parked for editing keeps — was left open and is a
-  candidate hand-back (F4), not a blocker.
+  candidate hand-back (Section H), not a blocker.
 - **Don't relitigate ADR 0016.** The lifecycle is five stages — formalization, then four
   implementation phases: Python, Cython, Numba CPU-parallel (`prange`), Numba CUDA. The
   plugin implements that; it does not reopen it. The one thing ADR 0016 leaves open that
@@ -221,7 +236,9 @@ logging them is that the plugin's README can later cite *why*, not just *what*.
         its *first* algorithm — and for being invisible, so a wrong inference is found late.
   - [x] **Drafted** below. It lives here rather than in the plugin because A1 settled that
         the rename runs before any content work, so `tmp/tokalign-dev/` takes no writes
-        yet; B2 copies it into the plugin's `examples/`, and F4 lands it at pfsmgraph's
+        yet; B2 embeds it in `commands/references/manifest.md` (not an `examples/`
+        directory — the plugin has none; B2 recorded the change), and the ground-rule
+        exception lands it at pfsmgraph's
         root. Keeping the draft in this tracked file rather than a scratch path is
         deliberate — it is the keystone artifact and everything in Section B reads from it.
 
@@ -1133,7 +1150,7 @@ started.
   > measured figure and file path verified against the sources rather than recalled.
   > **`pfsmgraph` has no `dp-compile.toml`, so the skill stops at its first prerequisite.**
   > That is the prerequisite working, not a defect, but it means the run had to construct
-  > one in the scratchpad first. No new hand-back item: F4 already carries "land the
+  > one in the scratchpad first. No new hand-back item: Section H already carries "land the
   > manifest", and nothing is lost with the scratchpad, since the draft is A2's worked
   > example plus the `[algorithms.viterbi]` block that `manifest.md` already ships.
   > **The D2 fix was verified in the concrete case rather than in the abstract.**
@@ -1436,7 +1453,7 @@ started.
         > would have been sitting on the unmerged `docs/plan-notes-and-interop` branch and
         > the swap would have put it straight into the load path.
 
-## Section F — Verification, commit, hand-back
+## Section F — Verification and commit
 
 - [x] `./dev/smoke-test.sh` and `claude plugin validate` green in `dp-compile`.
       `workflow-claude` has no suite; if `/step` or `/hitl-step` were touched, run its
@@ -1473,14 +1490,19 @@ started.
   > load-bearing, or delete it as dead.
 - [ ] Live-session check, run by the user: `claude --plugin-dir tmp/dp-compile
       --plugin-dir tmp/workflow-claude` in pfsmgraph with the example manifest in place;
-  - [ ] **Ordering problem, found while drafting the manifest in A2.** This check needs
-        `dp-compile.toml` at pfsmgraph's root, but F4 defers landing it to a later
+  - [x] **Ordering problem, found while drafting the manifest in A2.** This check needs
+        `dp-compile.toml` at pfsmgraph's root, but the hand-back defers landing it to a later
         pfsmgraph branch, and the ground rules say this plan edits nothing in pfsmgraph
         beyond `tmp/TODO.md`. Decide which gives: land the manifest on *this* branch as
         the one exception (it is the artifact the whole revision is built around, and the
         check is worthless without it), or run the check against an untracked copy and
         land the tracked one later. Do not discover this at F2 with the plugin finished
         and nothing to point it at.
+        > **A:** Resolved 2026-09-08 on the first option — the ground rule is relaxed for
+        > the manifest *and* its `docs/agents/claude.md` section. See the amended ground
+        > rule for the measurement that settled it and for why the exception covers two
+        > files rather than one. This subgoal is closed by that decision; F2 itself stays
+        > open because the live session is the user's to run.
       `/dp-compile:phase-check viterbi` reports phase 1; the same session without
       `workflow-claude` trips the presence check. Record results as `> **Ran:**` lines.
 - [x] Commit and push each repository from its own root per A7; version and GitHub
@@ -1537,29 +1559,6 @@ started.
   > **Note:** `dp-compile`'s GitHub repository **description is empty** while its
   > `plugin.json` carries a full one. Outside F3's scope — A1 settled the rename and the
   > version, not the repository metadata — so it is flagged rather than changed.
-- [ ] Hand-back list for pfsmgraph, executed on a pfsmgraph branch afterwards, not here:
-  - [ ] Land the manifest at the pfsmgraph root.
-  - [ ] Close `DEFERRED.md`'s "how the development plugin fits the multi-package family"
-        entry: one generic plugin, per-repo manifest, this plan as the record.
-  - [ ] A `dp-compile` section in `docs/agents/claude.md` (it names a Claude Code
-        feature, so `claude.md` not `core.md`).
-  - [ ] **ADR 0016's Open section on phase-3 naming: close it, and correct the claim it
-        rests on.** The record says its proposal mirrors "the existing `_python.py` /
-        `_cython.pyx` / `_cuda.py` per-phase naming seen in `.scratch/align-poc/tokalign`".
-        That repository has only `_python.py` and `_cython.pyx`; there is no `_cuda.py` and
-        no `_numba.py`, and its third phase was never implemented under any name. So the
-        deferral's stated reason is void, not merely unmet — settle
-        `_<algorithm>_cpu_parallel.py` per A5, matching `meson.build`'s existing
-        `_viterbi_cython` pattern, and fix the factual claim in the same edit rather than
-        leaving a closed decision resting on a wrong sentence.
-  - [ ] Land the recovered Viterbi `FORMALIZATION.md` from D4 where the manifest says.
-  - [ ] Master plan lines 192–196 (phases 2–4 of Viterbi): note they run under
-        `dp-compile`, so the first real use of the revised plugin is on the kernel it was
-        revised for.
-  - [ ] Marketplace: nothing to build yet — **verified 2026-09-07, no `marketplace.json`
-        exists in any of the user's repositories**, and `claude-plugin-tools` is unrelated.
-        Note in both READMEs that the `--plugin-dir` line is interim.
-
 ## Section G — The hardcoded commit convention (found by F3's audit)
 
 **Why this sits after F.** F3's audit is what found it. Checking `workflow-claude`'s own
@@ -1649,7 +1648,53 @@ side. G2 makes the command say what the consumer's docs already have to.
   - [ ] Branch via `/new-branch`, `**Status**: standalone`, then `/smart-merge` — per A7,
         and dogfooding the commands being changed. Expect `/file-plans` to report
         `no backlink`, as E4's branch did.
-  - [ ] Add to F4's hand-back list: pfsmgraph's `docs/agents/claude.md` override note should
+  - [ ] Add to Section H's hand-back list: pfsmgraph's `docs/agents/claude.md` override note should
         be **re-scoped, not deleted**. Its first half (the `VERSION` file, the tagging) stays
         true; only the Step 3 paragraph becomes redundant, and even that is worth keeping as
         a statement of pfsmgraph's own convention rather than as a correction of the plugin.
+
+## Section H — Hand-back to pfsmgraph (executed elsewhere)
+
+**This section is deliberately outside this plan's completion criteria.** Every item here
+runs on a *later* pfsmgraph branch, through pfsmgraph's own process, so none of them can be
+closed while this branch is open. It is a handoff manifest, not work this plan performs.
+
+Read the progress check accordingly: **A–G closing is this plan finishing; H stays open by
+design** until the follow-up branch picks it up. It was moved out of Section F on
+2026-09-08 for exactly that reason — a structurally uncloseable goal sitting inside a work
+section made the section-completion check, which is this plan's main progress signal,
+permanently red for a reason that was not incomplete work.
+
+**Two items left this list the same day** and are no longer hand-backs: landing the root
+`dp-compile.toml`, and the `docs/agents/claude.md` section. Both moved into the plan under
+the ground rule's one exception, because F2 cannot run without the first and the second
+arrives with it whether or not the rule admits it.
+
+Count this plan's progress over A–G only:
+
+```bash
+awk '/^## Section [A-G] /{a=1} /^## Section H/{a=0} a&&/^- \[/{t++} a&&/^- \[[x-]\]/{d++} \
+     END{print d" of "t}' tmp/TODO.md
+```
+
+The open-items-by-section check is unchanged and still runs over the whole file — H
+appearing in it is the correct result, not a miss.
+
+- [ ] Close `DEFERRED.md`'s "how the development plugin fits the multi-package family"
+      entry: one generic plugin, per-repo manifest, this plan as the record.
+- [ ] **ADR 0016's Open section on phase-3 naming: close it, and correct the claim it
+      rests on.** The record says its proposal mirrors "the existing `_python.py` /
+      `_cython.pyx` / `_cuda.py` per-phase naming seen in `.scratch/align-poc/tokalign`".
+      That repository has only `_python.py` and `_cython.pyx`; there is no `_cuda.py` and
+      no `_numba.py`, and its third phase was never implemented under any name. So the
+      deferral's stated reason is void, not merely unmet — settle
+      `_<algorithm>_cpu_parallel.py` per A5, matching `meson.build`'s existing
+      `_viterbi_cython` pattern, and fix the factual claim in the same edit rather than
+      leaving a closed decision resting on a wrong sentence.
+- [ ] Land the recovered Viterbi `FORMALIZATION.md` from D4 where the manifest says.
+- [ ] Master plan lines 192–196 (phases 2–4 of Viterbi): note they run under
+      `dp-compile`, so the first real use of the revised plugin is on the kernel it was
+      revised for.
+- [ ] Marketplace: nothing to build yet — **verified 2026-09-07, no `marketplace.json`
+      exists in any of the user's repositories**, and `claude-plugin-tools` is unrelated.
+      Note in both READMEs that the `--plugin-dir` line is interim.
