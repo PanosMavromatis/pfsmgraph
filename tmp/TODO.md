@@ -1081,10 +1081,45 @@ started.
   > shipped. The fix is general rather than a recovery special case — **the fallback may
   > never invent an edge that reverses a recorded one**, and a file that no header names
   > and that carries none of its own is a root that nothing can make stale.
-- [ ] Differential oracles as a first-class input. Where a legacy implementation left
+- [x] Differential oracles as a first-class input. Where a legacy implementation left
       outputs beside its inputs (the `.vpath.xls` files), the formalization records the
       oracle's location and the differential test as a relational TC, and every later
       phase inherits it — the plugin must not let a kernel validate against itself.
+  > **Done:** 2026-09-08 — `dp-compile` commit `45b7131`. **The manifest half already
+  > existed (A2); everything downstream of the listing did not.** The template gains a
+  > mandatory `Differential oracles` section, with "none" a complete and common answer.
+  > The split of duties follows the plugin's usual line: the manifest records *where the
+  > files are* (layout, the plugin's business), the document records *what they mean* —
+  > what produced them, which inputs they pair with, whether the comparison is an equality
+  > check — which is what a human reviews and what a path list cannot hold.
+  > **"Must not let a kernel validate against itself" needed stating precisely, because it
+  > is only half true.** Phases 2-4 are checked against phase 1, so nothing downstream can
+  > check phase 1. Written *forward* that is fine — the specification came from outside the
+  > repository and the cases predate the code. *Recovered*, it is not: the document was read
+  > off the kernel and its cases were extracted from the kernel's own suite, so the whole
+  > chain agrees with the kernel because it all came from it. So `test-patterns.md`'s
+  > phase-1 row splits on the entrance; "it *is* the oracle" is true forward and false in
+  > reverse.
+  > **Two rules the section exists to enforce.** *An oracle is a pairing, not a file* — an
+  > output is a differential test only alongside the inputs that produced it, which is
+  > `core.md`'s own `.gitignore` finding generalised. And *pin the divergence rather than
+  > widening the assertion*: an oracle produced by an implementation whose defect the port
+  > fixed is wrong exactly where the fix bites, so the test asserts agreement everywhere
+  > else and the enumerated disagreement there. A tolerance buys nothing and silently
+  > accepts the next divergence.
+  > **The case is relational for a concrete reason**, not by classification: a corpus-sized
+  > oracle is thousands of values, so pasting them in would make the specification a copy
+  > of a file that already exists. The document states the relation — implementation,
+  > inputs, named file — and the pinned exceptions.
+  > **This closed a gap D1 had opened.** `algorithm-recover` writes no test code, since
+  > phase 1 already exists, so a recovered document could specify a differential case that
+  > nothing implements and `/next-phase` would route straight to phase 2 with `python`
+  > fresh. Now the recovery reports every specified case no test implements, `/next-phase`
+  > refuses to advance past phase 1 while a declared oracle is unexercised, and
+  > `/phase-check` reports the same without acting. Inheritance by later phases is
+  > mechanical **only if the case is in the shared parameterised set** — in a non-shared
+  > section every later backend is compared to phase 1 alone and inherits whatever phase 1
+  > got wrong — so that is now stated as a rule rather than left to follow.
 - [ ] Dry run on pfsmgraph's Viterbi: recover a `FORMALIZATION.md` from
       `packages/pfsmgraph-hmm/src/pfsmgraph/hmm/_viterbi.py` into the scratchpad (not
       into pfsmgraph — landing it is a hand-back), and check it against
