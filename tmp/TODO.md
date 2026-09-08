@@ -1173,15 +1173,43 @@ started.
 
 ## Section E — Interoperation with `workflow-claude`
 
-- [ ] Presence check (A6) at the head of every `dp-compile` command: check the tool list
+- [x] Presence check (A6) at the head of every `dp-compile` command: check the tool list
       for any `workflow-claude:` skill. **Absence stops only the commands that delegate**;
       read-only ones print one line and continue (A6 corrected the earlier blanket "never
       degrades", which would have had `/phase-check` refuse for a dependency it never uses).
-  - [ ] The README's "Prerequisites" must name **three** load paths, not one — a
+  > **Done:** 2026-09-08 — `dp-compile` commit `b51ac73`. Written as a fourth shared
+  > fragment, `commands/references/workflow-claude.md`, `@`-included by all four commands,
+  > each of which then declares its own severity in one sentence. A fragment rather than
+  > four copies for the usual reason, but also because the *severity table* has to be read
+  > as a whole — a reader checking whether `/benchmark` should refuse needs to see that
+  > `/next-phase` does not refuse either.
+  > **The check and the stop go in different places, and A6 already said so.** Its "writing
+  > a `.pyx` needs no branch or commit machinery" settles it: the check is at the head, so
+  > the user learns at the start that the commit step will not be available; the stop is at
+  > the delegation, so `/next-phase` still writes the phase file and stops when it reaches
+  > `/smart-commit`. A `.pyx` written and left uncommitted costs one `git commit`; a command
+  > that refused to start costs the phase.
+  > **The rule that carries the most weight is "a stop must never substitute"** — no
+  > `git commit` run in place of `/smart-commit`, no branch opened in place of
+  > `/new-branch`, and no quiet finish as though the step had not existed. Without it,
+  > "degrade gracefully" quietly becomes "reimplement the other plugin badly", which is the
+  > duplication this whole section exists to remove.
+  > **Unplanned consequence, worth recording because it will recur:** the validator warns
+  > on every frontmatter-less file under `commands/`, so adding a fragment took the
+  > expected-warning count from three to four. `CLAUDE.md` documented "three" as a fixed
+  > number; it now states that the count *tracks the number of shared fragments*, since
+  > otherwise the next reader cannot tell an expected warning from a new one.
+  - [x] The README's "Prerequisites" must name **three** load paths, not one — a
         marketplace install, `claude --plugin-dir <path>/workflow-claude`, and a plugin
         tree placed in the project's `.claude/skills/`, which is how pfsmgraph itself loads
         it today. A message naming only `--plugin-dir` sends a user to fix something that
         is not how they loaded it.
+        > **Note:** the README gains a `## Prerequisites` section it did not have, placed
+        > above `## Skills` so it is read before the component list. The three paths are a
+        > table, and the marketplace row is qualified "once one is published" rather than
+        > written as available — A6 verified no `marketplace.json` exists in any of these
+        > repositories, and a prerequisite that names a route nobody can take is worse than
+        > one that names two.
 - [ ] Delegation, implemented rather than described. `dp-compile` owns the algorithm
       lifecycle and nothing else: commits go through `/smart-commit` (its end-of-phase
       text says so instead of prompting for a commit itself), branches through
