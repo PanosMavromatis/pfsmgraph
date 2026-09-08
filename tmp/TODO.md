@@ -1210,13 +1210,43 @@ started.
         > written as available — A6 verified no `marketplace.json` exists in any of these
         > repositories, and a prerequisite that names a route nobody can take is worse than
         > one that names two.
-- [ ] Delegation, implemented rather than described. `dp-compile` owns the algorithm
+- [x] Delegation, implemented rather than described. `dp-compile` owns the algorithm
       lifecycle and nothing else: commits go through `/smart-commit` (its end-of-phase
       text says so instead of prompting for a commit itself), branches through
       `/new-branch`, phase progression is recorded as branch-plan subgoals worked by
       `/hitl-step`, merges through `/smart-merge`, and documentation is never touched by
       `dp-compile` (`/agents-docs-update` owns it). Decide what, if anything,
       `/next-phase` writes into the branch plan; keep it minimal.
+  > **Q:** What does `/next-phase` write into the branch plan — nothing but a paste-ready
+  > report line, a `> **Note:**` written under the subgoal, or nothing at all?
+  > **A:** Nothing written; report a paste-ready line.
+  > **Done:** 2026-09-08 — `dp-compile` commit `f103ada`. **The goal's premise was wrong in
+  > a way worth recording**: it expected an end-of-phase prompt to redirect, and there was
+  > none. `algorithm-prototype` ends at "Run tests and confirm" and the three
+  > compiled-backend skills end at their verification steps — **no hand-back step of any
+  > kind existed**. The only two mentions of committing were the phase-0 skills' "commit it
+  > and run `/next-phase`", naming `git commit`, which is the delegate's job rather than a
+  > synonym for it. So E2 added an absent step in six skills and two commands rather than
+  > editing text that was already there.
+  > **The contract lives once**, in `commands/references/workflow-claude.md`: a table of who
+  > owns branches, plans, commits, merges and documentation, and what `dp-compile`'s part in
+  > each is. Skills cannot use `@`-includes — only commands can — so the per-skill sections
+  > are short and the table is the authority.
+  > **Why a plain `git commit` is refused is the part that must stay visible.** It is not
+  > caution about destructive commands: `/smart-commit` performs a documentation sync, so
+  > committing around it leaves a repository with a new backend and docs describing the old
+  > set. That is why the skills are told not to *suggest* it either — suggesting it is how
+  > the bypass starts.
+  > **Documentation is drawn on ownership, not file type.** A formalization is a phase
+  > artifact and `dp-compile` writes it; a `README.md`, anything under `docs/agents/`, and
+  > every generated `AGENTS.md` are descriptions of the repository and belong to
+  > `/agents-docs-update` — even when a phase changed something they describe.
+  > **The plan-write question answers itself once the single-writer rule is stated.** In a
+  > `/hitl-step` iteration its Step 4 already records the subgoal, so a second writer would
+  > duplicate it in a different vocabulary; run standalone there is no plan to write to. But
+  > the artifact path, the provenance hash and the suite result are facts `/hitl-step` cannot
+  > know, so a finishing command **offers them as a line that pastes under a subgoal** and
+  > writes nothing. Offer it; do not write it, and do not ask whether to.
 - [ ] Hook coexistence (A4's decision): if the pre-commit hook survives, it fires inside
       `/smart-commit`'s `git commit` (hooks stack — the same composition the conflict
       report describes for `security-guidance`) and must no-op with a message where no
