@@ -109,24 +109,49 @@ marketplace later; nothing here builds it, but nothing here may make it harder (
 Each goal here is Q&A. Recommendations are stated so the answer can be "yes"; the point of
 logging them is that the plugin's README can later cite *why*, not just *what*.
 
-- [ ] Settle the plugin's name, version and rename mechanics.
-  - [ ] Name. Recommend `dp-compile` (the user's suggestion): the emphasis stays on
-        dynamic-programming kernels, and "compile" reads as the progressive lowering from
-        prose to pseudocode to Python to compiled and JIT phases. Alternatives if that
-        reads as Cython-only: `dp-lifecycle`, `dp-phases`.
-  - [ ] Version. `plugin.json` is `0.1.0`; its `CLAUDE.md` says bump on every change users
-        should pick up. Recommend `0.2.0` under the new name (same repository, same
-        history; a reset to `0.1.0` would make the cached `tokalign-dev@0.1.0` and
-        `dp-compile@0.1.0` look like the same thing).
-  - [ ] GitHub rename: `gh repo rename dp-compile` from the clone root is the user's
-        action (external; `!` prefix), followed by `git remote set-url` and a local
-        directory rename to `tmp/dp-compile/` — `plugin.json` `name` must match the
-        directory name. Decide whether the rename lands first (cleanest: every later
-        commit is already under the new name) or last.
-  - [ ] Commit convention for the renamed repo: keep imperative-no-prefix (its history)
-        or adopt conventional commits (`workflow-claude`'s). Recommend keep, and *write it
-        into its `CLAUDE.md`* so `/smart-commit`'s template is overridden explicitly
-        rather than by the history's example.
+- [x] Settle the plugin's name, version and rename mechanics.
+  > **Q:** Name — `dp-compile`, `dp-lifecycle`, or `dp-phases`?
+  > **A:** `dp-compile`.
+  > **Q:** Version, and when — `0.2.0` at the rename commit, `0.2.0` at the end, or `1.0.0`?
+  > **A:** `0.2.0`, at the rename commit.
+  > **Q:** Does the GitHub rename land before the content work or after it?
+  > **A:** First, before any content work.
+  > **Q:** Keep imperative-no-prefix commits, or adopt conventional commits to match
+  > `workflow-claude`?
+  > **A:** Keep imperative, and write it into the plugin's `CLAUDE.md`.
+  > **Done:** All four settled on the stated recommendation, 2026-09-07. Two findings from
+  > the check that preceded them. All three candidate names are free on GitHub, so
+  > availability decided nothing and the name was chosen on what it says. And **no
+  > `marketplace.json` exists in any of the user's repositories** — `claude-plugin-tools`
+  > is unrelated (shell scripts for per-project plugin enabling, untouched since
+  > 2026-05-12) — so the organisation marketplace is future work rather than an existing
+  > structure these plugins must fit into.
+  - [x] **Name: `dp-compile`.** The emphasis stays on dynamic-programming kernels, and
+        "compile" reads as the progressive lowering from prose to pseudocode to Python to
+        compiled and JIT phases. Its known weakness is recorded rather than argued away:
+        "compile" understates phases 3 and 4, which JIT at call time rather than compiling
+        ahead of it. `dp-lifecycle` named the ordered-lifecycle framing more exactly and
+        `dp-phases` matched the plugin's own `/phase-check` vocabulary; both were free.
+  - [x] **Version: `0.2.0`, set at the rename commit** rather than at the end. The version
+        is effectively a cache key — Claude Code picks up a plugin's changes only when it
+        changes — so bumping early keeps the cached `tokalign-dev@0.1.0` and the new plugin
+        from ever looking like the same thing. Deliberately still pre-1.0: the manifest
+        format (A2) is new, unexercised against any repository but this one, and will
+        almost certainly change on contact with the second consumer.
+  - [x] **The rename lands first, before any content work.** Decided here; *executed* in
+        B1, which now carries the command sequence. Every commit of the revision then sits
+        under the new name, and `gh repo rename` leaves a redirect so the old URL keeps
+        resolving. Doing the four parts as one step — repo, remote, directory,
+        `plugin.json` — also avoids a window where `plugin.json`'s `name` and the
+        directory name disagree, which the plugin's own `CLAUDE.md` forbids.
+  - [x] **Commit convention: keep imperative-no-prefix, and write it into the plugin's
+        `CLAUDE.md`.** Its history already is that ("Implement benchmarking skill and
+        benchmark command"), and the history is the authority — the same principle
+        pfsmgraph applies to override the identical `/smart-commit` template. Writing it
+        down is the load-bearing half: today the repo states no convention anywhere, so a
+        fresh session has nothing to read and follows the command's conventional-commit
+        template instead. Accepted cost: the two plugins will sit in one marketplace under
+        two different conventions.
 - [ ] Settle how a consumer repository describes itself to the plugin (the manifest).
       The plugin cannot know where a repo keeps its kernels, what its phase files are
       called, how it builds, how it tests, or how a backend is registered — and every one
@@ -219,6 +244,22 @@ logging them is that the plugin's README can later cite *why*, not just *what*.
 
 - [ ] Rename everything that carries the old identity.
   - [ ] `plugin.json` name, description, version (per A1); local directory; `origin`.
+        **A1 settled that this runs first, before any content work.** `gh repo rename` is
+        the user's to run — it is outward-facing and touches the GitHub account, not the
+        working copy:
+
+        ```bash
+        cd tmp/tokalign-dev
+        gh repo rename dp-compile   # leaves a redirect, so the old URL keeps resolving
+        git remote -v               # gh normally rewrites origin itself — verify, don't assume
+        cd .. && mv tokalign-dev dp-compile
+        ```
+
+        Then `plugin.json` in the same commit: `name` to `dp-compile` (it **must** match
+        the directory name), `version` to `0.2.0`, and a `description` that no longer says
+        "the tokalign package". Everything after this point happens under
+        `tmp/dp-compile/`, so update the pfsmgraph-side references in this plan too — the
+        three-roots table at the top still says `tmp/tokalign-dev/`.
   - [ ] Every `tokalign-dev:` namespace reference — the `Skill` tool calls in
         `new-algorithm.md`, `next-phase.md`, `cython-translation/SKILL.md`; the smoke
         test; `README.md`; `CLAUDE.md`.
@@ -407,5 +448,6 @@ started.
   - [ ] Master plan lines 192–196 (phases 2–4 of Viterbi): note they run under
         `dp-compile`, so the first real use of the revised plugin is on the kernel it was
         revised for.
-  - [ ] Marketplace: nothing to build yet; note in both READMEs that the `--plugin-dir`
-        line is interim.
+  - [ ] Marketplace: nothing to build yet — **verified 2026-09-07, no `marketplace.json`
+        exists in any of the user's repositories**, and `claude-plugin-tools` is unrelated.
+        Note in both READMEs that the `--plugin-dir` line is interim.
