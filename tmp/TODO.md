@@ -491,7 +491,11 @@ logging them is that the plugin's README can later cite *why*, not just *what*.
 
 ## Section B — Rename and generalise `tokalign-dev` → `dp-compile`
 
-- [ ] Rename everything that carries the old identity.
+- [x] Rename everything that carries the old identity.
+  > **Done:** 2026-09-08, in two `dp-compile` commits — `3b7fc67` (repo, remote,
+  > directory, `plugin.json`) and `8960b59` (27 namespaced references across seven files).
+  > Acceptance met: `grep -rn 'tokalign-dev' --exclude-dir=.git .` returns nothing, and
+  > `dev/smoke-test.sh` passes.
   - [x] **Done 2026-09-08 — `dp-compile` commit `3b7fc67`.** The user ran the rename
         sequence (`gh repo rename dp-compile`, `git remote -v`, directory move); verified
         afterwards: `tmp/dp-compile/` in place, `origin` at `dp-compile.git`, the clone
@@ -506,10 +510,32 @@ logging them is that the plugin's README can later cite *why*, not just *what*.
         Not pushed yet. The `[commands]` and `[phases]` machinery the description implies
         does not exist yet either — B2 and B3 build it, and the description is a statement
         of the plugin's purpose rather than of what it can do today.
-  - [ ] Every `tokalign-dev:` namespace reference — the `Skill` tool calls in
-        `new-algorithm.md`, `next-phase.md`, `cython-translation/SKILL.md`; the smoke
-        test; `README.md`; `CLAUDE.md`.
-  - [ ] Acceptance: `grep -rn 'tokalign-dev' --exclude-dir=.git .` returns nothing.
+  - [x] **Done — 27 occurrences across seven files** (`dp-compile` commit `8960b59`).
+        **This subgoal's own file list was wrong in both directions**, which is worth
+        recording because it was written from a survey rather than a grep: `dev/smoke-test.sh`
+        was named and carries *no* reference — it works in relative paths — while
+        `skills/algorithm-prototype/SKILL.md` and
+        `skills/cython-translation/scripts/validate-equivalence.py` were not named and do.
+        Two places needed more than a substitution, because renaming alone would leave them
+        self-contradicting: `CLAUDE.md`'s overview sentence would have read "dp-compile is
+        a plugin ... for the `tokalign` package", and its `plugin.json` example block still
+        carried the old description and `0.1.0` — an example disagreeing with the file it
+        documents. Both now match the real manifest, asserted rather than eyeballed.
+  - [ ] **One pre-existing bug is preserved rather than fixed, because it dies with its
+        file.** `cython-translation/SKILL.md` invokes the equivalence script as
+        `dp-compile/skills/…`, a path assuming the plugin sits *inside* the consumer's
+        repository rather than at `${CLAUDE_PLUGIN_ROOT}`. A4 removes that script, so
+        fixing the path would be work on a file scheduled for deletion — but if that
+        removal is ever reversed, the path is wrong and this note is where it is recorded.
+  - [ ] **Standing smoke-test warning, pre-existing and a false positive.** Verified by
+        stashing and re-running: `claude plugin validate` reports "No frontmatter block
+        found" for `commands/references/phase-detection.md`, which is an `@`-included
+        reference document rather than a command — but the validator scans every `.md`
+        under `commands/`. Moving it would break the include that is its entire purpose.
+        C1 rewrites that file; decide there whether to live with the warning permanently or
+        restructure the include.
+  - [x] **Acceptance met**: `grep -rn 'tokalign-dev' --exclude-dir=.git .` returns
+        nothing, and `dev/smoke-test.sh` passes (one pre-existing warning, above).
 - [ ] Introduce the manifest (A2) and a shared `commands/references/manifest.md` that
       every command and skill reads first, replacing `phase-detection.md`'s hardcoded
       `src/tokalign/algorithms/<name>/`. Defaults reproduce `tokalign`. Include the
