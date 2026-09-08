@@ -976,20 +976,75 @@ The plugin's chain assumes prose → pseudocode → Python; this section gives i
 entrance so every algorithm ends up with a pseudocode reference regardless of where it
 started.
 
-- [ ] New skill (name to settle: `algorithm-recover`, `formalize-from-code`, or a mode
+- [x] New skill (name to settle: `algorithm-recover`, `formalize-from-code`, or a mode
       of `algorithm-formalize`).
-  - [ ] Input: an existing phase-1 implementation, optionally the legacy source it was
+  > **Q:** Separate skill `algorithm-recover`, separate skill `formalize-from-code`, or a
+  > mode of `algorithm-formalize`?
+  > **A:** Separate skill `algorithm-recover`.
+  > **Done:** 2026-09-08 — `dp-compile` commit `9617581`. **The name was the smaller half
+  > of the question; the shape was settled by the frontmatter.** A skill's `description`
+  > is a trigger, and `algorithm-formalize`'s ends "do NOT trigger if the phase-1 file
+  > already exists" — which is the exact condition under which the reverse entrance must
+  > fire. One block cannot carry both honestly, and the description is what decides
+  > whether a skill runs at all, so a mode was ruled out on a mechanism rather than on
+  > taste. Word budget was not the constraint: `algorithm-formalize` is 3127 words against
+  > the 5000-word cap, so a mode would have fitted.
+  > **The skill's spine is a hazard the plan had not named**: a document recovered from
+  > code *describes* the code, and therefore cannot contradict it. Phases 2-4 translate
+  > from the formalization, so a document translated from phase 1 adds a step and no
+  > independent check, and a phase-1 defect ends up written down as the specification with
+  > the document's authority behind it. Three things prevent the collapse — independent
+  > evidence, stating intent rather than mechanism, and the review — and where none is
+  > available the document must say so in `Notes` rather than sound confident.
+  > **`[algorithms.<name>].oracles` already existed** (A2), including the line "an oracle
+  > is not necessarily an equality check". So D1 consumes it rather than inventing it, and
+  > D3 is left with making it first-class *downstream* rather than at the manifest.
+  > **Two consequential edits outside the skill.** `/next-phase`'s routing table had one
+  > phase-0 row; it now splits on whether the phase-1 file exists, because with a kernel
+  > present the forward skill has no source material and would describe it. And the smoke
+  > test's `expected` array never listed `formalization-template.md` or
+  > `test-patterns.md` — both are referenced from several skills, so losing either breaks
+  > skills whose own directory still looks complete. Both are listed now.
+  - [x] Input: an existing phase-1 implementation, optionally the legacy source it was
         translated from and any differential fixtures. Output: `FORMALIZATION.md` with a
         provenance header (A3) naming the code as its source.
-  - [ ] Section mapping: "Source Pseudocode" becomes "Source implementation" (cited by
+        > **Note:** the skill also names the three evidence cases explicitly — legacy
+        > source present, only an account of it present, neither present — because which
+        > one holds changes what the document may claim, and a recovery that does not say
+        > which it was in is unauditable.
+  - [x] Section mapping: "Source Pseudocode" becomes "Source implementation" (cited by
         path and commit); "Adaptations from Source" becomes "Deviations of the
         implementation from the legacy source" — for `hmm`: the δ-seeding fix, the `-1`
         log-zero sentinel not reproduced, `psi` as `int64`, `safe_divide`'s zero
         convention; Objective states the semiring the code actually uses (min-sum over
         bits); TC-XX cases are *extracted* from the existing tests and fixtures, not
         invented.
-  - [ ] Same hard stop for human review as the forward skill; the recovered document
+        > **Note:** the mapping is written **into the template**, in place, rather than
+        > duplicated in the new skill. The template is canonical for structure, and two
+        > entrances sharing one structure is the property that keeps them from drifting
+        > into two different documents.
+        > **The plan's four `hmm` examples are four different kinds**, which is what
+        > `references/deviation-taxonomy.md` generalises: a defect fixed (δ-seeding), a
+        > defect not reproduced but harmless (`psi`), a representation replaced (`-1` →
+        > `+inf`), and a convention deliberately preserved (`safe_divide`). `core.md`
+        > supplies two more — a primitive substituted with different failure behaviour
+        > (`LU-solve` → `numpy.linalg.solve`) and a repository invariant imposed (the ADR
+        > 0011 renumbering). **Only the first kind reaches the recurrence**, and the
+        > recurrence then states the *fixed* behaviour; writing the original's in would
+        > specify the bug and make every later phase reproduce it.
+        > **The last kind is the one a diff cannot show.** A convention matched on purpose
+        > leaves no trace in the code, the diff or the tests, so to a later reader it looks
+        > like an oversight — which is precisely what a cleanup undoes. Recording only the
+        > differences loses exactly the entries the section exists for.
+  - [x] Same hard stop for human review as the forward skill; the recovered document
         becomes the living specification from then on, and later edge cases fold into it.
+        > **Note:** the stop is stricter here than in the forward skill, and says so.
+        > Beyond creating no implementation artifacts it forbids *editing* the kernel it
+        > just read — including a docstring "correction". A recovery that finds a real
+        > defect reports it; folding the fix into a documentation commit hides the one
+        > finding the recovery was for. The user-facing line also says **why** the review
+        > matters more on this entrance: a forward formalization can be checked against its
+        > source paper, whereas this one was read off the very code it now governs.
 - [ ] `/new-algorithm` gains an entry-mode question: from source material (forward), from
       an existing implementation (reverse), or from existing pseudocode (skip to phase 1
       with the supplied `FORMALIZATION.md`). Phase detection treats a recovered
