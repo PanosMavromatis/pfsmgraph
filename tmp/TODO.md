@@ -833,15 +833,56 @@ logging them is that the plugin's README can later cite *why*, not just *what*.
         > from the registry. A registered backend that will not import is a hard failure,
         > so putting numba behind an extra would make every install without that extra a
         > broken one.
-- [ ] Write `gpu-parallelization` (phase 4) for real — currently a stub over zero-byte
+- [x] Write `gpu-parallelization` (phase 4) for real — currently a stub over zero-byte
       references.
-  - [ ] `numba-cuda` behind the consumer's GPU extra (ADR 0004); backend row with
+  > **Done:** 2026-09-08. SKILL.md 10 lines → 1908 words, plus
+  > `references/numba-cuda-patterns.md` (1307) and `examples/example-cuda-impl.py`.
+  > `anti-diagonal-parallelism.md` deleted per C2's note, and `example-numba-impl.py`
+  > renamed to `example-cuda-impl.py` — the same library-versus-phase naming rule that
+  > retired `_numba.py`, applied to the last file still carrying it.
+  > **The structurally important CUDA fact is a code shape, not a performance note.**
+  > `cuda.syncthreads()` synchronises a block, not a grid, so there is no grid-wide
+  > barrier inside a kernel and the decomposition's sequential axis has to move to the
+  > host as a loop of launches. The failure mode is nasty in a specific way and the skill
+  > says so: keeping that loop inside the kernel is correct *whenever the grid fits in one
+  > block*, so it passes the small test and fails at exactly the size the GPU was for.
+  > **A GPU is not needed to write or test this phase.** `NUMBA_ENABLE_CUDASIM=1` runs
+  > `@cuda.jit` code on the CPU — evidence about indexing, bounds and barrier placement,
+  > and about nothing else, since it models neither coalescing nor divergence nor races
+  > between blocks. The skill requires saying that a result came from the simulator,
+  > because a green simulator run reads exactly like a validated kernel.
+  > **One more manifest key, my call rather than a question**, since it applies the
+  > pattern C2 settled rather than introducing one: `[backends].require_env`, optional,
+  > naming the variable that escalates a hardware skip to a CI failure. Without it the
+  > registration step could only tell the user *that* the backend will skip, not how to
+  > stop it — and guessing a variable name is worse than saying nothing, because an
+  > instruction that does nothing looks like it was followed. Verified against the real
+  > `_backends.py`: `REQUIRE_ENV` at line 41, the `hardware` escalation at 99–106.
+  - [x] `numba-cuda` behind the consumer's GPU extra (ADR 0004); backend row with
         `hardware="CUDA device"`, so absence skips loudly; CI escalation is the
         consumer's (`PFSMGRAPH_REQUIRE_BACKENDS`-style) and comes from the manifest.
-  - [ ] Reuse phase 3's decomposition verbatim; what is left to debug is
+        > The hard/optional split is written as a *consequence* at both phases rather
+        > than as two rules: phase 3 registers with no hardware requirement, so a failed
+        > import is a hard failure and the dependency must be in every install; phase 4
+        > requires a device, so its absence is a skip and a base install with no GPU has
+        > to remain a working library. Stated that way the two are one decision seen from
+        > opposite ends, and the skill can forbid "just add it to the hard list for now"
+        > as the silent inversion it is.
+  - [x] Reuse phase 3's decomposition verbatim; what is left to debug is
         hardware-specific — coalescing, occupancy, `cuda.jit` semantics — and the skill
         says so, so it does not re-derive the algorithm.
-  - [ ] Fill `references/numba-cuda-patterns.md` and the example. **`anti-diagonal-
+        > Written as the reason ADR 0016 inserted phase 3 at all: before it, a first GPU
+        > attempt debugged the decomposition and the hardware at once, and both produce
+        > the same symptom — an intermittently wrong answer. The skill routes a suspected
+        > decomposition error *back to phase 3* rather than fixing it in place, since a
+        > fix here leaves the two backends implementing different arguments with only the
+        > equivalence suite holding them together.
+        > One case the subgoal did not anticipate: a manifest that declares no
+        > `cpu_parallel` phase. Then phase 4 derives from `cython` and the decomposition
+        > has never been validated under concurrency — a real position for a repository
+        > to take, and the skill says so plainly up front rather than proceeding as if
+        > phase 3 had happened.
+  - [x] Fill `references/numba-cuda-patterns.md` and the example. **`anti-diagonal-
         parallelism.md` should be deleted rather than filled** (note from C2, 2026-09-08):
         C2 wrote `skills/cpu-parallelization/references/decomposition-patterns.md`, which
         covers the wavefront *and* the families that have no anti-diagonals. Phase 3 is
