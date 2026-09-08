@@ -1120,11 +1120,56 @@ started.
   > mechanical **only if the case is in the shared parameterised set** — in a non-shared
   > section every later backend is compared to phase 1 alone and inherits whatever phase 1
   > got wrong — so that is now stated as a rule rather than left to follow.
-- [ ] Dry run on pfsmgraph's Viterbi: recover a `FORMALIZATION.md` from
+- [x] Dry run on pfsmgraph's Viterbi: recover a `FORMALIZATION.md` from
       `packages/pfsmgraph-hmm/src/pfsmgraph/hmm/_viterbi.py` into the scratchpad (not
       into pfsmgraph — landing it is a hand-back), and check it against
       `HMMLIB-ACCOUNT.md` §3 and `core.md`'s arc-emission, N+1, min-sum and tie-break
       facts. This is the acceptance test for the three goals above.
+  > **Done:** 2026-09-08. Recovered into the session scratchpad; corrections to the plugin
+  > in `dp-compile` commit `3651bbf`. **The document passes**: all twelve template sections
+  > present under the reverse renaming (checked mechanically, not by eye), the four
+  > `core.md` facts stated — arc-emission with the no-hoist consequence, the N+1 geometry,
+  > min-plus over bits, and the tie-break as contract — and every cited line number,
+  > measured figure and file path verified against the sources rather than recalled.
+  > **`pfsmgraph` has no `dp-compile.toml`, so the skill stops at its first prerequisite.**
+  > That is the prerequisite working, not a defect, but it means the run had to construct
+  > one in the scratchpad first. No new hand-back item: F4 already carries "land the
+  > manifest", and nothing is lost with the scratchpad, since the draft is A2's worked
+  > example plus the `[algorithms.viterbi]` block that `manifest.md` already ships.
+  > **The D2 fix was verified in the concrete case rather than in the abstract.**
+  > `_viterbi.py` carries no provenance header — correctly, nothing derives it — and after
+  > the recovery the document names it. Under the pre-D2 fallback rule `/phase-check` would
+  > have reported the kernel stale against a document written from it, immediately. It does
+  > not, because a file that no header names and that carries none of its own is now a root.
+  > **The oracle pairing rule bit for real, and correctly.** Eighteen `.vpath.xls` files sit
+  > on disk; **three** are tracked — exactly the three whose `.hmm` model directories are
+  > also tracked. The other fifteen are outputs whose inputs exist on one machine, so they
+  > are files of numbers rather than oracles, and A2's manifest example was already listing
+  > only the right three.
+  > **Three corrections the run earned, none of which review would have found.**
+  > (1) The deviation taxonomy had six kinds covering what a port *computes* differently and
+  > none covering **responsibility moving between the kernel and its caller** — a deviation
+  > with no arithmetic in it, and the contract every later phase implements, since a device
+  > function cannot raise. Added as kind 7; it also covers a method on a mutable object
+  > becoming a free function over a frozen value.
+  > (2) The skill said constructed cases "are not optional", and **the run walked straight
+  > into it**: the first draft labelled four cases `constructed` on the assumption that a
+  > suite would not cover ties or a degenerate seed, and this suite covers both. The rule is
+  > now that those two must be *covered*, constructed only where extraction did not reach
+  > them — deciding "constructed" without looking is the mirror of the error the provenance
+  > rule exists to prevent.
+  > (3) The `Objective` row now asks for the semiring's **identity and absorbing element**,
+  > not only its direction. Deviation kind 3 turns on exactly those — a replacement sentinel
+  > is chosen because it absorbs and sorts where it means — and the row did not ask.
+  > **The recovery contributed no new test coverage, and that is the right outcome here.**
+  > Thirteen cases: three `oracle`, ten `extracted`, none `constructed`, out of a 37-test
+  > suite that already had the tie case on an exactly uniform model and the zero-`init_p`
+  > case. So `/next-phase`'s new oracle gate had nothing to refuse. Worth remembering when
+  > reading a future recovery: a run that produces no constructed cases has either met an
+  > unusually complete suite or not looked, and only the report distinguishes them.
+  > **The artifact is disposable by design.** The hand-back regenerates it with the
+  > corrected skill rather than copying this one — which is cheaper than preserving it and
+  > picks up all three fixes above.
 
 ## Section E — Interoperation with `workflow-claude`
 
