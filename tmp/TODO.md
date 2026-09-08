@@ -891,8 +891,34 @@ logging them is that the plugin's README can later cite *why*, not just *what*.
         doc-rot shape this plan has been cataloguing, and the zero-byte file makes the
         deletion free. What stays phase-4-only is genuinely hardware: coalescing,
         occupancy, `cuda.jit` semantics, and the host/device transfer boundary.
-- [ ] Benchmarking over four backends: JIT warm-up applies to phase 3 as to phase 4;
+- [x] Benchmarking over four backends: JIT warm-up applies to phase 3 as to phase 4;
       crossover reporting names all three transitions; command from the manifest.
+  > **Done:** 2026-09-08. All three landed, and the goal turned out to be mostly a
+  > *removal*: C1 had already done the crossover reporting and the four-backend count, and
+  > B5 the manifest command, but the bottom half of `skills/benchmarking/SKILL.md` still
+  > described tokalign's own harness — `results.md`/`scaling.png`/`results.json` as
+  > guaranteed outputs, a `--memory` flag, `alphabet.symbols`, an alignment-specific
+  > scoring setup, and gotchas about matplotlib and `memory-profiler`. It contradicted the
+  > "output layout belongs to the repository" principle stated at the top of the same
+  > file. Rewritten from `### 2` to the end.
+  > **The JIT subgoal hid a third case.** "Warm-up applies to phase 3 as to phase 4" is
+  > true and incomplete: `cache=True` moves compilation to the first run *of the process
+  > ever*, not of the session, so a harness measuring compilation overhead gets a different
+  > answer depending on whether a cache file happens to exist on disk. The cache state is
+  > therefore part of the measurement rather than of the environment. And a warm-up is per
+  > *(backend, signature)* — a new input dtype triggers a fresh compile, so one warm-up at
+  > the top of a size sweep does not cover the sweep.
+  > **A crossover is a property of the machine, not of the algorithm**, and both commands
+  > now say so. `cython → cpu_parallel` moves with core count and `cpu_parallel → cuda`
+  > with the device, so the same kernels on a laptop and a workstation disagree about which
+  > backend to ship and both are right. This is the doc-rot shape already catalogued twice
+  > in this plan — a correct local observation promoted to a global rule — caught before it
+  > was written rather than after: "Cython wins below 500" becomes false the moment it
+  > reaches a README as a fact about the algorithm.
+  > **One invented flag removed from `/benchmark`**: it appended `--memory` on request,
+  > which assumes the consumer's harness accepts it. On a harness that errors that is
+  > noise; on one that ignores unknown arguments it silently returns an ordinary timing run
+  > labelled as a memory profile.
 - [ ] Equivalence discipline per phase, written into the consumer: extend the
       parameterised suite where one exists, or add to the labelled non-shared section
       where it does not (pfsmgraph until `align`'s backend-selection API), plus the
