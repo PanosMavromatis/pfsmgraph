@@ -693,13 +693,34 @@ logging them is that the plugin's README can later cite *why*, not just *what*.
         `run-benchmark.sh` and `package-release/SKILL.md` (A4 deletes all three), and
         `manifest.md` — where it is *intentional*, since the second worked manifest is
         that repository's.
-- [ ] The mechanical tail: `dev/smoke-test.sh` `expected` array (three deletions and two
-      additions, per A4 and C2/C3), `hooks/` per A4 — **and verify the hook's `if` pattern
-      syntax while there**: it is written `Bash(git commit *)` with a space, where both
-      official plugins that use the field write `Bash(git commit:*)` with a colon. One of
-      the two matches nothing, and a hook that never fires fails silently.
-      `CLAUDE.md` (drop the `{{template}}` residue, add the commit convention per A1),
-      `plugin.json` version; `claude plugin validate` green.
+- [x] The mechanical tail. **Done 2026-09-08 — `dp-compile` commit `8430847`.** A4's five
+      deletions executed (three stub skills, `validate-equivalence.py`,
+      `run-benchmark.sh`); the smoke-test array rebuilt; `CLAUDE.md` de-templated and
+      given the commit convention in writing; `claude plugin validate` green.
+  > **Done:** **The `if` pattern question could not be answered, so the hook was rebuilt
+      not to depend on it.** The two official plugins using that field spell their
+      patterns incompatibly — `Bash(git commit:*)` against
+      `Bash(python3 *scripts/*.py *)` — so at least one syntax matches nothing, and a
+      matcher that matches nothing yields a hook that never fires *and never says so*. The
+      deciding evidence: `security-guidance`, which uses the colon form, **re-checks the
+      command with its own regex anyway** (`security_reminder_hook.py:663`, "Mirrors
+      Claude Code's own commit…"). So the hook is now Python, reads the `PreToolUse` JSON,
+      and decides for itself; the `if` is gone rather than trusted.
+  > **The hook's logic is tested, and the test caught a defect before it shipped.**
+      Deriving kernel paths by wildcarding `_{algorithm}.py` matched *every* private
+      module in a flat package — `_numeric.py` and `_params.py` alongside `_viterbi.py` —
+      so an edit to a helper would have run the whole suite. It now expands templates over
+      the manifest's listed algorithms, which is the same reason A2 gave for listing them
+      rather than globbing. That reason was stated as a resolution concern; it turns out
+      to bite anywhere a phase template is turned into a matcher.
+  > **Two things `CLAUDE.md` said were stale rather than merely thin**: its gotchas
+      described mtime staleness, which A3 replaced, and it described no manifest at all.
+      Both are now written up alongside the `commands/references/*.md` warning, so nobody
+      "fixes" the validator complaint by adding frontmatter and turning two `@`-included
+      fragments into invocable commands.
+  - [ ] **Deferred to C2:** the smoke-test array gains
+        `skills/cpu-parallelization/SKILL.md` when that skill exists. Adding it now would
+        make the smoke test fail on a file nobody has written.
 
 ## Section C — Implement the ADR 0016 chain
 
