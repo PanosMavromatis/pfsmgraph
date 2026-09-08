@@ -1247,11 +1247,44 @@ started.
   > the artifact path, the provenance hash and the suite result are facts `/hitl-step` cannot
   > know, so a finishing command **offers them as a line that pastes under a subgoal** and
   > writes nothing. Offer it; do not write it, and do not ask whether to.
-- [ ] Hook coexistence (A4's decision): if the pre-commit hook survives, it fires inside
+- [x] Hook coexistence (A4's decision): if the pre-commit hook survives, it fires inside
       `/smart-commit`'s `git commit` (hooks stack — the same composition the conflict
       report describes for `security-guidance`) and must no-op with a message where no
       manifest exists. Document the interaction in `workflow-claude`'s
       `_meta/plugin-conflict-report.md` (new section) and in `dp-compile`'s README.
+  > **Done:** 2026-09-08 — `dp-compile` commit `6d5bc7f`; `workflow-claude` commit
+  > `3795397` on `docs/plan-notes-and-interop`, which is E4's branch. **The hook itself
+  > needed no change**: B4 already rebuilt it manifest-driven, blocking, scoped to staged
+  > kernel paths and no-opping with a message. E3 was the analysis and the writing-down.
+  > **The composition is stronger than the conflict report's other findings, not merely
+  > similar.** §4.2 records two hooks that compose correctly *while running on the same
+  > calls*; these two **cannot collide at all** — `pre-commit-check.py` matches `Bash` and
+  > `protect-agent-docs.py` matches `Write|Edit|MultiEdit`, so no tool call matches both and
+  > there is no ordering question to have.
+  > **The gate firing inside `/smart-commit` is the property to want, and it is what makes
+  > E2 safe.** Hooks stack, so the `git commit` that command runs triggers the gate exactly
+  > as a hand-typed one would: *delegating the commit does not bypass the check*. One plugin
+  > enforces deterministically through a hook while the other orchestrates advisorily
+  > through commands — different layers, not competing claims on one. A `PostToolUse`
+  > security review is downstream by construction: if the gate blocks, no commit happens and
+  > no review fires.
+  > **One latent coupling, now written down in both repositories.** `/smart-commit` runs
+  > `/agents-docs-update` *before* committing, so the gate reads a staged set that command
+  > has already modified. It stages only documentation today, so it cannot change the gate's
+  > scoping decision — but nothing enforces that, and a future version staging anything else
+  > would move the decision without either plugin noticing.
+  > **Two costs recorded as accepted rather than left to be rediscovered as defects**: one
+  > short-lived process per `Bash` tool call, since the hook decides for itself whether a
+  > command commits rather than trusting an `if` matcher; and one skip line on *every*
+  > commit in a repository that loads the plugin without a manifest — the no-op-with-a-
+  > message rule working as intended, but noise worth expecting.
+  > **One thing deliberately not asserted:** the hook declares a 600-second timeout, and
+  > what Claude Code does when a `PreToolUse` hook exceeds it has not been measured — there
+  > is no CLI that exercises hook runtime behaviour, which `CLAUDE.md` already records as a
+  > general trap. Written as unverified in both documents rather than guessed.
+  > **Scope note:** the conflict-report section is also listed under E4. It landed here
+  > because E3 owns its *content*; E4's branch plan now carries it as a ticked subgoal, with
+  > the README pointer and `CLAUDE.md` line still open there.
 - [~] `workflow-claude` edits, expected to be small: README "Companion plugins" pointer;
       conflict-report section; a `CLAUDE.md` line. Record any functional change that
       turns out to be needed (a documented detection contract, say) rather than slipping
