@@ -199,8 +199,13 @@ logging them is that the plugin's README can later cite *why*, not just *what*.
   - [ ] `dp-compile`: no `docs/plan/`, history is straight to `main`. Recommend a
         sequence of focused commits to `main`, not bootstrapping plan machinery into a
         repository that is being rewritten end to end — the record of *why* is this file.
-  - [ ] pfsmgraph side: the user named the branch `revise-plugins`. **Settled 2026-09-07 —
-        pointer plan.** `/new-branch` creates `docs/plan/revise-plugins/TODO.md` as usual,
+  - [x] pfsmgraph side: **done 2026-09-07 — branch `chore/revise-plugins` opened from
+        `beb0637`, with a pointer plan.** The name took the `chore/` prefix every prior
+        branch in this repository carries, so the plan directory is
+        `docs/plan/chore-revise-plugins/` rather than the flat `revise-plugins` this line
+        first assumed; `chore` because pfsmgraph receives almost nothing from this work —
+        the substantive diff lands in two other repositories. `/new-branch` created
+        `docs/plan/chore-revise-plugins/TODO.md` as usual,
         and its body is then replaced with a one-line pointer to `tmp/TODO.md`. Rung 2 still
         resolves, but to something that says immediately where the real plan is, which beats
         both alternatives: declining the plan makes rung 2 miss and fall through to the
