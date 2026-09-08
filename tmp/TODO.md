@@ -242,6 +242,9 @@ logging them is that the plugin's README can later cite *why*, not just *what*.
         build    = "uv sync"        # meson-python editable; compiled phases rebuild on import
         test     = "uv run pytest"
         test_one = "uv run pytest {path}"
+        # `benchmark` is deliberately absent: pfsmgraph has no benchmark infrastructure at
+        # all, where tokalign has benchmarks/run_benchmark.py. The benchmarking skill must
+        # report an unconfigured command rather than assume one (A4).
 
         # One template per phase. tokalign's default is
         # "src/tokalign/algorithms/{algorithm}/_python.py" and needs no new concept.
@@ -321,25 +324,59 @@ logging them is that the plugin's README can later cite *why*, not just *what*.
         the mechanism would break the one repository the plugin currently works in. The
         warning is what keeps the fallback from becoming permanent by inattention — a
         silent fallback would leave a repo on mtime forever with nothing saying so.
-- [ ] Settle the fate of the `tokalign`-only components.
-  - [ ] The three domain stubs — `scoring-matrix`, `alignment-viz`, `package-release`.
-        Recommend delete: they are ten lines each over zero-byte references; scoring
-        matrices and alignment visualisation belong to an alignment-domain plugin or the
-        consumer, and `package-release` duplicates the consumer's own release path
-        (pfsmgraph has `just release` and a runbook).
-  - [ ] `validate-equivalence.py` (hardwired to `tokalign._types` and the `align()`
-        signature). Recommend script out, guidance in: the Cython/parallel skills end by
-        writing a fuzz/property test *into the consumer's suite*, using the consumer's own
-        types and encoder, where ADR 0003's parameterisation can pick it up.
-  - [ ] `run-benchmark.sh` (walks up to `pyproject.toml`, calls
-        `benchmarks/run_benchmark.py`). Recommend keep the skill, take the command from
-        the manifest, drop the wrapper.
-  - [ ] The pre-commit hook (`setup.py build_ext --inplace`, `--extra dev`, `pytest
-        tests/ -x`). Fires on *every* `git commit` in every repo where the plugin is
-        loaded, including inside `/smart-commit` (hooks stack). Recommend: keep only if
-        it becomes manifest-driven and no-ops with a message when no manifest exists;
-        otherwise drop it and make "tests green before commit" a step the phase skills
-        state. Decide here; E3 implements.
+- [x] Settle the fate of the `tokalign`-only components.
+  > **Q:** What happens to the pre-commit hook?
+  > **A:** Manifest-driven, still blocking, and scoped to commits that touch a kernel path.
+  > **Q:** What happens to the three domain stub skills?
+  > **A:** Delete all three.
+  > **Q:** Where does the Cython/Python equivalence check live?
+  > **A:** Not in a script — the phase skills write a property test into the consumer's suite.
+  > **Done:** Settled 2026-09-08. **The hook is worse than "needs generalising", and this
+  > was measured rather than reasoned.** All three of its commands fail in pfsmgraph:
+  > `uv run --extra dev` errors outright (`Extra 'dev' is not defined in any project's
+  > optional-dependencies table` — this family uses `[dependency-groups]`), there is no
+  > `setup.py` because every member is meson-python, and `pytest tests/` collects **41**
+  > tests where the suite is **280**, missing every `packages/*/tests/`. The script exits 2
+  > on a failed pytest and exit 2 blocks, so loaded as-is here it would **block every
+  > commit** — including the ones `/smart-commit` makes. Scoping it to kernel commits needs
+  > no new manifest field: `[phases]` already knows which paths are kernels.
+  - [x] **Delete `scoring-matrix`, `alignment-viz` and `package-release`.** Verified before
+        deciding: each is a ten-line "TODO: implement this skill" over reference and
+        example files that are *all zero bytes*, so nothing is lost. Scoring matrices and
+        alignment visualisation are alignment-domain rather than DP-lifecycle, and
+        `package-release` duplicates the consumer's own release path — pfsmgraph has
+        `just release` and `docs/ops/release.md`. A named stub that never fills in is worse
+        than no skill, because the skill list is the first thing a reader sees and it
+        advertises a capability that does not exist. (`gpu-parallelization` is a stub of
+        the same shape but is **not** deleted — C3 writes it.)
+  - [x] **`validate-equivalence.py` is removed; the check becomes a property test the
+        phase skills write into the consumer's own suite.** It then uses the consumer's
+        types and encoder, lives beside the code it guards, and runs in CI rather than only
+        when someone remembers a script — a check outside the suite is a check nobody runs.
+        **The skill must know pfsmgraph's suite is not yet backend-parameterised**: ADR
+        0003 also requires tests be written against the public API only, and
+        `viterbi(params, record)` has nowhere to put a backend, so the two halves are
+        jointly unsatisfiable until `align` brings a backend-selection API. Until then the
+        test goes in a labelled, explicitly non-shared section, which is what
+        `test_viterbi.py` already does. Generalising the script instead was rejected on
+        what it would have to know: not paths and commands, but how to *construct valid
+        inputs* for an arbitrary consumer's types — far more than a manifest can carry.
+  - [x] **`run-benchmark.sh` is dropped; the benchmarking skill takes its command from the
+        manifest.** The wrapper existed only to walk up to a project root and call
+        `benchmarks/run_benchmark.py`, which `[commands]` now states directly.
+        **`benchmark` is optional, and pfsmgraph has none** — no `benchmarks/` directory
+        and nothing tracked matching it, against tokalign's `run_benchmark.py`. So the
+        skill's absent-command path is not hypothetical: it is what the *only* consumer
+        with a manifest will hit, and it must report that rather than assume a command.
+  - [x] **The hook stays, but manifest-driven, still blocking, and scoped.** It takes
+        `build` and `test` from `[commands]`, runs *only* when the staged set touches a
+        path matching a `[phases]` template, and no-ops with a message when no manifest
+        exists. Blocking is kept deliberately — the plugin's own `CLAUDE.md` argues hooks
+        exist precisely because they always run where an instruction is advisory, and a
+        wrong compiled kernel is what this one catches. Scoping is what makes blocking
+        tolerable: today it runs the full suite before a docs-only commit. E3 implements,
+        and must also settle the hook's coexistence with `/smart-commit` and
+        `security-guidance`, whose hooks stack rather than override.
 - [ ] Settle phase-file naming for phases 3 and 4, where ADR 0016 left it open.
       Recommend the plugin's canonical phase names be `python`, `cython`, `cpu_parallel`,
       `cuda`, and the manifest's layout pattern decide whether they are filenames
@@ -436,7 +473,11 @@ logging them is that the plugin's README can later cite *why*, not just *what*.
         keep the TC-XX test-specification discipline and its three precision levels.
   - [ ] Keep the Needleman-Wunsch example as the example, labelled as one family's
         instance.
-- [ ] The mechanical tail: `dev/smoke-test.sh` `expected` array, `hooks/` per A4,
+- [ ] The mechanical tail: `dev/smoke-test.sh` `expected` array (three deletions and two
+      additions, per A4 and C2/C3), `hooks/` per A4 — **and verify the hook's `if` pattern
+      syntax while there**: it is written `Bash(git commit *)` with a space, where both
+      official plugins that use the field write `Bash(git commit:*)` with a colon. One of
+      the two matches nothing, and a hook that never fires fails silently.
       `CLAUDE.md` (drop the `{{template}}` residue, add the commit convention per A1),
       `plugin.json` version; `claude plugin validate` green.
 
