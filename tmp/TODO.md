@@ -69,6 +69,18 @@ it is a `>` blockquote.
   whose whole purpose is to notice an undocumented project fact, so the docs edit arrives
   by the repository's own machinery whether or not the rule admits it. Better to scope it
   deliberately than to have it appear as a surprise in a diff.
+
+  **Landed `5dcf1e4`**, through `/smart-commit` since agent docs were affected. The
+  manifest is byte-identical to the plugin's own worked example, so the two cannot drift
+  into disagreement about what this repository looks like, and the commit was dry-run
+  against the gate before being made — it passes. The docs sync earned its keep twice,
+  which is the argument for scoping the exception at two files rather than one: the
+  README's repository-layout tree had gone stale the instant a tracked root file appeared,
+  and the plugin's "five stages" needed reconciling with `core.md`'s "four-phase
+  lifecycle" invariant. **Those agree** — the fifth is `formalization`, a specification
+  rather than a backend — but nothing in either document said so, and a reader comparing
+  them would have read a contradiction. Neither would have been caught by landing the
+  manifest alone.
 - **Known deviation, recorded rather than fixed:** both clones carry a root `CLAUDE.md`,
   and pfsmgraph's `docs/agents/claude.md` says an imported tree's `CLAUDE.md` is renamed
   to `.orig` on arrival. These are not imports — they are live sibling repositories whose
