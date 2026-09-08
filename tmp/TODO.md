@@ -1380,7 +1380,7 @@ started.
   > **The manifest had been mentioned throughout and described nowhere**, so it gains a
   > section of its own — the no-defaults rule, a table of the six tables, and why algorithms
   > are listed rather than globbed.
-- [~] Replace the live copy with a symlink. **Settled 2026-09-07.**
+- [x] Replace the live copy with a symlink. **Settled 2026-09-07.**
       `.claude/skills/workflow-claude/` in pfsmgraph is an untracked byte-identical copy of
       the clone and goes stale at the first edit; a re-sync step fails *silently*, since a
       stale copy still loads and still works, just from the old text. Symlink it to
@@ -1407,9 +1407,17 @@ started.
   > `.claude/` began showing as untracked. Caught by checking `git status` after the swap
   > rather than assuming it was unchanged. Fixed by dropping the slash, with the reason
   > written beside the rule; status is clean again, exactly as before.
-  > **Remaining: PR #20 in `workflow-claude` carries the README note this goal asks for**
-  > — the symlink load path and its three costs. Written and in review, not yet merged, so
-  > the goal stays `[~]`.
+  > **PR #20 merged 2026-09-08** (`e4e2421`), carrying the README note this goal asks for:
+  > the symlink load path and its three costs, including the trailing-slash trap that bit
+  > while making the change it documents.
+  > **The merge demonstrated the benefit rather than merely asserting it.** `.claude/` was
+  > not touched at any point, and the live plugin picked the note up the moment the clone
+  > pulled — the sync step that a copy needs, and silently skips, does not exist here.
+  > **One process note worth keeping:** the first `merge_pull_request` call was refused with
+  > `409 Head branch was modified`, because the `expectedHeadSha` passed had been *expanded
+  > from the short SHA* rather than read. The guard did exactly its job — the fix was
+  > `git rev-parse origin/<branch>`, and the lesson is that a 40-character SHA is never to
+  > be reconstructed from a 7-character one.
   - [x] `settings.local.json`'s allow-list is **not** a cost here, contrary to the concern
         raised when this was posed. Permission patterns match the command *text*, not the
         resolved inode, and the two entries spell
