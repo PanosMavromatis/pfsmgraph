@@ -1343,7 +1343,7 @@ started.
   > standalone, so `docs/plan/DO.md` has no `> **Branch:**` line to close and was left
   > untouched — which the command insists be said aloud, since a legitimately absent
   > backlink and a lost one look identical from outside.
-- [ ] `dp-compile` README rewrite: the combined workflow (`/open-revision` →
+- [x] `dp-compile` README rewrite: the combined workflow (`/open-revision` →
       `/new-branch` → `/new-algorithm` and `/next-phase` inside `/hitl-step` →
       `/smart-commit` → `/smart-merge`), the manifest, the five-stage table under ADR 0016
       numbering, the two entrances (D), prerequisites, and the removal of the `tokalign`
@@ -1357,6 +1357,29 @@ started.
   > "Decisions" section pointing at `../docs/decisions/adr/` in a repository layout that
   > no longer exists; and the "Naming" section, which describes a `tok` prefix rename via
   > the `package-release` skill that A4 deleted.
+  > **Done:** 2026-09-08 — `dp-compile` commit `f071b70`. Zero occurrences of `tokalign`
+  > remain, and the one dead relative link in the file is gone with the section that held it.
+  > **Two of the four stale sections were actively wrong, not merely dated.** "Decisions"
+  > pointed at `../docs/decisions/adr/` "when using the nested co-location layout" — a
+  > parent-repository path that does not exist now the plugin is standalone, so both the
+  > link and the claim were false. "Naming" described a rename checklist in the
+  > `package-release` skill A4 deleted, so it sent a reader to a skill that is not there.
+  > **The patterns section now says why each property is a requirement rather than a
+  > style.** The wrapper/kernel split is there because a CUDA device function cannot raise a
+  > Python exception, so a kernel written to validate is redesigned at phase 4 instead of
+  > transliterated; the encoder paragraph says the plugin never names a reserved code; and
+  > the equivalence paragraph no longer claims every repository parameterises over backends
+  > — pfsmgraph itself cannot until `align` brings a backend-selection API, and a run that
+  > did not run twice must not be reported as equivalence.
+  > **"Decisions" is replaced rather than deleted**, because there is something true to put
+  > there: the plugin owns the shape of the lifecycle and nothing about the algorithms —
+  > arc-emission, the reserved block, the semiring all belong to the consumer and are stated
+  > in the documents `[project].invariants` names. That division is *why* the plugin has no
+  > ADR log of its own; a record here would duplicate a consumer's or quietly compete with
+  > it. Worth stating positively, since its absence otherwise looks like an oversight.
+  > **The manifest had been mentioned throughout and described nowhere**, so it gains a
+  > section of its own — the no-defaults rule, a table of the six tables, and why algorithms
+  > are listed rather than globbed.
 - [ ] Replace the live copy with a symlink. **Settled 2026-09-07.**
       `.claude/skills/workflow-claude/` in pfsmgraph is an untracked byte-identical copy of
       the clone and goes stale at the first edit; a re-sync step fails *silently*, since a
