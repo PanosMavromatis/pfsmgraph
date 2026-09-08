@@ -34,6 +34,7 @@ A composable ecosystem of Python packages for modeling symbolic data sequences. 
 
 ```
 pyproject.toml                 # uv workspace root (virtual — not a package)
+dp-compile.toml                # manifest for the dp-compile plugin (see docs/agents/claude.md)
 docs/design/PRD.md             # authoritative design document
 docs/design/adr/               # decision records (authoritative)
 docs/api/                      # API documentation, one subdirectory per package

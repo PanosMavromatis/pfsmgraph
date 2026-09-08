@@ -72,3 +72,25 @@ and the hand-backs the revised plugin needs *from* pfsmgraph.
 - The plugin's mtime staleness runs backwards for a formalization recovered from code —
   the recovered document is necessarily newer than its own source, so phase 1 would read
   as stale and be regenerated from its own derivative. Replacing it is goal A3.
+- 2026-09-08 — **The ground rule "pfsmgraph is not edited beyond `tmp/TODO.md`" was
+  relaxed once**, for the root `dp-compile.toml` and its `docs/agents/claude.md` section.
+  F2's live-session check cannot run without the manifest, and the plan had already framed
+  this as a decision to take deliberately rather than discover late. Measured before
+  landing: the manifest arms the plugin's blocking pre-commit gate on exactly four paths,
+  only one of which exists, and this branch touches none of them — so the file is inert
+  here. The exception covers two files rather than one because it is not self-limiting:
+  committing a new root file through `/smart-commit` runs `/agents-docs-update`, which
+  exists precisely to notice an undocumented project fact, so the docs edit arrives either
+  way. That sync also caught two things worth keeping: the README's layout tree had gone
+  stale the moment a tracked root file appeared, and the plugin's "five stages" needed
+  reconciling with `core.md`'s "four phases" (they agree — the fifth is `formalization`).
+- 2026-09-08 — **Section G was opened for a defect this revision's own audit found.**
+  `workflow-claude` hardcodes commit messages and PR-title formats at eight sites across
+  six commands, three encoding one convention and four the other, so whichever it hardcodes
+  is wrong in one of the two repositories using it. pfsmgraph has been silently overriding
+  the conventional ones on every run; `workflow-claude` took two non-conventional commits
+  this session as a result. Scoped as a cleanup by size, landing on its own branch.
+- 2026-09-08 — The hand-back list moved out of Section F into **Section H**, at the end of
+  the plan. Its items run on a later pfsmgraph branch by construction, so while it sat
+  inside a work section that section could never close and the completion check stayed
+  red for a reason that was not incomplete work.
