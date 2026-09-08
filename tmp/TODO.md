@@ -1045,10 +1045,42 @@ started.
         > finding the recovery was for. The user-facing line also says **why** the review
         > matters more on this entrance: a forward formalization can be checked against its
         > source paper, whereas this one was read off the very code it now governs.
-- [ ] `/new-algorithm` gains an entry-mode question: from source material (forward), from
+- [x] `/new-algorithm` gains an entry-mode question: from source material (forward), from
       an existing implementation (reverse), or from existing pseudocode (skip to phase 1
       with the supplied `FORMALIZATION.md`). Phase detection treats a recovered
       formalization as derived, so phase 1 is not stale (A3).
+  > **Done:** 2026-09-08 — `dp-compile` commit `a3dacdb`. **It is not a three-way
+  > question, and that is the design rather than a shortcut.** One branch is already
+  > settled by the filesystem: if the phase-1 file exists the entrance is reverse, since
+  > `algorithm-formalize`'s trigger excludes that case outright and with a kernel present
+  > it would end up describing it. The command states the inference and asks for
+  > confirmation — which also catches a path template that resolved somewhere unexpected,
+  > before a skill starts writing. A genuine question survives only where no phase file
+  > exists, and it is between two options.
+  > **Registration moved into the command.** It previously only *checked* whether
+  > `[algorithms.<name>]` existed and never said who writes it — a gap in every mode, made
+  > acute by the reverse one, where the code existing is exactly why nobody registered it.
+  > Since algorithms are listed and never discovered, an unregistered algorithm is
+  > invisible to `/phase-check` and `/next-phase` however many of its files exist, so this
+  > is most of what "scaffold" means here. The write is proposed and confirmed rather than
+  > silent: `dp-compile.toml` is the repository's contract with the plugin.
+  > **The supplied mode skips the authoring of phase 0, not its gate.** `Derived from`
+  > stays empty (it came from outside; nothing here can make it stale), the document is
+  > checked against the template — read as canonical rather than restated in the command —
+  > and against `[project].invariants`, and it is never reformatted into the template's
+  > voice. Two absences are named because neither fails now: no `Parallel decomposition`
+  > costs nothing until phase 3 stops on it, and no `Test Cases` leaves phase 1 inventing
+  > the specification it was meant to translate.
+  > **The parenthetical named a live defect, not a property to preserve.** The mtime
+  > fallback said a headerless file's source is the previous declared phase. A recovered
+  > algorithm's `_python.py` is correctly headerless — it is the root — and the
+  > formalization's header names it, so the fallback added a *reversed* edge on top of a
+  > recorded one: a cycle. And because a recovered document is necessarily newer than the
+  > kernel it was written from, mtime would report the kernel stale the moment the recovery
+  > landed, then regenerate it from a description of itself. Reachable as soon as D1
+  > shipped. The fix is general rather than a recovery special case — **the fallback may
+  > never invent an edge that reverses a recorded one**, and a file that no header names
+  > and that carries none of its own is a root that nothing can make stale.
 - [ ] Differential oracles as a first-class input. Where a legacy implementation left
       outputs beside its inputs (the `.vpath.xls` files), the formalization records the
       oracle's location and the differential test as a relational TC, and every later
