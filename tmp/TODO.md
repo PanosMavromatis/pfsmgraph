@@ -776,20 +776,63 @@ logging them is that the plugin's README can later cite *why*, not just *what*.
         names the two new files.
         > `cython-translation` had no such list at all — added one. The lists now name
         > phases rather than filenames, since the filenames are the manifest's.
-- [ ] New skill `cpu-parallelization` (phase 3: `@njit(parallel=True)` with `prange`).
-  - [ ] The decomposition comes from `FORMALIZATION.md`'s Parallel decomposition section,
+- [x] New skill `cpu-parallelization` (phase 3: `@njit(parallel=True)` with `prange`).
+  > **Q:** Phase 3 makes `numba` a hard runtime dependency and phase 4's `numba-cuda` goes
+  > behind an extra, but the manifest has no way to say where a dependency is declared.
+  > Add an optional `[dependencies]` table, have the skill report-and-stop with no table,
+  > or reuse `[backends].build_manifest`?
+  > **A:** Add an optional `[dependencies]` table.
+  > **Done:** 2026-09-08. `skills/cpu-parallelization/SKILL.md` (1790 words) plus
+  > `references/decomposition-patterns.md` (1235). The dangling
+  > `dp-compile:cpu-parallelization` reference C1 left is closed.
+  > **The plan assumed a manifest feature that did not exist** — this subgoal says the
+  > dependency is "declared via the manifest's dependency recipe", and there was no such
+  > recipe. `[dependencies]` is now `declared_in` plus one inline table per parallel
+  > phase, where the absence of an `extra` key *is* the hard/optional distinction. Absent
+  > table ⇒ report and stop, on the `benchmark` precedent. Rejecting
+  > `[backends].build_manifest` mattered concretely rather than aesthetically: in the one
+  > repository with a manifest it is `meson.build`, which declares build *sources*, while
+  > runtime dependencies live in `pyproject.toml` — same package, different file.
+  > **Verifying C2 found a defect in the C1-era hook.** `kernel_paths()` expanded *every*
+  > `[phases]` template, so the formalization counted as a kernel and staging a prose edit
+  > rebuilt and ran the whole suite. Phase 0 compiles to nothing and is imported by
+  > nothing, so it cannot break a backend; excluded, and re-checked at four kernels.
+  > **`[dependencies]` is inert to the hook** — verified rather than assumed, since a new
+  > top-level table is exactly the kind of addition that leaks into a `.values()` loop.
+  - [x] The decomposition comes from `FORMALIZATION.md`'s Parallel decomposition section,
         never invented here. Anti-diagonal for 2-D alignment DP; for a 1-D-over-time
         recurrence with dense state coupling (HMM) the candidates are
         states-within-a-timestep, batch over sequences, or an associative scan in the
         (min, +) semiring — and "no anti-diagonals" is a valid answer the skill must
         accept, because master plan line 194 settles that question against the Viterbi
         kernel, not here.
-  - [ ] Race-freedom is checked against the phase-1 oracle (same discipline as every
+        > The reference separates two outcomes a plan tends to collapse: **"undetermined"
+        > blocks the phase** (the question is unanswered, so amend the formalization
+        > first), while **"not usefully parallel" completes it** (a `prange` over four
+        > states is slower than a `range` over four states). Without that split a
+        > repository reaching the honest second answer would either have to overstate it
+        > or appear to have skipped a step. Three families are written up — 2-D grid with
+        > neighbour dependencies, 1-D over time with dense state coupling, 1-D with a
+        > bounded window — and the second says plainly that the wavefront question does
+        > not apply rather than that it is hard.
+  - [x] Race-freedom is checked against the phase-1 oracle (same discipline as every
         phase), and **the tie-breaking rule is contract** (`core.md`): the per-cell
         reduction over predecessors stays sequential so first-wins survives `prange`.
-  - [ ] `numba` becomes a hard runtime dependency of the package (ADR 0016), declared via
+        > Three checks, none optional: the suite; **thread-count invariance**
+        > (`NUMBA_NUM_THREADS=1` against many — a disagreement is a race, never a
+        > tolerance problem); and a **constructed tie**, since learned float parameters
+        > essentially never tie and a green differential run is evidence about the corpus.
+        > Written alongside it because it is the same failure wearing different clothes: a
+        > float *sum* reduced by `prange` is reassociated and not bit-identical, so a
+        > forward or posterior recurrence needs a tolerance where a min/max Viterbi does
+        > not.
+  - [x] `numba` becomes a hard runtime dependency of the package (ADR 0016), declared via
         the manifest's dependency recipe; `numba-cuda` does not.
-  - [ ] Registration: a backend row with `hardware=None` (a failed import escalates).
+  - [x] Registration: a backend row with `hardware=None` (a failed import escalates).
+        > Stated with its reason rather than as a rule: the hard/optional split *follows*
+        > from the registry. A registered backend that will not import is a hard failure,
+        > so putting numba behind an extra would make every install without that extra a
+        > broken one.
 - [ ] Write `gpu-parallelization` (phase 4) for real — currently a stub over zero-byte
       references.
   - [ ] `numba-cuda` behind the consumer's GPU extra (ADR 0004); backend row with
@@ -798,8 +841,15 @@ logging them is that the plugin's README can later cite *why*, not just *what*.
   - [ ] Reuse phase 3's decomposition verbatim; what is left to debug is
         hardware-specific — coalescing, occupancy, `cuda.jit` semantics — and the skill
         says so, so it does not re-derive the algorithm.
-  - [ ] Fill `references/anti-diagonal-parallelism.md`, `numba-cuda-patterns.md` and the
-        example.
+  - [ ] Fill `references/numba-cuda-patterns.md` and the example. **`anti-diagonal-
+        parallelism.md` should be deleted rather than filled** (note from C2, 2026-09-08):
+        C2 wrote `skills/cpu-parallelization/references/decomposition-patterns.md`, which
+        covers the wavefront *and* the families that have no anti-diagonals. Phase 3 is
+        where a decomposition is decided and validated and phase 4 reuses it, so phase 4's
+        reference should point there. Two copies of a decomposition argument is the exact
+        doc-rot shape this plan has been cataloguing, and the zero-byte file makes the
+        deletion free. What stays phase-4-only is genuinely hardware: coalescing,
+        occupancy, `cuda.jit` semantics, and the host/device transfer boundary.
 - [ ] Benchmarking over four backends: JIT warm-up applies to phase 3 as to phase 4;
       crossover reporting names all three transitions; command from the manifest.
 - [ ] Equivalence discipline per phase, written into the consumer: extend the
