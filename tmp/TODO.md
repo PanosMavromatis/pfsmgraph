@@ -1483,8 +1483,57 @@ started.
         and nothing to point it at.
       `/dp-compile:phase-check viterbi` reports phase 1; the same session without
       `workflow-claude` trips the presence check. Record results as `> **Ran:**` lines.
-- [ ] Commit and push each repository from its own root per A7; version and GitHub
+- [x] Commit and push each repository from its own root per A7; version and GitHub
       rename per A1.
+  > **Ran:** all three repositories audited from their own roots. Every one is clean with
+  > **zero unpushed commits** — pfsmgraph on `chore/revise-plugins`, `dp-compile` on
+  > `main` (21 commits from the rename onward), `workflow-claude` on `main`.
+  > **Ran:** `gh repo view` — the GitHub repository is `dp-compile`, and
+  > `gh api repos/PanosMavromatis/tokalign-dev` returns `PanosMavromatis/dp-compile`, so
+  > the rename redirect A1 relied on is live rather than assumed.
+  > **Ran:** `plugin.json` is `name = "dp-compile"`, `version = "0.2.0"`, and the history
+  > shows both fields changed in a **single commit** (`3b7fc67`) — which is exactly what
+  > A1 required, since a two-commit rename opens a window where `plugin.json`'s name and
+  > the directory name disagree, and the plugin's own `CLAUDE.md` forbids that state.
+  > **Note: no further version bump is owed, and the reason inverts A1's own argument.**
+  > A1 bumped early because "the version is effectively a cache key". Checked here: no
+  > marketplace install of `dp-compile` *or* `tokalign-dev` exists in `~/.claude/plugins/`,
+  > and A1 had already established that no `marketplace.json` exists in any of the user's
+  > repositories. So there is **no cache anywhere to invalidate** — the 21 commits that
+  > landed after the bump are served from the working tree by `--plugin-dir`, which A7
+  > relied on when it allowed `main` to sit half-rewritten. `0.2.0` therefore denotes the
+  > finished revision rather than the rename alone, and bumping again would mark a
+  > boundary no consumer can observe.
+  > **Note: `workflow-claude` gets no bump either, on its own repository's evidence.** Its
+  > version field was written once and has **never changed across 109 commits and three
+  > closed revisions** — so that repository's convention is that the version does not track
+  > content. Bumping it now for a documentation change would invent a convention mid-stream
+  > that nothing else in its history follows.
+  > **Note: a defect in `/smart-merge`, found by auditing the history it produced.** Two of
+  > the six `workflow-claude` commits this session are **not** conventional-commit format:
+  > `Remove branch doc (merging to main)` and `Record merge of ... in the plan (PR #19)`.
+  > Both are the command's hardcoded `-m` templates. `workflow-claude` uses conventional
+  > commits, so the command that *defines* the branch lifecycle breaks its own
+  > repository's convention every time it runs, and will do the same in any consumer that
+  > uses them. Not fixed here — it is a `workflow-claude` change outside this revision's
+  > scope — but it belongs on that repository's next plan.
+  > **Note:** the session attribution footer is present on **all** commits in all three
+  > repositories, including the two `/smart-merge` template commits — the branch-doc
+  > removal had to be amended for it during E4, because the command's literal `-m` template
+  > carries no footer. Same root cause as the finding above.
+  > **Note: the pfsmgraph ground rule held.** The branch changes three files, and only
+  > `tmp/TODO.md` is content. The other two — `docs/git/chore/revise-plugins.md` and
+  > `docs/plan/chore-revise-plugins/TODO.md` — are the branch-lifecycle artifacts A7's
+  > third subgoal explicitly provisioned, and the first is deleted at merge by design.
+  > **Note: E6's exclude rule does not travel, by construction.** `.git/info/exclude` is
+  > per-clone and can never be tracked, and pfsmgraph's `.claude/` is untracked entirely,
+  > so the symlink arrangement is *local setup a fresh clone does not inherit*. That is
+  > self-consistent rather than broken — a clone has no symlink, so it needs no rule — but
+  > it means the trailing-slash trap E6 hit is waiting for whoever sets this up again.
+  > Worth a line wherever the load path is documented.
+  > **Note:** `dp-compile`'s GitHub repository **description is empty** while its
+  > `plugin.json` carries a full one. Outside F3's scope — A1 settled the rename and the
+  > version, not the repository metadata — so it is flagged rather than changed.
 - [ ] Hand-back list for pfsmgraph, executed on a pfsmgraph branch afterwards, not here:
   - [ ] Land the manifest at the pfsmgraph root.
   - [ ] Close `DEFERRED.md`'s "how the development plugin fits the multi-package family"
