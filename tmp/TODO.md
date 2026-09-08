@@ -724,9 +724,31 @@ logging them is that the plugin's README can later cite *why*, not just *what*.
 
 ## Section C — Implement the ADR 0016 chain
 
-- [ ] `phase-detection.md` and its three consumers for five stages.
-  - [ ] Nominal-phase table 0–4; filenames from the manifest; staleness per A3.
-  - [ ] **Effective phase needs redefining, not extending — A3 changed its shape.** The
+- [x] `phase-detection.md` and its three consumers for five stages.
+  > **Done:** 2026-09-08. `phase-detection.md` rewritten whole (45 → 195 lines), and the
+  > deferrals from B2 and B3 discharged in that one pass as intended.
+  > **The rule was simulated before it was committed**, seven cases, and the seventh found
+  > a hole the prose had: *an artifact whose named source is absent*. A `cuda` kernel
+  > written straight from the `.pyx`, or a gap filled out of order, leaves a header naming
+  > a file that does not exist — nothing to hash, so neither fresh nor stale, and not a
+  > target either since it cannot be regenerated from a source that is not there. Folded
+  > into `blocked`, whose definition is now "an ancestor is stale **or absent**". Six of
+  > seven cases had passed; the rule was wrong only where nobody would have looked.
+  > **Two claims are now measured rather than argued.** In a recovered graph, editing the
+  > root kernel marks the formalization *and* the `.pyx` stale simultaneously — reported
+  > together, doc first — and editing the recovered *document* marks nothing at all. The
+  > second is the case the old rule got backwards, and it is now checked.
+  > **A dangling reference is live and deliberate.** `/next-phase`'s routing table and the
+  > README both name `dp-compile:cpu-parallelization`, which C2 writes. Naming it now was
+  > the alternative to writing the table twice; C2 closes it, and until C2 lands a phase-3
+  > target routes to a skill that does not exist.
+  - [x] Nominal-phase table 0–4; filenames from the manifest; staleness per A3.
+        > Also settled the validator question C1 inherited: **three** warnings, not two —
+        > the third is `CLAUDE.md at the plugin root is not loaded as project context`.
+        > Correct about an installed plugin, beside the point for a file that is context
+        > for developing the plugin in the repository where plugin root *is* repo root.
+        > All three are now recorded in `CLAUDE.md` as expected-and-do-not-fix.
+  - [x] **Effective phase needs redefining, not extending — A3 changed its shape.** The
         current rule is "the phase just before the first stale file *in the chain*", which
         assumes one linear order that is both the phase order and the dependency order.
         With provenance edges read from the files those come apart: for an algorithm whose
@@ -737,10 +759,23 @@ logging them is that the plugin's README can later cite *why*, not just *what*.
         the source its own header names**; and when nothing is stale, the target is the
         next unwritten phase. That rule covers the forward chain unchanged and the
         recovered DAG correctly, where "the phase before the first stale file" cannot.
-  - [ ] `/next-phase` routes 2 → 3 to the new CPU-parallel skill and 3 → 4 to GPU;
+  - [x] `/next-phase` routes 2 → 3 to the new CPU-parallel skill and 3 → 4 to GPU;
         `/phase-check` reports four backends; `/benchmark` counts them.
-  - [ ] Every "do not create X yet" list in the formalize, prototype and Cython skills
+        > `/phase-check` no longer reports a single phase number at all — under a graph
+        > there is not always one, so it reports the nominal phase plus a per-artifact
+        > state table. `/benchmark` gates on `blocked` as well as `stale` (an ancestor
+        > moved, so the number describes code on its way out) but explicitly **not** on
+        > the formalization, which compiles to nothing and contributes no timing.
+        > Four files beyond the three named consumers had to change or they would have
+        > contradicted the new reference: `skills/benchmarking/SKILL.md` still described
+        > mtime staleness; `gpu-parallelization`'s trigger description still said
+        > "Phase 3" and `_numba.py`, which would have misfired against the new routing;
+        > `test-patterns.md` named a test file `_numba_specific.py`, a library name where
+        > a phase name belongs; and `README.md` carried the whole superseded model.
+  - [x] Every "do not create X yet" list in the formalize, prototype and Cython skills
         names the two new files.
+        > `cython-translation` had no such list at all — added one. The lists now name
+        > phases rather than filenames, since the filenames are the manifest's.
 - [ ] New skill `cpu-parallelization` (phase 3: `@njit(parallel=True)` with `prange`).
   - [ ] The decomposition comes from `FORMALIZATION.md`'s Parallel decomposition section,
         never invented here. Anti-diagonal for 2-D alignment DP; for a 1-D-over-time
@@ -841,6 +876,15 @@ started.
       `/smart-commit` → `/smart-merge`), the manifest, the five-stage table under ADR 0016
       numbering, the two entrances (D), prerequisites, and the removal of the `tokalign`
       "Decisions" and "Naming" sections.
+  > **Note from C1 (2026-09-08):** the README's *phase model* was corrected in place —
+  > the five-stage table, provenance-not-mtime, the stale/blocked worked example, the
+  > skills table (three deleted skills were still listed) and the directory tree (still
+  > showed `pre-commit-check.sh`). Those were false claims rather than rewrite material.
+  > What is deliberately left for this goal: the opening line and §"Key Architectural
+  > Patterns", both still written about `tokalign` and its `Alphabet` class; the
+  > "Decisions" section pointing at `../docs/decisions/adr/` in a repository layout that
+  > no longer exists; and the "Naming" section, which describes a `tok` prefix rename via
+  > the `package-release` skill that A4 deleted.
 - [ ] Replace the live copy with a symlink. **Settled 2026-09-07.**
       `.claude/skills/workflow-claude/` in pfsmgraph is an untracked byte-identical copy of
       the clone and goes stale at the first edit; a re-sync step fails *silently*, since a
