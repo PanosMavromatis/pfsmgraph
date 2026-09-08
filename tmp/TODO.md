@@ -1528,7 +1528,7 @@ started.
   > and also that a folder of plugins loads each child. So `--plugin-dir tmp` would load
   > both. Do not use it: `tmp/` holds exactly the two plugins, so it reintroduces the
   > double-load the point above removes.
-  - [ ] **Positive check**, from the pfsmgraph root:
+  - [x] **Positive check**, from the pfsmgraph root:
         `claude --plugin-dir /Users/panayotismavromatis/Developer/PFSMGraph/pfsmgraph/tmp/dp-compile`
         then `/dp-compile:phase-check viterbi`. **Passing is this exact report**, derived
         from the manifest and the tree rather than from expectation:
@@ -1538,13 +1538,47 @@ started.
         oracle** (all three `.vpath.xls` files are reached by `test_viterbi.py` via
         `_lush_fixtures.py` — checked); and no "not applicable" line, since this manifest
         declares all five phases.
-  - [ ] **Two specific ways it can fail, and they mean different things.** `python` reported
-        **stale or blocked** is a real defect: `_viterbi.py` is headerless and no other file
-        names it, so D2's rule makes it a **root**, and anything else means the fallback is
-        inventing the forward chain it was fixed not to invent. A report that stops at
-        phase 1 **without the absent-formalization row** is the milder failure — the report
-        is meant to be five rows rather than a phase number, and collapsing it loses exactly
-        the reverse-entrance information the row set exists to carry.
+    > **Ran:** 2026-09-08, by the user, on Opus 5 (high). Command as corrected above —
+    > `claude --plugin-dir /Users/panayotismavromatis/Developer/PFSMGraph/pfsmgraph/tmp/dp-compile`,
+    > then `/dp-compile:phase-check viterbi`. **Passed on every predicted criterion.**
+    > Summarised output:
+    >
+    > > Viterbi is at nominal phase 1: only the pure-Python kernel `_viterbi.py` exists, and
+    > > phases 0 (formalization), 2 (cython), 3 (cpu_parallel) and 4 (cuda) are all declared
+    > > in the manifest but unwritten. The kernel is a root rather than a derived artifact —
+    > > it carries no dp-compile provenance header, and since no formalization exists and
+    > > nothing names it, nothing in the repository can currently make it stale. Its tests
+    > > pass (55 in `test_viterbi.py`, header `backends: python ✓`), and nothing was skipped
+    > > since there are no stale or blocked artifacts. All three declared `.vpath.xls`
+    > > oracles are exercised by the suite.
+    >
+    > **The sharp criterion is the one that passed most clearly.** The report calls the
+    > kernel a **root** and says in as many words that nothing can currently make it stale —
+    > which is D2's fix behaving correctly on the first repository it was ever pointed at,
+    > and the single most likely thing to have regressed. A `stale` or `blocked` verdict
+    > there would have meant the fallback was inventing the forward edge.
+    > **Two things the run reported that were not predicted, both benign.** The suite figure
+    > is **55 tests in `test_viterbi.py`** rather than a whole-suite count — the manifest
+    > gives `test_one` as well as `test`, so testing one fresh backend is narrower than
+    > `uv run pytest`, which is right. And the report surfaced pfsmgraph's own ADR 0003
+    > session header, `backends: python ✓`, which is the consumer's mechanism showing
+    > through rather than the plugin's.
+    > **Note: the report did not fit this file, and that is a finding about the command.**
+    > The user had to ask for a one-paragraph summary before it could be recorded, because
+    > `/phase-check` specifies a table plus seven further findings — appropriate on screen,
+    > too long for a `> **Ran:**` line. Not a defect: the verbosity is deliberate ("report
+    > the artifacts, not a single phase number"). But a plan capturing these results wants a
+    > summarisation step in the loop, and Section G's landing is the natural place to record
+    > that, since it is the next edit to a command that writes into a plan.
+    > **Two ways it could have failed, and they mean different things.** `python` reported
+    > **stale or blocked** would be a real defect: `_viterbi.py` is headerless and no other
+    > file names it, so D2's rule makes it a **root**, and anything else means the fallback
+    > is inventing the forward chain it was fixed not to invent. A report stopping at
+    > phase 1 **without the absent-formalization row** is the milder failure — the report is
+    > meant to be five rows rather than a phase number, and collapsing it loses exactly the
+    > reverse-entrance information the row set exists to carry. (Recast from a checkbox to a
+    > note: it is a criterion, not work, and this file's own first ground rule forbids the
+    > checkbox form for exactly that reason.)
   - [ ] **Negative check — the presence line.** It cannot be done by omitting a flag any
         more, since the symlink loads `workflow-claude` unconditionally in pfsmgraph. Run it
         from a directory that has no `.claude/skills/` instead; one is prepared at
