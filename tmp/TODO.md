@@ -1438,9 +1438,39 @@ started.
 
 ## Section F — Verification, commit, hand-back
 
-- [ ] `./dev/smoke-test.sh` and `claude plugin validate` green in `dp-compile`.
+- [x] `./dev/smoke-test.sh` and `claude plugin validate` green in `dp-compile`.
       `workflow-claude` has no suite; if `/step` or `/hitl-step` were touched, run its
       byte-identical Step 1 check from its `CLAUDE.md`.
+  > **Ran:** `./dev/smoke-test.sh` in `dp-compile` — exit 0, all 22 components `[ok]`,
+  > including the five files added this revision (`formalization-template.md`,
+  > `algorithm-recover/SKILL.md`, `deviation-taxonomy.md`, `test-patterns.md`,
+  > `workflow-claude.md`).
+  > **Ran:** `claude plugin validate .` — passed with **exactly four warnings**, which is
+  > what `CLAUDE.md` documents. The meta-rule holds as written: three warnings are the
+  > three files in `commands/references/` having no frontmatter, one is the root
+  > `CLAUDE.md` note. Adding `workflow-claude.md` in E3 took the count 3 → 4 and that
+  > entry was updated in the same commit, so the count is still self-describing.
+  > **Ran:** the `workflow-claude` Step 1 check —
+  > `sed -n '/^## Step 1/,/^### Status stamp/p'` on both commands, with `TODO.md`→`DO.md`
+  > and `/hitl-step`→`/step` substituted. **Empty.** 27 lines each side.
+  > **Note:** the check was owed but was never at risk, and the two facts are worth
+  > separating. `/step` and `/hitl-step` *were* touched this session (`d6b9318`), which is
+  > what triggers the check — but its hunks in `hitl-step.md` start at line 71, and Step 1
+  > spans lines 32–58. Every edit landed outside the locked region, in the annotation
+  > vocabulary and Steps 2–6. "The file was touched" and "the locked section was touched"
+  > are different questions, and only the second can break the invariant. The `CLAUDE.md`
+  > rule keys on the first, which is the conservative and correct choice: keying on the
+  > second would require judging whether an edit fell inside a line range that drifts with
+  > every insertion above it.
+  > **Note:** the check was verified to be *discriminating* before its result was believed.
+  > The raw sections differ by 22 diff lines; only after the substitution do they match. A
+  > check whose two inputs were already identical would come out empty too and detect
+  > nothing — so an empty diff is evidence only alongside a non-empty one.
+  > **Note:** the `/hitl-step`→`/step` half of the documented substitution is **vacuous** —
+  > zero occurrences in either Step 1 section, so `TODO.md`→`DO.md` does all the work.
+  > Left as written: it costs nothing and would be needed the moment either Step 1 gains a
+  > cross-reference to its sibling. Recorded so a future reader does not mistake it for
+  > load-bearing, or delete it as dead.
 - [ ] Live-session check, run by the user: `claude --plugin-dir tmp/dp-compile
       --plugin-dir tmp/workflow-claude` in pfsmgraph with the example manifest in place;
   - [ ] **Ordering problem, found while drafting the manifest in A2.** This check needs
