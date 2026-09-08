@@ -271,18 +271,56 @@ logging them is that the plugin's README can later cite *why*, not just *what*.
           ".scratch/hmm-lush/Training/set02a/set02a_200/m008_0001_008.vpath.xls",
         ]
         ```
-- [ ] Settle the staleness mechanism (replaces mtime).
-  - [ ] Options: keep mtime with a `touch` discipline; a provenance header in every
-        derived artifact recording its source path and content hash
-        (`derived-from: _viterbi.py sha256:…` in a comment or front-matter); git commit
-        order. Recommend the provenance header: survives checkout, encodes *direction*
-        (a recovered formalization says it derives from the code, so the code is not
-        stale relative to it), and is visible in a diff.
-  - [ ] Define the header format per file type (`.md`, `.py`, `.pyx`) and the rule
-        `phase-check` applies: stale iff the recorded hash differs from the current hash
-        of the named source; transitive as before.
-  - [ ] Legacy fallback: files without a header use mtime, with a warning naming the
-        file, so existing `tokalign` artifacts keep working.
+- [x] Settle the staleness mechanism (replaces mtime).
+  > **Q:** What replaces mtime — a provenance header with a content hash, mtime plus a
+  > touch discipline, or git commit order?
+  > **A:** Provenance header with a content hash.
+  > **Q:** After a formalization is recovered from code and approved, which way does the
+  > dependency edge point?
+  > **A:** It stays reverse — the doc derives from the code.
+  > **Q:** How is the header written in a Markdown formalization?
+  > **A:** A row in the Metadata table the template already mandates.
+  > **Done:** Settled 2026-09-08. Git commit order was rejected on something the earlier
+  > framing missed: it is blind to *uncommitted* work, so a kernel edited and not yet
+  > committed reads as fresh — and that is exactly the window the plugin exists to guide.
+  > It shares mtime's direction blindness on top of that. **The consequence that reaches
+  > furthest is not the hash but the recorded edge**: once each file names its own source,
+  > the dependency structure is *read from the files* rather than assumed, and it stops
+  > being a chain. For a recovered algorithm `_viterbi.py` is a root with two dependents —
+  > the formalization and the `.pyx` — so editing the kernel marks both stale, which a
+  > linear chain cannot express. C1 carries what that does to effective-phase detection.
+  - [x] **Mechanism: a provenance header recording the source path and its sha256.** Stale
+        iff the recorded hash differs from the named source's current hash. Survives every
+        `git checkout`, is visible in a diff, and encodes direction explicitly.
+        **The direction is the point, not the hash.** A recovered formalization records
+        that it derives from the kernel, so the kernel is not stale relative to it — the
+        case mtime cannot represent at all, since the recovered document is necessarily
+        newer than its own source.
+  - [x] **Format.** In `.py` and `.pyx`, a comment above the module docstring:
+        `# dp-compile: derived-from <path> sha256:<hash>`. In a Markdown formalization, a
+        row in the `| Field | Value |` Metadata table the template already mandates — which
+        invents no syntax and puts the claim where a human reviewing the document actually
+        reads it. YAML front-matter was rejected because **no tracked `.md` in pfsmgraph
+        has any** (checked 2026-09-08), so it would introduce a second document
+        convention; an HTML comment was rejected for the opposite reason to its appeal —
+        invisible when rendered means a wrong provenance line survives review unseen.
+
+        **The hash is computed over the file with its own `dp-compile` header removed**,
+        and that is load-bearing rather than tidy. A file's header records its *source's*
+        hash, so if the header counted toward its own file's hash, re-stamping any file
+        would spuriously invalidate everything downstream of it — and stamping an existing
+        chain would take one pass per link instead of one pass. A dependent depends on its
+        source's *content*, never on its source's provenance bookkeeping.
+
+        Accepted cost, stated so it is not a surprise: the hash is over the whole file, so
+        a docstring typo fix in `_viterbi.py` marks its formalization and its `.pyx` stale.
+        That is exactly what mtime does today, so it is no regression — but unlike mtime,
+        reverting the typo restores the hash and clears the staleness.
+  - [x] **Legacy fallback: a file with no header falls back to mtime, with a warning that
+        names the file.** Every existing `tokalign` artifact is headerless, so without this
+        the mechanism would break the one repository the plugin currently works in. The
+        warning is what keeps the fallback from becoming permanent by inattention — a
+        silent fallback would leave a repo on mtime forever with nothing saying so.
 - [ ] Settle the fate of the `tokalign`-only components.
   - [ ] The three domain stubs — `scoring-matrix`, `alignment-viz`, `package-release`.
         Recommend delete: they are ten lines each over zero-byte references; scoring
@@ -405,8 +443,18 @@ logging them is that the plugin's README can later cite *why*, not just *what*.
 ## Section C — Implement the ADR 0016 chain
 
 - [ ] `phase-detection.md` and its three consumers for five stages.
-  - [ ] Nominal-phase table 0–4; staleness rules gain the `cpu_parallel` link between
-        `cython` and `cuda`; filenames from the manifest; staleness per A3.
+  - [ ] Nominal-phase table 0–4; filenames from the manifest; staleness per A3.
+  - [ ] **Effective phase needs redefining, not extending — A3 changed its shape.** The
+        current rule is "the phase just before the first stale file *in the chain*", which
+        assumes one linear order that is both the phase order and the dependency order.
+        With provenance edges read from the files those come apart: for an algorithm whose
+        formalization was recovered, the doc is phase 0 by number but *downstream* of
+        phase 1 by dependency, and a stale doc is a reason to regenerate the doc — never a
+        reason to regenerate the kernel it was derived from. Replace it with: **the target
+        is the first stale artifact in dependency (topological) order, regenerated from
+        the source its own header names**; and when nothing is stale, the target is the
+        next unwritten phase. That rule covers the forward chain unchanged and the
+        recovered DAG correctly, where "the phase before the first stale file" cannot.
   - [ ] `/next-phase` routes 2 → 3 to the new CPU-parallel skill and 3 → 4 to GPU;
         `/phase-check` reports four backends; `/benchmark` counts them.
   - [ ] Every "do not create X yet" list in the formalize, prototype and Cython skills
