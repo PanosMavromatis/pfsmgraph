@@ -575,29 +575,78 @@ logging them is that the plugin's README can later cite *why*, not just *what*.
         frontmatter is *not* the fix — it would register these reference documents as
         commands. C1 decides between living with it permanently and restructuring where
         `@`-included references live.
-- [ ] Strip `tokalign` from the four real skills and the four commands — the structural
-      couplings, not just the word.
-  - [ ] Paths and layout → manifest (formalize, prototype, cython, benchmarking, all four
-        commands, `phase-detection.md`).
-  - [ ] `_types.py` trio and `_registry.py` → manifest-named encoder, result type and
-        registration recipe. The wrapper/kernel split stays as an invariant — pfsmgraph
-        sharpens it: the kernel neither validates nor raises, the wrapper turns
-        `inf` into `ImpossibleSequenceError` — and the skill should state the generic
-        form (kernel purely numeric so phases 2–4 are transliterations).
-  - [ ] Objective and semiring stated explicitly in the formalization (max-product,
-        min-sum, max-plus, …) and **never normalised** by the skill; delete "normalize to
-        max (similarity)". Cite the `hmm` bits trap as the reason.
-  - [ ] Reserved block never hardcoded: delete "indices 0–3", "GAP = 3", "user symbols
-        from 4"; the manifest points at the consumer's encoder documentation (pfsmgraph:
-        ADR 0011 and `docs/api/dataseq/`).
-  - [ ] Build and test commands → manifest (pfsmgraph: meson-python rebuild-on-import,
-        `uv run pytest`, `meson.build` listing; no `setup.py`, no extras).
-  - [ ] `test-patterns.md` → both worlds: import auto-discovery (`tokalign`) and a
-        registry row with `hardware` and loud-skip semantics (pfsmgraph, ADR 0003), plus
-        the not-yet-parameterised state where a backend-reaching test lives in a labelled
-        non-shared section (`test_viterbi.py` precedent).
-  - [ ] Affine gaps, alignment types, `gap_open`/`gap_extend` → an alignment-family
-        example inside a generic skill, not the skill's assumption.
+- [x] Strip `tokalign` from the four real skills and the four commands — the structural
+      couplings, not just the word. **Done 2026-09-08 in three `dp-compile` commits:
+      `46faf7b` (commands), `78ff771` (algorithm-formalize), `bfcd03e` (prototype,
+      test-patterns, cython, benchmarking).** Coupling in every B3-scope file is now zero,
+      measured rather than asserted; the smoke test passes throughout.
+  > **Q:** How does a skill learn the consumer's API shape — read it from the code, add
+  > API fields to the manifest, or require the invariants documents to state it?
+  > **A:** Read it from the code; ask when there is none.
+  > **Q:** How far should the alignment-specific prose in `algorithm-formalize` be
+  > generalised?
+  > **A:** Generic principle, with alignment as one worked family.
+  > **Done:** **Two instructions turned out to be wrong rather than narrow, and both are
+  > reversed with the reason recorded in place.** "Normalize to max (similarity)" is
+  > correct for one family and inverts every comparison in another — a decode accumulating
+  > `-log2(p)` minimises a description length in bits, which *grows* as the probability
+  > falls. And "the gap sentinel maps to integer 3" was **already false in the repository
+  > the plugin was written for**, whose encoder was renumbered to 4 on 2026-09-01. Both
+  > share a shape worth naming: a correct local observation promoted to a global rule.
+  > Neither was wrong when written; each became wrong the moment a second consumer existed
+  > — and the second became wrong without any second consumer at all.
+  > Alignment examples are kept everywhere, relabelled as one family's instance rather
+  > than deleted: an abstract template teaches nothing, and the *shapes* are what a reader
+  > needs. `algorithm-prototype` now carries two illustrations chosen to sit as far apart
+  > as two correct answers can — an alignment entry point and an HMM decode over a numeric
+  > kernel — which makes "read the code rather than assume a shape" read as necessary
+  > rather than pedantic.
+  - [x] **Paths and layout → manifest**, in all four skills and all four commands.
+        Algorithm-name resolution changed *shape*, not just its path: it looked names up
+        as directories under a hardcoded root and now looks them up in `[algorithms]`,
+        which is what lets both layouts share one code path.
+        `phase-detection.md` is **excluded deliberately** — C1 rewrites it once, for five
+        stages and the new effective-phase rule together, rather than twice.
+  - [x] **Types and registration → the repository, read rather than declared.** The
+        wrapper/kernel split is stated in its generic form and promoted from a convention
+        to a rule, with the reason attached: the kernel neither validates nor raises,
+        because the GPU phase implements the same kernel and a device function cannot
+        raise a Python exception at all — so a kernel that validates is a kernel that
+        cannot be transliterated. Backend registration likewise gained its second half,
+        which fails *silently*: a build system that does not glob omits a source nobody
+        listed, producing a module that imports in development and is absent from any
+        built artifact.
+  - [x] **Objective is a mandatory metadata row, and normalisation is now forbidden
+        rather than required.** The gotcha that taught converting to max now teaches why
+        converting is unsafe — it is not flipping an operator, since the recurrence
+        structure, the base cases and the identity element all change with the semiring,
+        and a silent conversion is indistinguishable from a bug.
+  - [x] **Every hardcoded reserved code is gone**, from the formalize gotchas, the
+        prototype gotchas and the TC-XX translation rules alike. Reserved symbols are
+        named as sentinels with their integers deliberately unstated, and tests are told
+        to ask the encoder which integer a sentinel is rather than write the number.
+  - [x] **Build and test commands → `[commands]`.** Every `setup.py build_ext` and
+        `--extra dev` is gone from the skills and their references.
+  - [x] **`test-patterns.md` restructured around both models plus the third state**
+        (204 → 267 lines). Writing it up sharpened the argument for the registry beyond
+        "pfsmgraph does it this way": **import auto-discovery cannot distinguish "not
+        written yet" from "written but broken"**, because a compiled phase whose extension
+        failed to build raises `ImportError` exactly like one that was never written — so
+        a stale build reads as an absent phase and the suite goes green having tested less
+        than it did yesterday. That is the gap a registry row's `hardware` field closes.
+        The tie-break-is-contract corollary is stated there too, since it is the rule a
+        parameterised suite depends on and the one most easily mistaken for an
+        implementation detail.
+  - [x] **Alignment specifics are now labelled examples rather than assumptions**, in
+        every place they appear — the formalize assumptions step, the prototype signature
+        block, the Cython wrapper/kernel pair, and the whole `test-patterns.md` worked
+        template. Deleting them was rejected: an abstract template teaches nothing, and
+        the shapes are exactly what a reader needs.
+  - [ ] **Still coupled, and out of B3's scope by design** — `pseudocode-conventions-DP.md`
+        and `formalization-template.md` (the next goal rewrites both),
+        `example-formalization.md` and `example-cython-impl.pyx` (kept as one family's
+        instance, but their headers need the label), and `package-release/SKILL.md`
+        (deleted by A4 in the mechanical tail).
 - [ ] Generalise the formalization conventions and template.
   - [ ] `pseudocode-conventions-DP.md` header and voice; keep its DP-only scope and the
         "do not force a non-DP algorithm into this template" rule.
