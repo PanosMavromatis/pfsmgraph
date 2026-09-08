@@ -87,10 +87,17 @@ marketplace later; nothing here builds it, but nothing here may make it harder (
   anti-diagonal wavefront as *the* parallel decomposition — an HMM recurrence is 1-D over
   time with dense state coupling and may have no anti-diagonals (ADR 0016 Open; master
   plan line 194).
-- Phase-file naming disagrees three ways: the plugin says `_numba.py` for the GPU phase;
-  ADR 0016 proposes `_cpu_parallel.py` and says the proof-of-concept used `_cuda.py`
-  (it did not — `.scratch/align-poc/tokalign` has `_numba.py`; hand-back in F4); pfsmgraph
-  `hmm` names algorithm-first and flat: `_viterbi.py`, `_viterbi_cython.pyx`.
+- Phase-file naming disagrees three ways: the plugin's docs say `_numba.py` for the GPU
+  phase; ADR 0016 proposes `_cpu_parallel.py` "mirroring the existing `_python.py` /
+  `_cython.pyx` / `_cuda.py` per-phase naming seen in `.scratch/align-poc/tokalign`";
+  pfsmgraph `hmm` names algorithm-first and flat, `_viterbi.py` and `_viterbi_cython.pyx`.
+  **The precedent ADR 0016 cites does not exist** *(corrected 2026-09-08; this line
+  previously said the proof-of-concept "has `_numba.py`", which is also false and was
+  written from a stale mypy-cache entry rather than from the tree)*. The PoC has exactly
+  two phase files, `_python.py` and `_cython.pyx`. There is no `_cuda.py` and no
+  `_numba.py`: `_numba` survives only as a string in that repo's `_backends.py` mapping,
+  pointing at a module nobody ever wrote. So the third phase was never implemented there
+  under any name, which is why the plugin's own `gpu-parallelization` skill is a stub.
 - Staleness is mtime-based and transitive (`phase-detection.md`). mtime is reset by every
   `git checkout`, and a formalization *recovered from* code is necessarily newer than the
   code, which would mark phase 1 stale and have `/next-phase` regenerate the reference
@@ -377,12 +384,34 @@ logging them is that the plugin's README can later cite *why*, not just *what*.
         tolerable: today it runs the full suite before a docs-only commit. E3 implements,
         and must also settle the hook's coexistence with `/smart-commit` and
         `security-guidance`, whose hooks stack rather than override.
-- [ ] Settle phase-file naming for phases 3 and 4, where ADR 0016 left it open.
-      Recommend the plugin's canonical phase names be `python`, `cython`, `cpu_parallel`,
-      `cuda`, and the manifest's layout pattern decide whether they are filenames
-      (`_cython.pyx`) or suffixes (`_viterbi_cython.pyx`). Backend-matrix names follow
-      (`python · cython · cpu-parallel · cuda`). `_numba.py` is retired: it names the
-      library, and two phases now share the library.
+- [x] Settle phase-file naming for phases 3 and 4, where ADR 0016 left it open.
+  > **Q:** Should one spelling serve the manifest key, the filename token and the
+  > backend-matrix row?
+  > **A:** Yes — `python`, `cython`, `cpu_parallel`, `cuda`, identical in all three.
+  > **Q:** Should the hand-back close ADR 0016's Open section on naming, or leave it open?
+  > **A:** Close it now.
+  > **Done:** Settled 2026-09-08. **A2 had already done most of this work without saying
+  > so**: once `[phases]` carries a path template per phase, the *filename* is data in the
+  > manifest rather than a constant in the plugin, so "what do we call the phase-3 file"
+  > stops being one question and becomes two — what the plugin calls the phase (a key), and
+  > what a given consumer calls the file (a template). Only the first is global. One
+  > spelling for the key means no mapping layer: a mapping with a single entry, existing
+  > solely because `cpu-parallel` reads better in a session header than `cpu_parallel`, is
+  > the kind nobody remembers when a fifth phase arrives.
+  > **`_numba` is retired**, and the reason is worth keeping: it names the *library*, and
+  > since ADR 0016 two phases share that library, so the name stopped distinguishing what
+  > it was there to distinguish.
+  > **ADR 0016's deferral is void rather than merely unmet.** It justified proposing
+  > `_cpu_parallel.py` as "mirroring the existing `_python.py` / `_cython.pyx` / `_cuda.py`
+  > per-phase naming" in the proof-of-concept, and defers settling until a real phase-3
+  > kernel lands. Checked 2026-09-08: that repository has **two** phase files, `_python.py`
+  > and `_cython.pyx`. No `_cuda.py`, no `_numba.py` — `_numba` exists only as a string in
+  > its `_backends.py` mapping, pointing at a module nobody wrote. So the convention being
+  > mirrored was never written, which is the same shape as ADR 0012's falsified premise:
+  > not a deadline that has yet to arrive, but a reason that was never true. Hence closing
+  > it rather than waiting. The settled form is `_<algorithm>_cpu_parallel.py` and
+  > `_<algorithm>_cuda.py`, which matches what `packages/pfsmgraph-hmm/meson.build` already
+  > does for `_viterbi_cython` and says it will do for `_baum_welch_cython`.
 - [ ] Settle how `dp-compile` detects `workflow-claude`, and what absence means.
       Installed-plugins JSON cannot be trusted (`--plugin-dir` loads never appear there).
       Recommend the precedent `/smart-merge` already uses for MCP: *you can see your own
@@ -637,8 +666,15 @@ started.
         entry: one generic plugin, per-repo manifest, this plan as the record.
   - [ ] A `dp-compile` section in `docs/agents/claude.md` (it names a Claude Code
         feature, so `claude.md` not `core.md`).
-  - [ ] ADR 0016 Open: phase-3 naming settled per A5; and correct its claim that the
-        proof-of-concept used `_cuda.py` (it used `_numba.py`).
+  - [ ] **ADR 0016's Open section on phase-3 naming: close it, and correct the claim it
+        rests on.** The record says its proposal mirrors "the existing `_python.py` /
+        `_cython.pyx` / `_cuda.py` per-phase naming seen in `.scratch/align-poc/tokalign`".
+        That repository has only `_python.py` and `_cython.pyx`; there is no `_cuda.py` and
+        no `_numba.py`, and its third phase was never implemented under any name. So the
+        deferral's stated reason is void, not merely unmet — settle
+        `_<algorithm>_cpu_parallel.py` per A5, matching `meson.build`'s existing
+        `_viterbi_cython` pattern, and fix the factual claim in the same edit rather than
+        leaving a closed decision resting on a wrong sentence.
   - [ ] Land the recovered Viterbi `FORMALIZATION.md` from D4 where the manifest says.
   - [ ] Master plan lines 192–196 (phases 2–4 of Viterbi): note they run under
         `dp-compile`, so the first real use of the revised plugin is on the kernel it was
