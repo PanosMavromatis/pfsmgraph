@@ -412,13 +412,37 @@ logging them is that the plugin's README can later cite *why*, not just *what*.
   > it rather than waiting. The settled form is `_<algorithm>_cpu_parallel.py` and
   > `_<algorithm>_cuda.py`, which matches what `packages/pfsmgraph-hmm/meson.build` already
   > does for `_viterbi_cython` and says it will do for `_baum_welch_cython`.
-- [ ] Settle how `dp-compile` detects `workflow-claude`, and what absence means.
-      Installed-plugins JSON cannot be trusted (`--plugin-dir` loads never appear there).
-      Recommend the precedent `/smart-merge` already uses for MCP: *you can see your own
-      tools, so judge from that* — each `dp-compile` command opens by checking its tool
-      list for `workflow-claude:` skills and, if none, stops with the install line
-      (`claude --plugin-dir <path>/workflow-claude` today; the marketplace line later).
-      Never degrade silently.
+- [x] Settle how `dp-compile` detects `workflow-claude`, and what absence means.
+  > **Q:** How is presence detected — the command reading its own tool list, a detection
+  > contract between the plugins, or asking the user once per session?
+  > **A:** The command reads its own tool list.
+  > **Q:** What does absence mean?
+  > **A:** Stop where the command delegates; note-and-continue where it does not.
+  > **Done:** Settled 2026-09-08. Detection follows the precedent `/smart-merge` sets for
+  > MCP — *there is no shell command that reports availability, you can see your own tools,
+  > so judge from that* — so a command opens by checking for any `workflow-claude:` skill.
+  > **Config inspection is ruled out empirically, not on principle:** `workflow-claude`
+  > appears nowhere in `~/.claude/plugins/*.json`, and in pfsmgraph it is not an installed
+  > plugin at all — it is a full plugin tree sitting in `.claude/skills/`, which is neither
+  > a marketplace install nor the `--plugin-dir` its own README documents. **So the install
+  > line a presence check prints must cover three load paths, not one**, and naming only
+  > `--plugin-dir` would send a user to fix something that is not how they loaded it.
+  > A detection *contract* — `workflow-claude`'s SessionStart hook writing a marker that
+  > `dp-compile` reads — was rejected despite being the deterministic option. It assumes
+  > hooks fire, which depends on the load path, and this session's load path is already the
+  > non-standard one; it also couples two plugins forever for a check one of them can make
+  > alone. The trick it would have generalised is real and worth recording, though:
+  > `remind-disable-commit-commands.py` establishes that **a plugin's own hook firing is
+  > itself proof that plugin is loaded** — but that proof is available only to the plugin
+  > shipping the hook, which is exactly why `dp-compile` cannot borrow it.
+  > **Absence is not uniform, and the earlier "never degrade" was too blunt.** No
+  > `dp-compile` command strictly needs `workflow-claude`: `/phase-check` reports, and
+  > writing a `.pyx` needs no branch or commit machinery. So the stop belongs where the
+  > delegation is — `/next-phase` ending in `/smart-commit`, `/new-algorithm` opening a
+  > branch — while read-only commands print one line and proceed. Refusing a report for a
+  > dependency that report never uses reads as a bug the first time someone hits it.
+  > Note for E2: **no current `dp-compile` command references `workflow-claude` anywhere**,
+  > so this coupling is entirely new rather than an existing one being tightened.
 - [ ] Settle the branch and plan workflow *inside* each plugin repository.
   - [ ] `workflow-claude`: it has a master plan and closed revisions, and lands work via
         PRs. Recommend `/open-revision 05-dp-compile-interop` (label to taste) and one
@@ -599,9 +623,15 @@ started.
 
 ## Section E — Interoperation with `workflow-claude`
 
-- [ ] Presence check (A6) at the head of every `dp-compile` command, and a
-      "Prerequisites" section in its README with the install line. Absence stops with
-      instructions; it never degrades.
+- [ ] Presence check (A6) at the head of every `dp-compile` command: check the tool list
+      for any `workflow-claude:` skill. **Absence stops only the commands that delegate**;
+      read-only ones print one line and continue (A6 corrected the earlier blanket "never
+      degrades", which would have had `/phase-check` refuse for a dependency it never uses).
+  - [ ] The README's "Prerequisites" must name **three** load paths, not one — a
+        marketplace install, `claude --plugin-dir <path>/workflow-claude`, and a plugin
+        tree placed in the project's `.claude/skills/`, which is how pfsmgraph itself loads
+        it today. A message naming only `--plugin-dir` sends a user to fix something that
+        is not how they loaded it.
 - [ ] Delegation, implemented rather than described. `dp-compile` owns the algorithm
       lifecycle and nothing else: commits go through `/smart-commit` (its end-of-phase
       text says so instead of prompting for a commit itself), branches through
