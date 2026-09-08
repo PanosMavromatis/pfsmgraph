@@ -152,27 +152,125 @@ logging them is that the plugin's README can later cite *why*, not just *what*.
         fresh session has nothing to read and follows the command's conventional-commit
         template instead. Accepted cost: the two plugins will sit in one marketplace under
         two different conventions.
-- [ ] Settle how a consumer repository describes itself to the plugin (the manifest).
+- [x] Settle how a consumer repository describes itself to the plugin (the manifest).
+  > **Q:** Where does the manifest live — a root `dp-compile.toml`, a `[tool.dp-compile]`
+  > table in `pyproject.toml`, or `.claude/`?
+  > **A:** Root `dp-compile.toml`.
+  > **Q:** How is file layout expressed — one path template per phase, named layout kinds,
+  > or inference from a reference algorithm?
+  > **A:** One path template per phase.
+  > **Q:** Where does pfsmgraph keep a `FORMALIZATION.md`?
+  > **A:** `docs/design/algorithms/<algorithm>/`.
+  > **Done:** Settled 2026-09-07, all three on the recommendation, and the draft manifest
+  > is in subgoal 3 below. **Two findings reshaped what the manifest has to carry.** First,
+  > the plugin is stale against *its own* repository, not merely narrow for this one:
+  > `tokalign`'s `_types.py` was renumbered onto ADR 0011 on 2026-09-01 (`GAP = 4`,
+  > `USER_BASE = 6`, identical to pfsmgraph), while the plugin's skills still say "indices
+  > 0-3 are reserved and user symbols start at 4". So that text is *wrong for both
+  > consumers*, and the manifest needs no reserved-block field at all — only a pointer to
+  > where the consumer documents its encoder. Second, **algorithms must be listed rather
+  > than discovered**, and the layout settles that rather than taste: `tokalign` discovers
+  > by listing `algorithms/*/`, but pfsmgraph's packages are flat, so globbing `_*.py`
+  > under `hmm` returns `_numeric.py` and `_params.py` beside `_viterbi.py`.
       The plugin cannot know where a repo keeps its kernels, what its phase files are
       called, how it builds, how it tests, or how a backend is registered — and every one
       of those differs between `tokalign` and pfsmgraph.
-  - [ ] Mechanism. Options: a repo-root `dp-compile.toml`; a `[tool.dp-compile]` table
-        in `pyproject.toml` (per member in a workspace); derivation from `docs/agents/`
-        prose. Recommend the root file: pfsmgraph's root `pyproject.toml` is virtual, a
-        per-member table would need a discovery walk, and prose is not a contract. When
-        the file is absent, defaults reproduce the `tokalign` layout, so the
-        proof-of-concept keeps working unmodified.
-  - [ ] Contents. At minimum, per repository: build command, test command, the invariant
-        documents every phase skill must read before writing (pfsmgraph:
-        `docs/agents/core.md` and the ADRs it names), the encoder and reserved-block
-        pointer, and the backend registration recipe (pfsmgraph: a row in `_backends.py`
-        plus `meson.build` `install_sources`/extension entries; `tokalign`: import
-        auto-discovery). Per algorithm: its root, its layout pattern (per-algorithm
-        directory with fixed filenames, or flat module with phase suffix), where
-        `FORMALIZATION.md` lives (beside the code, or under `docs/`), and any differential
-        oracle (D3).
-  - [ ] Draft pfsmgraph's manifest as the worked example, kept under the plugin's
-        `examples/` until F4 hands it back.
+  - [x] **Mechanism: a repo-root `dp-compile.toml`.** Self-contained, obvious to a reader
+        opening the repository, and independent of the repo's packaging shape. When the
+        file is absent the plugin falls back to defaults reproducing `tokalign`'s layout,
+        so the proof-of-concept keeps working with no file at all.
+        The rejected alternatives, and why — the reasoning here is not what this line
+        first assumed. A `[tool.dp-compile]` table in the root `pyproject.toml` is the
+        idiomatic Python home for tool config, and **"the root is virtual" is not an
+        objection**: virtual means no `[project]` table, while `[tool.*]` tables work
+        fine, as `[tool.uv]` and `[tool.pytest.ini_options]` already do there. It loses on
+        the workspace ambiguity instead — whether a member's own table overrides the
+        root's has to be answered, and answered the same way by every command.
+        `.claude/dp-compile.toml` loses on something sharper: pfsmgraph's entire `.claude/`
+        directory is untracked today (`git ls-files .claude` returns nothing), so a shared
+        contract placed there would be invisible in a clone.
+  - [x] **Contents.** Per repository: the invariant documents every phase skill reads
+        before writing, an encoder *pointer* (no reserved-block values — see the parent's
+        first finding), build and test commands, and the backend-registration recipe. Per
+        phase: one path template, with `{algorithm}` and `{package}` substituted — which
+        is the whole of the layout question, since any layout expressible as a path is
+        expressible as a template, and **phase-file naming (A5) falls out for free**
+        because the template carries the name. Per algorithm: only what the templates
+        cannot supply — which package it belongs to, and any differential oracle (D3).
+        Named layout kinds (`per-algorithm-dir`, `flat-suffix`) were rejected for costing
+        generality: a third consumer matching neither would need a plugin change rather
+        than a config change. Inferring the layout from a reference algorithm was rejected
+        for being undefined exactly when the plugin is most useful — a repository adding
+        its *first* algorithm — and for being invisible, so a wrong inference is found late.
+  - [x] **Drafted** below. It lives here rather than in the plugin because A1 settled that
+        the rename runs before any content work, so `tmp/tokalign-dev/` takes no writes
+        yet; B2 copies it into the plugin's `examples/`, and F4 lands it at pfsmgraph's
+        root. Keeping the draft in this tracked file rather than a scratch path is
+        deliberate — it is the keystone artifact and everything in Section B reads from it.
+
+        ```toml
+        # dp-compile manifest -- pfsmgraph
+        #
+        # States what the plugin cannot infer. With no manifest at all, dp-compile falls
+        # back to defaults reproducing tokalign's layout, so that repository needs no file.
+
+        [project]
+        name = "pfsmgraph"
+
+        # Read before writing any phase. These carry invariants that no amount of reading
+        # the kernel reveals: arc-emission (output_p[i, j, sym], never B[s, sym]), the N+1
+        # state geometry, min-sum over bits rather than max-product, and ADR 0003's rule
+        # that a tie-breaking rule is contract because two correct backends would
+        # otherwise legitimately disagree.
+        invariants = [
+          "docs/agents/core.md",
+          "docs/design/adr/0002-three-phase-algorithm-lifecycle.md",
+          "docs/design/adr/0003-one-parameterized-test-suite-per-algorithm.md",
+          "docs/design/adr/0015-arc-emission-mealy-formulation.md",
+          "docs/design/adr/0016-numba-cpu-parallel-phase.md",
+          "docs/design/adr/0017-frozen-parameter-object-for-hmm.md",
+        ]
+
+        # Where the symbol/code mapping is defined. dp-compile hardcodes no reserved block
+        # and no user-symbol base; it reads these instead.
+        encoder = [
+          "docs/api/dataseq/encoder.md",
+          "docs/design/adr/0011-fixed-reserved-symbol-block-and-strict-encoding.md",
+        ]
+
+        [commands]
+        build    = "uv sync"        # meson-python editable; compiled phases rebuild on import
+        test     = "uv run pytest"
+        test_one = "uv run pytest {path}"
+
+        # One template per phase. tokalign's default is
+        # "src/tokalign/algorithms/{algorithm}/_python.py" and needs no new concept.
+        [phases]
+        formalization = "docs/design/algorithms/{algorithm}/FORMALIZATION.md"
+        python        = "packages/pfsmgraph-{package}/src/pfsmgraph/{package}/_{algorithm}.py"
+        cython        = "packages/pfsmgraph-{package}/src/pfsmgraph/{package}/_{algorithm}_cython.pyx"
+        cpu_parallel  = "packages/pfsmgraph-{package}/src/pfsmgraph/{package}/_{algorithm}_cpu_parallel.py"
+        cuda          = "packages/pfsmgraph-{package}/src/pfsmgraph/{package}/_{algorithm}_cuda.py"
+
+        # ADR 0003. A new backend is a row in the registry plus, for a compiled phase, an
+        # entry in that member's meson.build -- install_sources for .py, extension_module
+        # for .pyx. meson does not glob, so the second half is not optional.
+        [backends]
+        registry       = "_backends.py"
+        build_manifest = "packages/pfsmgraph-{package}/meson.build"
+
+        # Algorithms are listed, never discovered: the packages are flat, so globbing
+        # _*.py under hmm returns _numeric.py and _params.py beside _viterbi.py.
+        [algorithms.viterbi]
+        package = "hmm"
+        # Differential oracles (D3). Not a pure equality check: the delta-seeding defect is
+        # fixed rather than reproduced, so m008_0001_008 differs at exactly one position.
+        oracles = [
+          ".scratch/hmm-lush/Training/set02a/set02a_200/m001_0001_001.vpath.xls",
+          ".scratch/hmm-lush/Training/set02a/set02a_200/m001_0005_005.vpath.xls",
+          ".scratch/hmm-lush/Training/set02a/set02a_200/m008_0001_008.vpath.xls",
+        ]
+        ```
 - [ ] Settle the staleness mechanism (replaces mtime).
   - [ ] Options: keep mtime with a `touch` discipline; a provenance header in every
         derived artifact recording its source path and content hash
@@ -432,6 +530,14 @@ started.
       byte-identical Step 1 check from its `CLAUDE.md`.
 - [ ] Live-session check, run by the user: `claude --plugin-dir tmp/dp-compile
       --plugin-dir tmp/workflow-claude` in pfsmgraph with the example manifest in place;
+  - [ ] **Ordering problem, found while drafting the manifest in A2.** This check needs
+        `dp-compile.toml` at pfsmgraph's root, but F4 defers landing it to a later
+        pfsmgraph branch, and the ground rules say this plan edits nothing in pfsmgraph
+        beyond `tmp/TODO.md`. Decide which gives: land the manifest on *this* branch as
+        the one exception (it is the artifact the whole revision is built around, and the
+        check is worthless without it), or run the check against an untracked copy and
+        land the tracked one later. Do not discover this at F2 with the plugin finished
+        and nothing to point it at.
       `/dp-compile:phase-check viterbi` reports phase 1; the same session without
       `workflow-claude` trips the presence check. Record results as `> **Ran:**` lines.
 - [ ] Commit and push each repository from its own root per A7; version and GitHub
