@@ -1027,10 +1027,34 @@ started.
       report describes for `security-guidance`) and must no-op with a message where no
       manifest exists. Document the interaction in `workflow-claude`'s
       `_meta/plugin-conflict-report.md` (new section) and in `dp-compile`'s README.
-- [ ] `workflow-claude` edits, expected to be small: README "Companion plugins" pointer;
+- [~] `workflow-claude` edits, expected to be small: README "Companion plugins" pointer;
       conflict-report section; a `CLAUDE.md` line. Record any functional change that
       turns out to be needed (a documented detection contract, say) rather than slipping
       it in. Landed through its own revision (A7).
+  > **Note:** branch `docs/plan-notes-and-interop` opened 2026-09-08 from `main` at
+  > `59661bc` and pushed, per A7's "one standalone branch, no revision". Commit `d6b9318`
+  > carries the first change; the three interop edits above are still to come on the same
+  > branch, then `/smart-merge`.
+  > **A functional change was needed, and this is the record E4 asked for rather than the
+  > slipping-in it warned against.** Neither `/step` nor `/hitl-step` documents a way to
+  > record a **finding**. Their whole annotation vocabulary — `Q`, `A`, `Blocked`,
+  > `Deferred`, `Descoped`, `Done`, `Commit`, `Ran`, `Result` — describes the state of a
+  > *task*, so an observation that is not a task has no category and gets written as
+  > `- [ ]`. `> **Note:**` is already the convention in practice, including in
+  > `workflow-claude`'s own plans, and was written down nowhere — so an agent following the
+  > protocol cannot discover a form that exists only in files it is not reading.
+  > Found by using the commands on this very plan: seven findings in Section B were written
+  > as checkboxes and reported as outstanding work across two completed sections.
+  > **`/hitl-step` would have prevented the misreport even without the fix.** Its Step 4
+  > forbids flipping a parent to `[x]` while any subgoal is `[ ]`. The protocol was correct
+  > and simply was not run — "go ahead with C1" bypassed it. So the gap and the incident
+  > have different causes, and both are now addressed: the missing category, and two checks
+  > that were stated but not made mechanical (Step 4 now says to re-read the subgoals
+  > rather than recall them; Step 6 re-derives a section-completion claim at every indent).
+  > **The live copy stays on `main` deliberately.** `.claude/skills/workflow-claude/` is a
+  > second clone of the same repository, and pointing it at an unmerged branch would put
+  > unreviewed work into the load path. It updates when the branch merges — and E6, which
+  > replaces that copy with a symlink, is what stops this being a standing question.
 - [ ] `dp-compile` README rewrite: the combined workflow (`/open-revision` →
       `/new-branch` → `/new-algorithm` and `/next-phase` inside `/hitl-step` →
       `/smart-commit` → `/smart-merge`), the manifest, the five-stage table under ADR 0016
