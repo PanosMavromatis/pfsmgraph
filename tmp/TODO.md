@@ -536,10 +536,45 @@ logging them is that the plugin's README can later cite *why*, not just *what*.
         restructure the include.
   - [x] **Acceptance met**: `grep -rn 'tokalign-dev' --exclude-dir=.git .` returns
         nothing, and `dev/smoke-test.sh` passes (one pre-existing warning, above).
-- [ ] Introduce the manifest (A2) and a shared `commands/references/manifest.md` that
-      every command and skill reads first, replacing `phase-detection.md`'s hardcoded
-      `src/tokalign/algorithms/<name>/`. Defaults reproduce `tokalign`. Include the
-      pfsmgraph example.
+- [x] Introduce the manifest (A2) and a shared `commands/references/manifest.md` that
+      every command and skill reads first. **Done 2026-09-08 — `dp-compile` commit
+      `88d231f`**, 215 lines.
+  > **Q:** With no `dp-compile.toml`, should defaults reproduce `tokalign`'s layout as A2
+  > settled, should the defaults be announced, or should the manifest be required?
+  > **A:** Required, erroring with a template.
+  > **Q:** Where does the worked pfsmgraph example live?
+  > **A:** Embedded in `commands/references/manifest.md`.
+  > **Done:** **This reverses A2's "defaults reproduce the `tokalign` layout", and the
+  > reversal came out of implementing it.** The failure it would cause: in any repository
+  > *other* than the one whose layout is baked in, the plugin resolves paths under a layout
+  > that repository does not have, finds nothing, and reports "algorithm not found" —
+  > misdiagnosing a missing manifest as a missing algorithm, which is the exact
+  > silent-failure shape this plan keeps cataloguing. A2's supporting rationale had also
+  > weakened since it was written: `.scratch/align-poc/tokalign` is *frozen reference
+  > material* (deny-by-default, 11 files tracked, described in its own policy as the
+  > proof-of-concept the ADRs derive from), not a project that would run the plugin, and
+  > the live `tokalign` repo can gain a ten-line file trivially.
+  > The example is embedded rather than filed under a new root `examples/` — the plugin has
+  > no such directory, examples live only inside skills, and an example in the same file as
+  > the prose describing it cannot drift from it. A second worked example (one directory
+  > per algorithm) is included to demonstrate that the same four templates express both
+  > layouts; that is the claim the whole design rests on, so it is shown rather than
+  > asserted.
+  > **Verified, not eyeballed:** all three TOML blocks parse, and every path in the
+  > pfsmgraph example was resolved against this repository — the six invariant documents,
+  > both encoder documents, the phase-1 kernel, `_backends.py`, `meson.build` and all three
+  > oracles exist; the only four that do not are exactly the unwritten phases. The `cython`
+  > template independently agrees with what `packages/pfsmgraph-hmm/meson.build` already
+  > declares.
+  - [ ] **Deferred to C1, deliberately: `phase-detection.md` still hardcodes
+        `src/tokalign/algorithms/<name>/`.** Rewriting it here would mean rewriting it
+        again at C1, which changes its phase table from three stages to five and replaces
+        the effective-phase rule outright (A3). One rewrite, done once, at C1.
+  - [ ] **Second standing smoke-test warning.** `manifest.md` joins `phase-detection.md` as
+        a frontmatter-less `.md` under `commands/`, so the validator now warns twice. Adding
+        frontmatter is *not* the fix — it would register these reference documents as
+        commands. C1 decides between living with it permanently and restructuring where
+        `@`-included references live.
 - [ ] Strip `tokalign` from the four real skills and the four commands — the structural
       couplings, not just the word.
   - [ ] Paths and layout → manifest (formalize, prototype, cython, benchmarking, all four
