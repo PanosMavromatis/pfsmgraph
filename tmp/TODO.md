@@ -647,15 +647,52 @@ logging them is that the plugin's README can later cite *why*, not just *what*.
         `example-formalization.md` and `example-cython-impl.pyx` (kept as one family's
         instance, but their headers need the label), and `package-release/SKILL.md`
         (deleted by A4 in the mechanical tail).
-- [ ] Generalise the formalization conventions and template.
-  - [ ] `pseudocode-conventions-DP.md` header and voice; keep its DP-only scope and the
-        "do not force a non-DP algorithm into this template" rule.
-  - [ ] Template metadata: replace the alignment-specific rows (Alignment type, Gap model)
-        with generic ones plus an algorithm-family block; add **Objective** (semiring and
-        direction) and **Parallel decomposition** (consumed by C2) as mandatory sections;
-        keep the TC-XX test-specification discipline and its three precision levels.
-  - [ ] Keep the Needleman-Wunsch example as the example, labelled as one family's
-        instance.
+- [x] Generalise the formalization conventions and template. **Done 2026-09-08 —
+      `dp-compile` commit `14affb3`.**
+  > **Q:** The metadata table is defined twice, in the skill's Step 5 and in
+  > `formalization-template.md`. How should they relate?
+  > **A:** The template is canonical; the skill points at it.
+  > **Q:** What happens to the conventions doc's project-specific section?
+  > **A:** Split it — universal rules stay, family notation becomes an example.
+  > **Done:** **The duplication had already opened before it was closed**, which is the
+  > argument for closing it: the skill's copy carried the new `Objective` and provenance
+  > rows from B3 while the template still carried `Alignment type` and `Gap model`. The
+  > split of the conventions doc turned on which rules are universal — the encode/decode
+  > boundary note applies in every repository and to every family, because it is what
+  > makes the later phases transliterations, so it was promoted rather than demoted with
+  > the rest.
+  > **One terminology change, made for a reason specific to this plugin:** generic prose
+  > now says *backtrace* rather than *traceback*, because in a plugin whose subject is
+  > Python code "traceback" already means an exception's stack trace, so "check the
+  > traceback" is ambiguous exactly where precision matters. The alignment examples keep
+  > their own field's word, with a note explaining the two.
+  - [x] **Conventions doc de-coupled, DP-only scope kept**, including the rule that a
+        non-DP algorithm is reported rather than forced into the template. Its
+        "tokalign-Specific Conventions" section is now two: a universal encode/decode
+        boundary requirement, and family-specific notation carrying alignment and HMM
+        examples side by side — the HMM one making emission *arity* explicit, since an
+        arc-emitting model's emission depends on both endpoints and so cannot be hoisted
+        out of the inner loop, which changes the recurrence rather than the notation.
+  - [x] **Template rewritten and made canonical** (108 → 149 lines). `Alignment type` and
+        `Gap model` become `Family` and `Variant`; `Derived from`, `Objective` and
+        `Parallel decomposition` are added. Parallel decomposition is a **section**, not
+        just a row, because C2 needs the *argument* for why cells may be computed
+        concurrently rather than the name of a decomposition — and "undetermined" is
+        stated as legitimate, since a guess there becomes a race rather than an error.
+        The TC-XX discipline and its three precision levels are kept, and gain one
+        requirement: **at least one deliberate tie**, because learned parameters rarely
+        tie and a suite drawn only from real data can pass while the tie-breaking rule is
+        wrong.
+  - [x] **Both worked examples kept and labelled** — the Needleman-Wunsch formalization
+        and the Cython wrapper/kernel pair. The formalization example's header also
+        records that **it predates the current template**, so a reader does not mistake
+        its section list for the canonical one; that is cheaper than regenerating the
+        example and more honest than leaving the discrepancy silent.
+  - [ ] **What still names the old project, and why each is fine:** `README.md` (E5
+        rewrites it), `phase-detection.md` (C1), `validate-equivalence.py`,
+        `run-benchmark.sh` and `package-release/SKILL.md` (A4 deletes all three), and
+        `manifest.md` — where it is *intentional*, since the second worked manifest is
+        that repository's.
 - [ ] The mechanical tail: `dev/smoke-test.sh` `expected` array (three deletions and two
       additions, per A4 and C2/C3), `hooks/` per A4 — **and verify the hook's `if` pattern
       syntax while there**: it is written `Bash(git commit *)` with a space, where both
