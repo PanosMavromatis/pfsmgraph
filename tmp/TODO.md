@@ -1500,8 +1500,8 @@ started.
   > Left as written: it costs nothing and would be needed the moment either Step 1 gains a
   > cross-reference to its sibling. Recorded so a future reader does not mistake it for
   > load-bearing, or delete it as dead.
-- [ ] Live-session check, run by the user: `claude --plugin-dir tmp/dp-compile
-      --plugin-dir tmp/workflow-claude` in pfsmgraph with the example manifest in place;
+- [ ] Live-session check, run by the user. **The command below is not the one this goal
+      was written with** — see the correction note under it.
   - [x] **Ordering problem, found while drafting the manifest in A2.** This check needs
         `dp-compile.toml` at pfsmgraph's root, but the hand-back defers landing it to a later
         pfsmgraph branch, and the ground rules say this plan edits nothing in pfsmgraph
@@ -1515,8 +1515,48 @@ started.
         > rule for the measurement that settled it and for why the exception covers two
         > files rather than one. This subgoal is closed by that decision; F2 itself stays
         > open because the live session is the user's to run.
-      `/dp-compile:phase-check viterbi` reports phase 1; the same session without
-      `workflow-claude` trips the presence check. Record results as `> **Ran:**` lines.
+  > **Note: the original command line is stale, and E6 is what made it so.** It read
+  > `claude --plugin-dir tmp/dp-compile --plugin-dir tmp/workflow-claude`, written before
+  > E6 replaced the copy at `.claude/skills/workflow-claude` with a symlink to the clone.
+  > `workflow-claude` is now loaded in *every* pfsmgraph session from that directory —
+  > confirmed live: this session's own skill list carries `workflow-claude:*` entries whose
+  > path reports `plugin:workflow-claude:...`, while nothing in `~/.claude/plugins/*.json`
+  > or `.claude/settings.local.json` names it. So the second flag would load the **same
+  > plugin twice under one name**, from two paths that resolve to one directory. Dropping
+  > it is not a workaround; it is what E6 bought.
+  > **Note:** `--plugin-dir` *is* repeatable — `claude --help` says so in as many words,
+  > and also that a folder of plugins loads each child. So `--plugin-dir tmp` would load
+  > both. Do not use it: `tmp/` holds exactly the two plugins, so it reintroduces the
+  > double-load the point above removes.
+  - [ ] **Positive check**, from the pfsmgraph root:
+        `claude --plugin-dir /Users/panayotismavromatis/Developer/PFSMGraph/pfsmgraph/tmp/dp-compile`
+        then `/dp-compile:phase-check viterbi`. **Passing is this exact report**, derived
+        from the manifest and the tree rather than from expectation:
+        **nominal phase 1**; five rows reading `formalization absent`, `python fresh`,
+        `cython absent`, `cpu_parallel absent`, `cuda absent`; `_viterbi.py` **named as
+        carrying no provenance header**, with the mtime fallback in use; **no unexercised
+        oracle** (all three `.vpath.xls` files are reached by `test_viterbi.py` via
+        `_lush_fixtures.py` — checked); and no "not applicable" line, since this manifest
+        declares all five phases.
+  - [ ] **Two specific ways it can fail, and they mean different things.** `python` reported
+        **stale or blocked** is a real defect: `_viterbi.py` is headerless and no other file
+        names it, so D2's rule makes it a **root**, and anything else means the fallback is
+        inventing the forward chain it was fixed not to invent. A report that stops at
+        phase 1 **without the absent-formalization row** is the milder failure — the report
+        is meant to be five rows rather than a phase number, and collapsing it loses exactly
+        the reverse-entrance information the row set exists to carry.
+  - [ ] **Negative check — the presence line.** It cannot be done by omitting a flag any
+        more, since the symlink loads `workflow-claude` unconditionally in pfsmgraph. Run it
+        from a directory that has no `.claude/skills/` instead; one is prepared at
+        `<scratchpad>/f2-no-workflow/` with a copy of the manifest and no project settings.
+        `--restricted` was considered and rejected: it also removes `Bash` and confines the
+        filesystem, so it would break the plugin rather than isolate it.
+        **Check both severities, because they differ by design (A6):**
+        `/dp-compile:phase-check viterbi` must print the absence line and then **continue**
+        to a full report (note-and-continue); `/dp-compile:next-phase viterbi` must print it
+        and **stop at the delegation point**, naming what it did not do. A `/next-phase`
+        that runs to completion is a failure even though nothing errored.
+  - [ ] Record results as `> **Ran:**` lines.
 - [x] Commit and push each repository from its own root per A7; version and GitHub
       rename per A1.
   > **Ran:** all three repositories audited from their own roots. Every one is clean with
