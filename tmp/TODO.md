@@ -1290,9 +1290,25 @@ started.
       turns out to be needed (a documented detection contract, say) rather than slipping
       it in. Landed through its own revision (A7).
   > **Note:** branch `docs/plan-notes-and-interop` opened 2026-09-08 from `main` at
-  > `59661bc` and pushed, per A7's "one standalone branch, no revision". Commit `d6b9318`
-  > carries the first change; the three interop edits above are still to come on the same
-  > branch, then `/smart-merge`.
+  > `59661bc` and pushed, per A7's "one standalone branch, no revision". Three commits:
+  > `d6b9318` (the `> **Note:**` vocabulary and the two mechanical checks), `3795397`
+  > (conflict report §4.4, written under E3), `0dd68a6` (README and `CLAUDE.md` companion
+  > sections). **All four branch-plan tasks are `[x]`; only the merge remains**, and it is
+  > the user's to run — `/smart-merge` creates a PR and merges it, which is outward-facing
+  > and not something to do unasked. **No PR exists yet**: what the last push returned was
+  > GitHub's create-a-PR link, not a PR (`gh pr list --head docs/plan-notes-and-interop`
+  > returns empty).
+  > **The three interop edits needed no functional change, and that is the record E4 asked
+  > for.** E1 settled detection as one-sided — `dp-compile` reads its own tool list — so the
+  > dependency runs one way and `workflow-claude` implements nothing to support it. The
+  > detection contract E4 named as the example of a change to record was considered on
+  > `dp-compile`'s side and *rejected* (A6), so the thing to record is its absence.
+  > **The one real coupling is command names.** `dp-compile` names `/smart-commit`,
+  > `/new-branch`, `/hitl-step`, `/step`, `/smart-merge` and `/agents-docs-update` in its
+  > prose; renaming any of them breaks it silently and no test in `workflow-claude` would
+  > notice. Now written into that repository's `CLAUDE.md` as a cross-repository rename
+  > hazard — the *opposite* of the `commit-commands` case, where editing `hooks.json`
+  > obliges a conflict-report update in the same commit.
   > **A functional change was needed, and this is the record E4 asked for rather than the
   > slipping-in it warned against.** Neither `/step` nor `/hitl-step` documents a way to
   > record a **finding**. Their whole annotation vocabulary — `Q`, `A`, `Blocked`,
