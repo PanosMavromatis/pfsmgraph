@@ -1380,7 +1380,7 @@ started.
   > **The manifest had been mentioned throughout and described nowhere**, so it gains a
   > section of its own — the no-defaults rule, a table of the six tables, and why algorithms
   > are listed rather than globbed.
-- [ ] Replace the live copy with a symlink. **Settled 2026-09-07.**
+- [~] Replace the live copy with a symlink. **Settled 2026-09-07.**
       `.claude/skills/workflow-claude/` in pfsmgraph is an untracked byte-identical copy of
       the clone and goes stale at the first edit; a re-sync step fails *silently*, since a
       stale copy still loads and still works, just from the old text. Symlink it to
@@ -1388,15 +1388,45 @@ started.
       at all. The accepted cost is that the clone can no longer move or be deleted without
       breaking the live plugin — note it in the plugin's own README, since a future clone
       elsewhere would hit it.
-  - [ ] `settings.local.json`'s allow-list is **not** a cost here, contrary to the concern
+  > **Swap done 2026-09-08.** `.claude/skills/workflow-claude/` is now a relative symlink
+  > to `tmp/workflow-claude`. Verified before deleting the clone that nothing existed only
+  > there — one branch, no stashes, no unpushed commits, clean tree, nothing dangling — and
+  > both copies were byte-identical at `959425c`.
+  > **A consequence the goal did not anticipate, and it is the larger of the two costs: the
+  > live plugin now follows the clone's checked-out branch.** A separate copy was pinned to
+  > `main` independently, which is exactly what let E4 keep unreviewed work out of the load
+  > path; a symlink is not. `git checkout` in `tmp/workflow-claude` puts that branch into
+  > this session's load path immediately. It cuts both ways — the same property is what
+  > makes an edit take effect with no sync step, which is the reason for the swap — but it
+  > changes how the next `workflow-claude` branch has to be handled. Managed once already:
+  > the README note below was written on a branch, pushed, and the clone returned to `main`
+  > before the PR was opened, so no session loads unreviewed text while it is in review.
+  > **Second finding, hit while doing it: a trailing-slash ignore rule stops matching.**
+  > `.git/info/exclude` held `/.claude/skills/workflow-claude/`, and a trailing slash matches
+  > *directories only* — so replacing the directory with a symlink silently un-ignored it and
+  > `.claude/` began showing as untracked. Caught by checking `git status` after the swap
+  > rather than assuming it was unchanged. Fixed by dropping the slash, with the reason
+  > written beside the rule; status is clean again, exactly as before.
+  > **Remaining: PR #20 in `workflow-claude` carries the README note this goal asks for**
+  > — the symlink load path and its three costs. Written and in review, not yet merged, so
+  > the goal stays `[~]`.
+  - [x] `settings.local.json`'s allow-list is **not** a cost here, contrary to the concern
         raised when this was posed. Permission patterns match the command *text*, not the
         resolved inode, and the two entries spell
         `.claude/skills/workflow-claude/scripts/…` — a path the symlink keeps valid. Verify
         once by running `check-agents-md.sh` through that path after the swap rather than
         assuming it.
-  - [ ] Do the swap at E6 time, not earlier. The copies are byte-identical today, so there
+        > **Note:** verified rather than assumed. Ran the allow-list entry's exact spelling,
+        > quotes included, through the symlinked path: "Agent docs are in sync with
+        > docs/agents/", exit 0. The concern was unfounded and is now closed by measurement.
+  - [x] Do the swap at E6 time, not earlier. The copies are byte-identical today, so there
         is nothing to gain from swapping mid-session and a live plugin directory is not
         worth disturbing for no benefit.
+        > **Note:** the deferral earned its keep for a different reason than the one given.
+        > Waiting meant the swap happened *after* PR #19 merged, so the symlink's first act
+        > was to expose reviewed code; had it been done mid-session, `tmp/workflow-claude`
+        > would have been sitting on the unmerged `docs/plan-notes-and-interop` branch and
+        > the swap would have put it straight into the load path.
 
 ## Section F — Verification, commit, hand-back
 
