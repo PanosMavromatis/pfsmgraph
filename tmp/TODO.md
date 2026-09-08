@@ -1515,8 +1515,11 @@ started.
   > Both are the command's hardcoded `-m` templates. `workflow-claude` uses conventional
   > commits, so the command that *defines* the branch lifecycle breaks its own
   > repository's convention every time it runs, and will do the same in any consumer that
-  > uses them. Not fixed here — it is a `workflow-claude` change outside this revision's
-  > scope — but it belongs on that repository's next plan.
+  > uses them. **Both halves of that sentence were wrong and are corrected here rather than
+  > left standing.** It is not `/smart-merge`-specific: widening the check found **eight**
+  > sites across six commands, three encoding the opposite convention, and pfsmgraph
+  > hand-overriding those on every run. And it is no longer out of scope — it is now
+  > **Section G**, taken into this revision as a cleanup.
   > **Note:** the session attribution footer is present on **all** commits in all three
   > repositories, including the two `/smart-merge` template commits — the branch-doc
   > removal had to be amended for it during E4, because the command's literal `-m` template
@@ -1556,3 +1559,97 @@ started.
   - [ ] Marketplace: nothing to build yet — **verified 2026-09-07, no `marketplace.json`
         exists in any of the user's repositories**, and `claude-plugin-tools` is unrelated.
         Note in both READMEs that the `--plugin-dir` line is interim.
+
+## Section G — The hardcoded commit convention (found by F3's audit)
+
+**Why this sits after F.** F3's audit is what found it. Checking `workflow-claude`'s own
+history against its own convention surfaced two commits that break it, and widening the
+check turned what looked like one command's defect into a uniform one across six. The
+section is placed where it was discovered rather than where it logically belongs, so the
+order of the file still reads as the order of the work.
+
+**Cleanup by size, not by landing.** Eight sites across six files, all prose — no logic, no
+script, no new concept — so no revision is opened. **The landing is still a branch and a
+PR**, because A7 established that `workflow-claude` states no cleanup exemption and routes
+everything through one. That matters more than usual here: the change edits the very
+commands that define the branch lifecycle, so taking a shortcut past them would be the one
+place a shortcut is actually visible.
+
+**The defect, stated once.** Every commit-message and PR-title decision in `workflow-claude`
+encodes *one* repository's convention, and a plugin cannot know its consumer's. It takes two
+forms — six literal `git commit -m` strings and two prescriptive format rules — and it is
+wrong in one direction or the other in **both** repositories using the plugin today.
+
+Measured 2026-09-08:
+
+| Site | Encodes | Wrong in |
+|---|---|---|
+| `smart-merge.md:92` — `Remove branch doc (merging to main)` | imperative | `workflow-claude` |
+| `smart-merge.md:176` — `Record merge of ... in plans (PR #123)` | imperative | `workflow-claude` |
+| `new-branch.md:138` — `Add branch doc and plan for <branch>` | imperative | `workflow-claude` |
+| `file-plans.md:61` — `chore(plan): file merged plans ...` | conventional | pfsmgraph |
+| `close-revision.md:58` — `chore(plan): close revision <label>` | conventional | pfsmgraph |
+| `open-revision.md:57` — `docs(plan): open revision <label>` | conventional | pfsmgraph |
+| `smart-commit.md:50` — "Follow conventional commit format" | conventional | pfsmgraph |
+| `smart-merge.md:72` — PR title "imperative mood, sentence case" | imperative | `workflow-claude` |
+
+**The evidence runs both ways, which is what makes it a defect rather than a preference.**
+pfsmgraph has **zero** conventional-prefixed commits in its entire history, and
+`workflow-claude` is conventional in commits *and* PR titles. So each repository has been
+silently hand-correcting the plugin on every run, in opposite directions:
+
+- In pfsmgraph the conventional templates were overridden **every time** — `/file-plans`
+  and `/open-revision` ran there at least four times and produced "File revision 02's three
+  merged plans into its revision directory" and "Open revision 02-hmm-v0.1.0, and move the
+  drafts out of its way", never the template. The overrides were also *better* than the
+  template, naming the actual revision.
+- In `workflow-claude` the imperative templates pasted through verbatim and broke the
+  convention — twice this session, in E4's merge.
+
+**The consumer already documented a workaround, which is the confirming evidence.**
+pfsmgraph's `docs/agents/claude.md` carries a standing override for `/smart-commit` Step 3:
+*"This repository does not use them ... Follow the repository's convention — the history is
+the authority, not the command's template."* A consumer repository writing an override note
+because the plugin encodes a convention it cannot know is the defect stated from the other
+side. G2 makes the command say what the consumer's docs already have to.
+
+- [ ] Settle how a command learns the repository's convention.
+  > **Q:** How does a command decide the message format — read it from the repository's
+  > recent history, take it from a config field, or state nothing and leave it to the model?
+  > **A:**
+  > **Q:** Do the plan-lifecycle commands keep a *suggested* message, or stop proposing one
+  > at all?
+  > **A:**
+  - [ ] **Recommendation: read it from the history**, in one shared sentence reused at every
+        site — inspect the last ~20 subjects and match the dominant form. It needs no config
+        field, is self-correcting when a repository changes convention, and is exactly what
+        pfsmgraph's own override note already prescribes. It also follows the precedent A6
+        settled for detection: `/smart-merge` reasons that *there is no shell command that
+        reports MCP availability, you can see your own tools, so judge from that* — here,
+        there is no config that reports the convention, and the history is visible.
+  - [ ] **Recommendation: keep a suggested message, drop the hardcoded format.** The
+        templates carry real information — *which* commit this is — and only their prefix is
+        wrong. So `Record merge of <branch> in plans (PR #N)` stays as the *content* and the
+        form is left to the convention rule, rather than deleting the proposal and making
+        every merge author one from nothing.
+  - [ ] Decide whether the rule lives in each command or in one place. `workflow-claude` has
+        **no `commands/references/` fragment mechanism** (checked — `dp-compile` has one,
+        this plugin does not), so a shared fragment is a new mechanism rather than a reuse.
+        Weigh that against eight near-duplicate paragraphs.
+- [ ] Apply the fix across all eight sites.
+  - [ ] The six literal `git commit -m` strings.
+  - [ ] `/smart-commit` Step 3's "Follow conventional commit format", which is the site the
+        consumer already had to override in writing.
+  - [ ] `/smart-merge` step 3's PR-title rule — the same defect in the same command, and the
+        one most easily missed because it is prose rather than a `-m` string.
+  - [ ] Check no *other* site encodes a convention: tag messages, the `CHANGELOG` heading
+        format, and `README.md:156` which advertises `/smart-commit` as "Conventional commit
+        format" in the command table.
+- [ ] Land it, and record what it makes redundant elsewhere.
+  - [ ] Branch via `/new-branch`, `**Status**: standalone`, then `/smart-merge` — per A7,
+        and dogfooding the commands being changed. Expect `/file-plans` to report
+        `no backlink`, as E4's branch did.
+  - [ ] Add to F4's hand-back list: pfsmgraph's `docs/agents/claude.md` override note should
+        be **re-scoped, not deleted**. Its first half (the `VERSION` file, the tagging) stays
+        true; only the Step 3 paragraph becomes redundant, and even that is worth keeping as
+        a statement of pfsmgraph's own convention rather than as a correction of the plugin.
