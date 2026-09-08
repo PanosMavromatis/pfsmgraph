@@ -443,13 +443,36 @@ logging them is that the plugin's README can later cite *why*, not just *what*.
   > dependency that report never uses reads as a bug the first time someone hits it.
   > Note for E2: **no current `dp-compile` command references `workflow-claude` anywhere**,
   > so this coupling is entirely new rather than an existing one being tightened.
-- [ ] Settle the branch and plan workflow *inside* each plugin repository.
-  - [ ] `workflow-claude`: it has a master plan and closed revisions, and lands work via
-        PRs. Recommend `/open-revision 05-dp-compile-interop` (label to taste) and one
-        branch, since its edits are small and its convention is its own.
-  - [ ] `dp-compile`: no `docs/plan/`, history is straight to `main`. Recommend a
-        sequence of focused commits to `main`, not bootstrapping plan machinery into a
-        repository that is being rewritten end to end — the record of *why* is this file.
+- [x] Settle the branch and plan workflow *inside* each plugin repository.
+  > **Q:** How should `workflow-claude`'s changes land — one standalone branch, a full
+  > revision 05, or straight to `main`?
+  > **A:** One branch via `/new-branch`, standalone, no revision.
+  > **Q:** How should `dp-compile`'s rewrite land — focused commits to `main`, one branch
+  > for the whole rewrite, or a branch per section?
+  > **A:** Focused commits straight to `main`.
+  > **Done:** Settled 2026-09-08, and the two repositories deliberately get *different*
+  > answers because their conventions differ. Checked first: `workflow-claude`'s master
+  > plan has **no open items** — revisions 02, 03 and 04 are all closed and archived — and
+  > it states **no cleanup exemption**, so unlike pfsmgraph its written convention routes
+  > everything through a PR. Straight-to-`main` was therefore rejected there specifically
+  > because it would import pfsmgraph's rule into the repository that *defines* the
+  > lifecycle for everyone else. A full revision was rejected on that repo's own
+  > definition: a revision is a milestone "whose subgoals each spawn a branch", plural, and
+  > this is one branch of documentation edits — the more so now that A6 rejected the
+  > detection contract, which was the one change that might have needed code.
+  - [x] **`workflow-claude`: one branch via `/new-branch`, `**Subgoal**: standalone`, then
+        `/smart-merge`.** No revision opened. Accepted consequence, the same one this
+        pfsmgraph branch carries: with no master-plan backlink, `/file-plans` will report
+        `no backlink` and leave the branch plan flat. That is the designed safe outcome
+        rather than a defect — and it is worth noticing that the repository defining that
+        behaviour now exercises it on itself.
+  - [x] **`dp-compile`: focused commits straight to `main`**, no branch and no plan
+        machinery. Bootstrapping a two-tier plan convention into a repository being
+        rewritten end to end would duplicate bookkeeping that `tmp/TODO.md` already holds —
+        which is the entire reason that file exists. The cost is real and accepted: `main`
+        is half-rewritten for the duration. It does not reach anyone, because
+        `--plugin-dir` loads from the working tree rather than from a cached published
+        version, so nothing stale is served while the rewrite is in flight.
   - [x] pfsmgraph side: **done 2026-09-07 — branch `chore/revise-plugins` opened from
         `beb0637`, with a pointer plan.** The name took the `chore/` prefix every prior
         branch in this repository carries, so the plan directory is
