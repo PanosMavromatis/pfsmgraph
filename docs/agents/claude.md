@@ -46,5 +46,56 @@ Note that the `protect-agent-docs.py` `PreToolUse` hook matches on filename, so 
 edits to an imported `CLAUDE.md` too — correctly, but for an unrelated reason. Renaming also
 takes the file out of that hook's way.
 
+## `dp-compile` and the root `dp-compile.toml`
+
+`dp-compile` is a Claude Code plugin that guides a dynamic-programming kernel through the
+ADR 0016 lifecycle. **It counts five stages where [`core.md`](core.md) counts four phases,
+and the two agree** — the plugin puts a `formalization` stage ahead of the four
+implementation phases, so its chain reads `formalization → python → cython → cpu_parallel →
+cuda`. `core.md` is authoritative for the invariant; the extra stage is the plugin's, and
+it is a specification document rather than a backend. The
+root **`dp-compile.toml` is its manifest**, and it is the only thing in this repository the
+plugin reads to learn the layout: kernel paths per phase, build and test commands, where
+backends are registered, and which documents a phase skill must read before writing.
+**The plugin has no defaults.** A repository without the file is told so, rather than
+resolving paths under a layout it does not have and reporting "algorithm not found" — a
+missing file misdiagnosed as a missing algorithm.
+
+Two properties of the manifest matter when editing it:
+
+- **Algorithms are listed, never discovered.** `[algorithms.viterbi]` exists because this
+  family's packages are flat, so globbing `_*.py` under `hmm` would return `_numeric.py`
+  and `_params.py` beside `_viterbi.py`. Adding a kernel means adding a table.
+- **`[commands] benchmark` is deliberately absent.** There is no benchmark infrastructure
+  here, and the benchmarking skill must report an unconfigured command rather than invent
+  one.
+
+**The plugin ships a blocking `PreToolUse` hook on `Bash`, and the manifest is what arms
+it.** Before a `git commit` whose *staged set* touches a kernel path, it runs `[commands]
+build` and `test` and blocks on failure. Scoping is what makes blocking tolerable: with
+this manifest it arms on exactly four paths — `_viterbi.py` and its three unwritten
+siblings — so a commit touching `docs/`, a helper module such as `_numeric.py`, or even a
+phase-0 `FORMALIZATION.md` passes silently. Phase 0 is excluded by design: a Markdown
+specification compiles to nothing and is imported by nothing, so staging it cannot break a
+backend.
+
+**The gate fires inside `/smart-commit`, and that is the design rather than a leak.**
+`/smart-commit` ultimately runs `git commit` through `Bash`, so the hook sees it like any
+other commit. This is what makes `dp-compile` safe to delegate committing to
+`workflow-claude`: the enforcement is deterministic and sits below whichever command
+happens to be driving. The two plugins' `PreToolUse` hooks match **disjoint** tool sets —
+`dp-compile` on `Bash`, `workflow-claude`'s `protect-agent-docs.py` on
+`Write|Edit|MultiEdit` — so no tool call matches both and they stack rather than compete.
+
+`dp-compile` **assumes `workflow-claude` is present** and delegates rather than duplicating:
+it runs no `git` command of its own, opens no branch, and writes no plan file. Its commands
+detect the companion by reading their own tool list, print one line when it is missing, and
+stop at the point where they would have delegated.
+
+**Loading is interim.** Neither plugin is on a marketplace yet, so both are loaded with
+`--plugin-dir` (or, for `workflow-claude` here, a symlink under `.claude/skills/`). The
+clones live under `tmp/` and are gitignored; `dp-compile.toml` is tracked, the plugin that
+reads it is not.
+
 Everything else — architecture, commands, conventions, domain invariants — belongs in
 `core.md`, which also feeds `AGENTS.md` for other agents.

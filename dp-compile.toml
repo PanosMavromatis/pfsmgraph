@@ -1,0 +1,61 @@
+# dp-compile manifest -- pfsmgraph
+[project]
+name = "pfsmgraph"
+
+# These carry invariants no amount of reading a kernel reveals: arc-emission
+# (output_p[i, j, sym], never B[s, sym]), the N+1 state geometry, min-sum over bits
+# rather than max-product, and the rule that a tie-breaking rule is contract because
+# two correct backends would otherwise legitimately disagree.
+invariants = [
+  "docs/agents/core.md",
+  "docs/design/adr/0002-three-phase-algorithm-lifecycle.md",
+  "docs/design/adr/0003-one-parameterized-test-suite-per-algorithm.md",
+  "docs/design/adr/0015-arc-emission-mealy-formulation.md",
+  "docs/design/adr/0016-numba-cpu-parallel-phase.md",
+  "docs/design/adr/0017-frozen-parameter-object-for-hmm.md",
+]
+encoder = [
+  "docs/api/dataseq/encoder.md",
+  "docs/design/adr/0011-fixed-reserved-symbol-block-and-strict-encoding.md",
+]
+
+[commands]
+build    = "uv sync"        # editable install; compiled phases rebuild on import
+test     = "uv run pytest"
+test_one = "uv run pytest {path}"
+# `benchmark` is deliberately absent: this repository has no benchmark
+# infrastructure, and the skill must say so rather than assume a command.
+
+[phases]
+formalization = "docs/design/algorithms/{algorithm}/FORMALIZATION.md"
+python        = "packages/pfsmgraph-{package}/src/pfsmgraph/{package}/_{algorithm}.py"
+cython        = "packages/pfsmgraph-{package}/src/pfsmgraph/{package}/_{algorithm}_cython.pyx"
+cpu_parallel  = "packages/pfsmgraph-{package}/src/pfsmgraph/{package}/_{algorithm}_cpu_parallel.py"
+cuda          = "packages/pfsmgraph-{package}/src/pfsmgraph/{package}/_{algorithm}_cuda.py"
+
+# A new backend is a row in the registry plus, for a compiled phase, an entry in that
+# member's build file. meson does not glob, so the second half is not optional.
+[backends]
+registry       = "_backends.py"
+build_manifest = "packages/pfsmgraph-{package}/meson.build"
+require_env    = "PFSMGRAPH_REQUIRE_BACKENDS"
+
+# Note this is pyproject.toml, not the meson.build above: build sources and runtime
+# dependencies are different questions about the same package. `gpu` is the extra this
+# member already declares (ADR 0004 keeps numba-cuda and dl's torch deliberately
+# unmerged, so there is no family-wide [gpu]). The numba floor pairs with the
+# numpy>=2.1 this member declares; raising either is a reason to review the other.
+[dependencies]
+declared_in  = "packages/pfsmgraph-{package}/pyproject.toml"
+cpu_parallel = { requires = "numba>=0.61" }
+cuda         = { requires = "numba-cuda", extra = "gpu" }
+
+[algorithms.viterbi]
+package = "hmm"
+# Not a pure equality check: the delta-seeding defect of the original is fixed rather
+# than reproduced, so one of these three differs at exactly one position.
+oracles = [
+  ".scratch/hmm-lush/Training/set02a/set02a_200/m001_0001_001.vpath.xls",
+  ".scratch/hmm-lush/Training/set02a/set02a_200/m001_0005_005.vpath.xls",
+  ".scratch/hmm-lush/Training/set02a/set02a_200/m008_0001_008.vpath.xls",
+]
