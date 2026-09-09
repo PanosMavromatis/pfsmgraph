@@ -194,9 +194,96 @@ must be `chore/plugin-handback` for rung 2 to match.
   > min-plus depends on whether revision 03 keeps the bit domain, which is that revision's
   > undecided call. Flagged in the master plan for it to resolve. Confidence about a
   > specified, measured decode does not transfer to an unimplemented forward pass.
-- [ ] Marketplace: nothing to build yet — **verified 2026-09-07, no `marketplace.json`
-      exists in any of the user's repositories**, and `claude-plugin-tools` is unrelated.
-      Note in both READMEs that the `--plugin-dir` line is interim.
+- [~] **Prepare both plugins for a marketplace release.** Reshaped 2026-09-09: this goal
+      read *"Marketplace: nothing to build yet — verified 2026-09-07, no `marketplace.json`
+      exists in any of the user's repositories… note in both READMEs that the
+      `--plugin-dir` line is interim."* That premise no longer holds — the plugins are
+      going into an organisation marketplace, which inverts the goal from *record the
+      absence* to *prepare the release*.
+      > **Note: this is the one place A1's conclusion inverts, and it is why the reshape
+      > matters rather than being bookkeeping.** A1 settled that no version bump was owed,
+      > on an explicit premise: no marketplace install exists, so nothing consumes the
+      > version as a cache key. The reasoning was sound and is recorded as such. Publishing
+      > removes the premise — the version becomes how a consumer's installation decides
+      > whether it already has the current plugin. Measured 2026-09-09: `dp-compile` was
+      > **20 commits and 42 files** past `0.2.0`, and `workflow-claude` **103 commits and
+      > 39 files** past `0.1.0`, whose number predates its entire current command set.
+      > **Verified ready, so these are not blockers:** no absolute paths in either plugin's
+      > sources — `${CLAUDE_PLUGIN_ROOT}` throughout, which is the portability check that
+      > actually matters; both repos clean, on `main`, synced; `dp-compile` no-ops safely
+      > in a repo with no manifest (F2's negative check); and the two `PreToolUse` hooks
+      > match disjoint tool sets, so they stack rather than compete.
+  - [x] Bump both versions to describe the tree being published — `dp-compile` to `0.3.0`
+        and `workflow-claude` to `0.2.0`. Minor rather than patch: each shipped new
+        commands and changed behaviour, not fixes.
+  - [x] Declare `dp-compile`'s dependency on `workflow-claude` where a consumer will see
+        it. `plugin.json` has no dependency field, so the assumption lives only in
+        `references/workflow-claude.md`. A consumer installing `dp-compile` alone gets a
+        plugin that correctly detects the absence and stops at every delegation point — by
+        design, but discovered at first use rather than at install. It belongs in the
+        marketplace description and the README's opening.
+        > **Done:** `dp-compile` `4db80b0`, on both surfaces an installer actually sees —
+        > `plugin.json`'s description, which is what a marketplace listing renders and
+        > often the only text read before installing, and a third opening README paragraph
+        > beside the one saying the plugin knows no repository's layout. The manifest was
+        > re-parsed after editing; an unparseable `plugin.json` is an unloadable plugin.
+        > Folded into `0.3.0` rather than bumped again: that version is pushed but
+        > published nowhere, so nothing has cached it — the cache-key argument that made
+        > the bump necessary is what makes a second one unnecessary.
+  - [!] **Make both plugin repositories public.** Found 2026-09-09 by checking the README
+        link just added: `PanosMavromatis/dp-compile` and `PanosMavromatis/workflow-claude`
+        are **both `PRIVATE`**. A public marketplace entry points at a repository URL, so
+        neither is installable by anyone until this changes, and the new README link 404s
+        for exactly the audience it was written for.
+        > **Blocked:** only the account owner can change repository visibility.
+        > **Note: this exposes nothing new in kind, which is the useful measurement.**
+        > pfsmgraph is already public and already carries all three committer emails —
+        > including both of the ones in the plugin histories — and **164**
+        > `claude.ai/code/session` URLs in its commit messages. The plugins add 99 more of
+        > the same pattern and no new address, and neither has a local username in any
+        > tracked file. So this is not a fresh exposure decision; it is the one already
+        > taken for pfsmgraph. Worth stating because "make a private repo public" sounds
+        > like it needs a security review, and the review that would matter has in effect
+        > already happened.
+  - [x] Add a `LICENSE` to each repository. Neither has one, so a recipient gets no grant
+        of rights. Arguably moot inside one organisation; not moot beyond it.
+        > **Q:** MIT, to match pfsmgraph?
+        > **A:** Yes. The marketplace will be **public**, which promoted this from
+        > last-of-four to first.
+        > **Done:** `dp-compile` `93369cf`, `workflow-claude` `7d6b1b2`. All three
+        > `LICENSE` files verified byte-identical (`c345985d…`), the same check pfsmgraph
+        > applies to its member copies — and for the same reason: a copy that drifts means
+        > the shipped artifact no longer says what the root one says.
+        > **Note: the copyright line names one person, and that is a decision.** Both
+        > `plugin.json` files credit *"Panos Mavromatis & Claude"*, and that stays — an
+        > author field is credit. A copyright notice is the statement of **who grants the
+        > rights**, so it takes the legal name, for the reason pfsmgraph already records
+        > ("a license is read by lawyers"), and it omits "& Claude" because an AI system is
+        > not a legal person and cannot hold copyright. A recipient who cannot identify the
+        > grantor cannot rely on the grant.
+        > **Note:** nothing is vendored in either plugin — every script imports only the
+        > standard library — so there was no third-party license to stay compatible with,
+        > which is what made a single-holder MIT straightforward rather than a question.
+  - [ ] Rewrite the loading sections once the marketplace exists. `workflow-claude`'s
+        README currently states the opposite of what is about to be true — *"loaded
+        deliberately per-project via the CLI flag, **not** through a marketplace"* — and
+        `dp-compile`'s table calls a marketplace install conditional on one being
+        published. Marketplace install becomes primary; `--plugin-dir` demotes to the
+        development path.
+        > **Third site, found by `/agents-docs-update` and added here rather than edited
+        > early:** pfsmgraph's own `docs/agents/claude.md:95` says *"Loading is interim.
+        > Neither plugin is on a marketplace yet."* That is **still true today**, so no
+        > edit is owed — but it is false the moment the marketplace exists, and it sits in
+        > a *different repository* from the two READMEs this subgoal named, which is
+        > exactly how it would have been missed. Editing it now would make a document
+        > wrong in order to keep it from becoming wrong later.
+  - [ ] Fix the prescribed absence message's three load paths. F2 measured that **both**
+        live runs paraphrased it away and neither named any of the three. Behaviour was
+        right and only the message drifted, which is the advisory layer's cost — but
+        publishing makes marketplace install the *primary* path, so the message needs
+        rewriting on its own account.
+        > **Blocked on the marketplace existing** for the last two: both name a path that
+        > has no value until there is a marketplace to name.
 - [ ] **Re-scope pfsmgraph's `/smart-commit` override note, do not delete it** (from G3).
       `docs/agents/claude.md` carries a standing correction of `/smart-commit` Step 3:
       *"This repository does not use them ... the history is the authority, not the
