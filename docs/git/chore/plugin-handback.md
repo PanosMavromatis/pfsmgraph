@@ -33,8 +33,10 @@ The seven goals are in the branch plan, with their measurements and reasoning. I
 
 ## Context
 
-- **PR #19** — the plugin revision this hands back from. Its plan, `tmp/TODO.md`, closed at
-  33 of 33 across sections A-G and is on `main` as the record.
+- **PR #19** — the plugin revision this hands back from. Its plan closed at 33 of 33 across
+  sections A-G and is on `main` as the record, archived at
+  `docs/plan/chore-revise-plugins/_TODO.md` (it ran from `tmp/TODO.md` and was moved in
+  afterwards).
 - **`workflow-claude` PR #21** — the commit-convention fix, which is what makes the
   `/smart-commit` override note redundant as a *correction* and worth keeping as a
   *statement*.

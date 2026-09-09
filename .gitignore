@@ -232,12 +232,17 @@ __marimo__/
 .com.apple.timemachine.donotpresent
 .apdisk
 
-# Local repo housekeeping. `tmp/*` rather than `tmp/`: git never descends into an
-# ignored directory, so a bare `tmp/` would make the negation below inert. The
-# clones parked here (plugin repositories) stay ignored; only the meta-plan for
-# revising them is tracked from this root.
+# Local repo housekeeping. Nothing under tmp/ is tracked: the clones parked here
+# (the dp-compile and workflow-claude plugin repositories) are separate repos with
+# their own histories. The plan for revising them was tracked from this root as
+# `tmp/TODO.md` until 2026-09-09, under a `!tmp/TODO.md` negation; it now lives at
+# docs/plan/chore-revise-plugins/_TODO.md and the negation is retired.
+#
+# `tmp/*` rather than `tmp/` is kept deliberately even with no negation left: git
+# never descends into an ignored directory, so a bare `tmp/` would silently make any
+# future negation beneath it inert — the failure would look like a file that refuses
+# to be added for no reason.
 tmp/*
-!tmp/TODO.md
 
 # Codex working-tree review output (see docs/agents/codex.md)
 REVIEW.md

@@ -7,11 +7,13 @@
 
 ## Where this came from
 
-These seven goals were Section H of `tmp/TODO.md`, the plan for `chore/revise-plugins`,
-which revised the `dp-compile` and `workflow-claude` plugins in two clones parked under the
-gitignored `tmp/`. That plan's own work — sections A through G — is complete at 33 of 33.
-Section H was never part of it: every item edits **pfsmgraph**, and that plan's first ground
-rule limited it to `tmp/TODO.md` plus a two-file manifest exception. The items were
+These seven goals were Section H of the plan for `chore/revise-plugins`, which revised the
+`dp-compile` and `workflow-claude` plugins in two clones parked under the gitignored `tmp/`.
+That plan lived at `tmp/TODO.md` while the work ran and is now archived at
+[`../chore-revise-plugins/_TODO.md`](../chore-revise-plugins/_TODO.md); its own work —
+sections A through G — is complete at 33 of 33. Section H was never part of it: every item
+edits **pfsmgraph**, and that plan's first ground rule limited it to its own file plus a
+two-file manifest exception. The items were
 collected there as a handoff manifest and cut here at merge time.
 
 **The cut is why this file exists rather than a pointer.** Left in place, seven permanently

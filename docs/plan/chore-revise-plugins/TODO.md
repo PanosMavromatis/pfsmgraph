@@ -2,33 +2,41 @@
 
 **Status**: merged — PR #19 — 2026-09-09
 **Created**: 2026-09-07
-**Subgoal**: standalone — meta-work interpolated before revision 02 resumes
+**Subgoal**: Meta-work interpolated before revision 02 resumes — registered in
+[`../TODO.md`](../TODO.md) under revision 02-hmm-v0.1.0, backlinked 2026-09-09.
 
-## This is a pointer, not the plan
+## The record is [`_TODO.md`](_TODO.md), beside this file
 
-**The plan for this branch is [`tmp/TODO.md`](../../../tmp/TODO.md)**, at the repository
-root. Work it with:
+This file is the resolvable branch plan: small, carrying the merge stamp, and what
+`/hitl-step` rung 2 and `/smart-merge` find by name. **The plan itself — every goal, every
+inline Q&A, every measurement — is `_TODO.md` in this directory.** Read it by path; the `_`
+prefix deliberately keeps it out of the `docs/plan/**/TODO.md` glob, so a finished plan
+cannot surface in a disambiguation prompt as a place to do work. That is
+`/close-revision`'s `_DO.md` convention applied to a branch plan.
 
-```
-/hitl-step N tmp/TODO.md
-```
+**It lived at `tmp/TODO.md` until 2026-09-09**, at the repository root, because the work
+was committed in two *other* repositories — the `dp-compile` (formerly `tokalign-dev`) and
+`workflow-claude` clones parked under the gitignored `tmp/` — and the plan sat beside them.
+The root `.gitignore` carried a `!tmp/TODO.md` negation to keep that one file tracked; the
+negation was retired with the move.
 
-**Always pass the path.** `tmp/TODO.md` sits outside `docs/plan/`, so no resolution rung
-finds it on its own — and rung 2 finds *this* file, which is why this file exists and says
-so rather than being omitted. Declining to create a branch plan at all would not have
-avoided the problem: resolution would then fall through to `docs/plan/TODO.md`, the
-pfsmgraph master plan, which is also the wrong file and fails less visibly.
-
-It is a pointer rather than a copy because the work is committed in two *other*
-repositories — the `dp-compile` (formerly `tokalign-dev`) and `workflow-claude` clones
-parked under the gitignored `tmp/`. A second real plan here would drift from the first the
-moment work started, while describing commits this repository does not contain.
+**Why this file was a pointer rather than a copy, and why that reasoning still matters.**
+A second real plan here would have drifted from the first the moment work started, while
+describing commits this repository does not contain. But the arrangement had a cost that
+only appeared at the end: `tmp/TODO.md` was outside `docs/plan/`, so no resolution rung
+found it and every invocation had to pass the path — and, more quietly, `/file-plans`
+derives a plan's revision from its master-plan backlink, which this branch did not have, so
+the directory would have sat flat beside the master plan forever with its content in a
+third place. Moving the body in and adding the backlink resolved both. **The lesson is not
+"never point" — it is that a plan parked outside the tree needs an explicit plan for
+getting back in, decided when it is parked rather than at merge.**
 
 ## Tasks
 
-- [x] Work this branch from `tmp/TODO.md`. Flip this at merge; it is deliberately the only
-      item, and its `> **Done:**` line is where the outcome gets summarised for the PR body.
-  > **Done:** `tmp/TODO.md` closed at **33 of 33** across sections A–G, with no `[~]` or
+- [x] Work this branch from `tmp/TODO.md` (now [`_TODO.md`](_TODO.md) beside this file).
+      Flip this at merge; it is deliberately the only item, and its `> **Done:**` line is
+      where the outcome gets summarised for the PR body.
+  > **Done:** the plan closed at **33 of 33** across sections A–G, with no `[~]` or
   > `[!]` anywhere. `tokalign-dev` was renamed and generalised to `dp-compile`, its
   > hardcoded layout replaced by a per-repository manifest with no defaults; ADR 0016's
   > five-stage chain implemented end to end including a real phase-4 skill where a ten-line

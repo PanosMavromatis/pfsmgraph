@@ -472,9 +472,9 @@ These have no event that will surface them. They need to be looked at on purpose
   rather than globbed, since these packages are flat and `_*.py` would match `_numeric.py`
   and `_params.py` beside `_viterbi.py`.
 
-  The record is `docs/plan/chore-revise-plugins/TODO.md`, which points at `tmp/TODO.md`
-  where the plan and its inline Q&A live (PR #19); `docs/agents/claude.md` carries the
-  operational summary. **PRD §10 is deliberately not amended** — it says the question
+  The record is `docs/plan/chore-revise-plugins/_TODO.md` — the plan and its inline Q&A,
+  archived beside the branch plan that points at it (PR #19); `docs/agents/claude.md`
+  carries the operational summary. **PRD §10 is deliberately not amended** — it says the question
   "was not discussed", which is a true claim about that document's scope and stays true.
 
 ## Trigger: `align` able to produce a multiple alignment
