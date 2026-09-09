@@ -1877,27 +1877,37 @@ side. G2 makes the command say what the consumer's docs already have to.
         > Now reads "Reads the subject convention from the repository's own history rather
         > than prescribing one" — which is also the line that tells a prospective consumer
         > the plugin will not fight their conventions, so it earns its place in the table.
-- [!] Land it, and record what it makes redundant elsewhere.
-  > **Blocked:** the merge itself, and nothing else. Both subgoals' work is done and
-  > PR #21 is open with its plan already stamped; the harness refuses the merge call
-  > on both the MCP and `gh` paths. One user-run command closes this goal and, with
-  > it, Section G and the whole A–G plan.
-  - [!] Branch via `/new-branch`, `**Status**: standalone`, then `/smart-merge` — per A7,
+- [x] Land it, and record what it makes redundant elsewhere.
+  > **Done:** merged 2026-09-09 as `01d3ac4`, "Merge pull request #21 from
+  > PanosMavromatis/fix/hardcoded-commit-convention". The merge was the one step the
+  > harness refused; the user ran it. Verified afterwards: `main` in sync with `origin`,
+  > **0** stale remote refs so the prune took, the branch gone locally, all six
+  > `"<subject>"` placeholders present on `main`, `docs/git/` empty, and the plan surviving
+  > at `docs/plan/fix-hardcoded-commit-convention/DO.md` stamped
+  > `merged — PR #21 — 2026-09-08`.
+  - [x] Branch via `/new-branch`, `**Status**: standalone`, then `/smart-merge` — per A7,
         and dogfooding the commands being changed. Expect `/file-plans` to report
         `no backlink`, as E4's branch did.
-        > **Blocked at the merge, and only at the merge.** `/smart-merge` ran through step 9
-        > and stopped at step 10: both `merge_pull_request` (MCP) and `gh pr merge` were
-        > refused by the harness's auto-mode classifier — a local gate, not a GitHub
-        > permission, so the documented MCP→`gh` fallback does not route around it. Per the
-        > denial's own instruction I stopped rather than looking for a third path. **The
-        > user runs one command**, from `tmp/workflow-claude`:
-        > `gh pr merge 21 --merge --delete-branch`, then `git checkout main && git pull --prune`.
+        > **Ran, and landed.** `/smart-merge` executed steps 1–9 and 11–12; step 10, the
+        > merge, was refused on **both** paths — `merge_pull_request` (MCP) and
+        > `gh pr merge` — by the harness's auto-mode classifier. Worth recording precisely,
+        > because the command has a documented MCP→`gh` fallback and it does **not** help
+        > here: that fallback exists for a 404/403 *from GitHub*, and this was a local gate.
+        > A fallback keyed to the remote cannot route around a refusal made before the call
+        > leaves the machine. The user ran the merge; everything either side of it was
+        > automated.
         >
-        > Everything before it is done: branch opened, four commits, pushed, **PR #21**
-        > created via MCP with no fallback needed, branch doc removed, plan stamped
-        > `merged — PR #21 — 2026-09-08`. No master-plan item is closed alongside it — the
-        > backlink grep returns nothing, which is correct for a standalone branch and is
-        > reported rather than skipped.
+        > Branch opened, four commits, pushed, **PR #21** created via MCP with no fallback
+        > needed, branch doc removed, plan stamped `merged — PR #21 — 2026-09-08`, merged as
+        > `01d3ac4`. No master-plan item closed alongside it — the backlink grep returns
+        > nothing, correct for a standalone branch and reported rather than skipped.
+        >
+        > **The `/file-plans` prediction held exactly**, checked after the merge: `0 to
+        > file, 2 skipped`, this plan skipped with `no backlink in docs/plan/DO.md — cannot
+        > derive a revision`, sitting beside `docs-plan-notes-and-interop`, which is E4's
+        > branch giving the identical result. Both stay flat, which is the safe outcome —
+        > a plan filed into the *wrong* revision is worse than one never filed, because the
+        > mistake becomes invisible once it is filed.
         >
         > **CI: none configured.** `get_status` returned `total_count: 0`, which is the case
         > `/smart-merge` step 8 warns about — its `state` reads `"pending"` when nothing has
