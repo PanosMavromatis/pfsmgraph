@@ -411,7 +411,7 @@ must be `chore/plugin-handback` for rung 2 to match.
         > where nothing enforces co-loading. So a runtime check that was the primary
         > safeguard is now a development-path fallback, and both READMEs say so rather than
         > leaving a reader to wonder why a carefully worded message never appears.
-- [ ] **Re-scope pfsmgraph's `/smart-commit` override note, do not delete it** (from G3).
+- [x] **Re-scope pfsmgraph's `/smart-commit` override note, do not delete it** (from G3).
       `docs/agents/claude.md` carries a standing correction of `/smart-commit` Step 3:
       *"This repository does not use them ... the history is the authority, not the
       command's template."* G2 makes the command say what that note has been saying, so the
@@ -432,3 +432,27 @@ must be `chore/plugin-handback` for rung 2 to match.
       > Contrast `workflow-claude`, where the same templates polluted the history 19 times
       > in 40 commits. Same plugin, opposite outcomes, decided entirely by whether the
       > consumer noticed.
+      >
+      > **Done (2026-09-09).** The Step 3 paragraph now states this repository's convention
+      > instead of correcting the command's template, and the two bullets above it are
+      > untouched — neither the `VERSION` invariant nor the release-tagging note was
+      > affected by PR #21.
+      >
+      > **The second edit was made, and measuring it falsified the reason given for it.**
+      > The note above says pfsmgraph's history is uncontaminated "precisely because every
+      > operator overrode the templates by hand every time." Measured over the last 40
+      > non-merge subjects: 40 plain imperative, 0 conventional — so the first half holds.
+      > But **3 of those 40 are template-shaped** (`Add the branch doc for …`, `Record the
+      > merge of …`, `Remove the branch doc …`), so the templates were plainly *not*
+      > overridden every time. The reason there is no contamination **effect** is different
+      > and more general: those templates are plain imperative and so is this repository,
+      > so the rule's discount changes nothing here — 40/40 either way. **A template
+      > pollutes a history only when its form disagrees with the repository's.** That is
+      > what went into `claude.md`.
+      >
+      > It also corrects the contrast drawn above. `workflow-claude`'s outcome was not
+      > "decided entirely by whether the consumer noticed" — its convention is
+      > conventional-commits, so the templates' plain-imperative form *fought* it, and 19
+      > template-written subjects against 21 human ones nearly inverted the reading. Same
+      > plugin, opposite outcomes, decided by whether the template's form agreed with the
+      > repository's. No consumer chooses that, and none can notice it.

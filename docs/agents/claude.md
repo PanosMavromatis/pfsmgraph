@@ -25,10 +25,26 @@ command; both are places where a single-component assumption meets a five-packag
   (see [`core.md`](core.md) under "Commands"), which is why `/smart-commit` reporting "no
   tag created" on a release commit is the correct outcome rather than a gap to fill.
 
-Its Step 3 also specifies conventional-commit subjects (`feat(scope): …`). This repository
-does not use them: every commit is an imperative subject with no prefix and a substantial
-body explaining why. Follow the repository's convention — the history is the authority, not
-the command's template.
+**This repository's commit convention, stated rather than corrected.** Every commit is a
+capitalised imperative subject with no prefix, followed by a substantial body explaining
+why. Step 3 of `/smart-commit` used to prescribe conventional-commit subjects
+(`feat(scope): …`) and this paragraph existed to override it; since `workflow-claude`
+PR #21 the command reads the convention from `git log` instead of asserting one, so the
+override is spent. The statement stays, because it is now what the command goes looking
+for — and a convention worth following is worth writing down rather than leaving to be
+inferred from a sample.
+
+**Both ways that detection can be fooled are absent here, which is why it can be trusted.**
+Measured 2026-09-09 over the last 40 non-merge commits: 40 plain imperative, 0
+conventional. Three match the plugin's own bookkeeping templates (`Add the branch doc
+for …`, `Record the merge of …`, `Remove the branch doc …`), which the rule discounts — and
+discounting them changes nothing, because those templates are *also* plain imperative here.
+**A template pollutes a history only when its form disagrees with the repository's**; in
+`workflow-claude`'s own repository it disagreed, and 19 template-written subjects sat
+against 21 human ones. The second failure mode — a subtree import grafting another
+repository's convention into the log — cannot arise here either, since every `.scratch/`
+import had its `.git` renamed on arrival. See [`../plan/DEFERRED.md`](../plan/DEFERRED.md)
+under "the next `workflow-claude` revision" for where that one is live.
 
 ## A nested `CLAUDE.md` in imported source
 
