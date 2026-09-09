@@ -216,8 +216,20 @@ must be `chore/plugin-handback` for rung 2 to match.
   - [x] Bump both versions to describe the tree being published — `dp-compile` to `0.3.0`
         and `workflow-claude` to `0.2.0`. Minor rather than patch: each shipped new
         commands and changed behaviour, not fixes.
+        > **Superseded the same day, and worth recording as a reversal.** The runbook's
+        > §10 Stage 1 posture is to **omit** `version` from `plugin.json` entirely, so the
+        > commit SHA becomes the cache key and every push is an update with zero ceremony.
+        > That solves the same trap this bump solved — a forgotten bump silently freezing
+        > every consumer — by removing the field a human could forget, rather than
+        > maintaining it. Strictly better for plugins under active development. The Phase 3
+        > normalize commit rewrites each manifest into that shape, so `0.3.0` and `0.2.0`
+        > exist in history (`233a311`, `4cca98a`) carrying the cache-key reasoning and
+        > reach no consumer. Stage 2 — explicit versions plus `<name>--v<version>` tags —
+        > arrives only with the first *constrained* dependency, which nothing here needs.
   - [x] Declare `dp-compile`'s dependency on `workflow-claude` where a consumer will see
-        it. `plugin.json` has no dependency field, so the assumption lives only in
+        it. ~~`plugin.json` has no dependency field~~ — **wrong, corrected 2026-09-09**: it
+        does, since v2.1.110 (`"dependencies": ["workflow-claude"]`), and installing a
+        plugin installs its dependencies. The assumption had lived only in
         `references/workflow-claude.md`. A consumer installing `dp-compile` alone gets a
         plugin that correctly detects the absence and stops at every delegation point — by
         design, but discovered at first use rather than at install. It belongs in the
@@ -230,6 +242,12 @@ must be `chore/plugin-handback` for rung 2 to match.
         > Folded into `0.3.0` rather than bumped again: that version is pushed but
         > published nowhere, so nothing has cached it — the cache-key argument that made
         > the bump necessary is what makes a second one unnecessary.
+        > **Correction, same day:** the prose declaration was the right *human-facing*
+        > fix and stays. But I asserted the manifest had no dependency field, and the
+        > marketplace runbook — docs verified 2026-09-01 — shows it does. The
+        > machine-readable form, `"dependencies": ["workflow-claude"]` in `dp-compile`'s
+        > `plugin.json`, is what actually enforces co-installation and is added in the
+        > Phase 3 normalize commit. Unconstrained, so it forces no tagging (runbook §9–§10).
   - [x] **Pre-import audit of both plugins, six checks.** Run 2026-09-09 against a
         checklist supplied for exactly this purpose: manifest present, component layout,
         `SKILL.md` `name` frontmatter, hook script paths, paths escaping the plugin root,
@@ -251,7 +269,7 @@ must be `chore/plugin-handback` for rung 2 to match.
         > *"Duplicate hooks file detected"*, **failing the entire plugin load**. The
         > absence is load-bearing. Found only because the history contradicted the tip —
         > reading the manifest alone shows a missing key and no reason for it.
-  - [ ] **After the first marketplace install, check whether each plugin's root
+  - [x] **After the first marketplace install, check whether each plugin's root
         `CLAUDE.md` leaks into a consumer's session.** Both ship one — 221 lines in
         `dp-compile`, 205 in `workflow-claude` — and both are *plugin-development*
         instructions: component placement, `${CLAUDE_PLUGIN_ROOT}` discipline, version-bump
@@ -269,12 +287,20 @@ must be `chore/plugin-handback` for rung 2 to match.
         > If it does fire, the fix is the rename pfsmgraph already prescribes for imported
         > trees — `CLAUDE.md` to `CLAUDE.md.orig` — since presence on disk is the trigger
         > and gitignoring does not help.
-  - [!] **Make both plugin repositories public.** Found 2026-09-09 by checking the README
+        > **Resolved by citation, no test needed (2026-09-09).** The marketplace runbook
+        > §0 states it outright: *"a `CLAUDE.md` at a plugin root is not loaded as project
+        > context; plugins contribute context only through skills, agents, and hooks."*
+        > So it does **not** leak to a consumer — and it **does** load for an agent opened
+        > at the monorepo root, which is that layout's stated second goal: agents
+        > *developing* the plugins see the guidance. Both files stay, unrenamed. The
+        > question was well-posed; the answer was already written down elsewhere.
+  - [x] **Make both plugin repositories public.** Found 2026-09-09 by checking the README
         link just added: `PanosMavromatis/dp-compile` and `PanosMavromatis/workflow-claude`
         are **both `PRIVATE`**. A public marketplace entry points at a repository URL, so
         neither is installable by anyone until this changes, and the new README link 404s
         for exactly the audience it was written for.
-        > **Blocked:** only the account owner can change repository visibility.
+        > **Done 2026-09-09.** Both now `PUBLIC`, and the README link added in `4db80b0`
+        > — which 404'd for exactly the audience it was written for — resolves `200`.
         > **Note: this exposes nothing new in kind, which is the useful measurement.**
         > pfsmgraph is already public and already carries all three committer emails —
         > including both of the ones in the plugin histories — and **164**
