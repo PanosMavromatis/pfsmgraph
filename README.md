@@ -37,6 +37,7 @@ pyproject.toml                 # uv workspace root (virtual — not a package)
 dp-compile.toml                # manifest for the dp-compile plugin (see docs/agents/claude.md)
 docs/design/PRD.md             # authoritative design document
 docs/design/adr/               # decision records (authoritative)
+docs/design/algorithms/        # per-algorithm formalizations, one directory each
 docs/api/                      # API documentation, one subdirectory per package
 packages/
 ├── pfsmgraph-dataseq/         # + meson.build

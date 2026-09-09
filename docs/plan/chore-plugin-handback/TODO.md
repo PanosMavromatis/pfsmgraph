@@ -87,7 +87,7 @@ must be `chore/plugin-handback` for rung 2 to match.
   > "against a kernel that exists"; closing it on corroborating evidence would preempt a
   > deferral taken on purpose. The note exists so the next reader sees it was weighed, not
   > missed. ADR 0002 names no module files, so it carries no matching defect.
-- [ ] Land the recovered Viterbi `FORMALIZATION.md` from D4 where the manifest says.
+- [x] Land the recovered Viterbi `FORMALIZATION.md` from D4 where the manifest says.
       > **Note:** F2's read-only real-tree run drafted this document in full and was
       > correctly **denied the write** — nothing reached disk, and phase 0 is not done. It
       > verified every line citation the kernel's docstrings claim
@@ -96,6 +96,32 @@ must be `chore/plugin-handback` for rung 2 to match.
       > divergence at position 0 of `m008_0001_008` and nowhere else, seed margin
       > **0.004218 bits**, and **0 exact ties in 3804** recurrence positions. Regenerate
       > rather than reuse, but these numbers are checkable against it.
+  > **Done:** written to `docs/design/algorithms/viterbi/FORMALIZATION.md` (329 lines),
+  > the path the manifest's `[phases] formalization` names — the directory did not exist
+  > and this created it. Every measurement regenerated, not pasted; all four ADR links and
+  > the three oracle paths resolve; `Derived from` carries
+  > `_viterbi.py sha256:48666ca8…`, re-verified against the file after writing.
+  > **Note: the agreement figure reproduced exactly — 3806/3807**, diverging only at
+  > position 0 of `m008_0001_008`. But the archive's *labels* were wrong twice, and both
+  > are now pinned. **"Seed margin 0.004218 bits" is the arc margin**, not the seed
+  > difference: the two best arcs are 1.594225 and 1.598444, while the seed difference is
+  > **0.789531 bits**. `core.md` had it right ("the two best outgoing arcs differ by 0.004
+  > bits"); the plan's paraphrase did not. And **"0 ties in 3804 positions" measures a
+  > coarser denominator** than the cell-level count — 0 in **6081 live recurrence cells**.
+  > Both say zero; the denominators are not interchangeable.
+  > **Note: the divergence is now demonstrated causally rather than inferred.**
+  > Substituting the defective raw-probability seed into this implementation reproduces the
+  > original's choice exactly — start state 0 — where the corrected seed gives 5. The
+  > archive argued the seed *could* decide it because the arc margin is small; this shows
+  > it *does*, on demand. That is a stronger claim and it is what the oracle section states.
+  > **Note: TC-19's premise was wrong as inherited, and drafting caught it.** The archive
+  > says "code 7 decodes, code 8 raises". Verified on a constructed model with `A = 8`:
+  > **both raise** — code 7 passes the range guard and dies downstream on the arithmetic,
+  > code 8 is refused *by* the guard. Whether `A-1` decodes depends on the model emitting
+  > it, so a case written decodes-vs-raises is model-dependent and passes for the wrong
+  > reason. The specification now asserts *which error and from where*, which is the
+  > observable a `>`/`>=` slip actually changes. Recovering a spec from code found a defect
+  > in the spec's own source note — the reverse entrance earning its keep.
 - [ ] **Two test-coverage gaps in `pfsmgraph-hmm`, found by F2's live run.** Both sit at the
       validation boundary rather than in the recurrence, which is why the 165-test suite
       misses them.
