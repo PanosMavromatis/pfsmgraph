@@ -1877,10 +1877,42 @@ side. G2 makes the command say what the consumer's docs already have to.
         > Now reads "Reads the subject convention from the repository's own history rather
         > than prescribing one" — which is also the line that tells a prospective consumer
         > the plugin will not fight their conventions, so it earns its place in the table.
-- [ ] Land it, and record what it makes redundant elsewhere.
-  - [~] Branch via `/new-branch`, `**Status**: standalone`, then `/smart-merge` — per A7,
+- [!] Land it, and record what it makes redundant elsewhere.
+  > **Blocked:** the merge itself, and nothing else. Both subgoals' work is done and
+  > PR #21 is open with its plan already stamped; the harness refuses the merge call
+  > on both the MCP and `gh` paths. One user-run command closes this goal and, with
+  > it, Section G and the whole A–G plan.
+  - [!] Branch via `/new-branch`, `**Status**: standalone`, then `/smart-merge` — per A7,
         and dogfooding the commands being changed. Expect `/file-plans` to report
         `no backlink`, as E4's branch did.
+        > **Blocked at the merge, and only at the merge.** `/smart-merge` ran through step 9
+        > and stopped at step 10: both `merge_pull_request` (MCP) and `gh pr merge` were
+        > refused by the harness's auto-mode classifier — a local gate, not a GitHub
+        > permission, so the documented MCP→`gh` fallback does not route around it. Per the
+        > denial's own instruction I stopped rather than looking for a third path. **The
+        > user runs one command**, from `tmp/workflow-claude`:
+        > `gh pr merge 21 --merge --delete-branch`, then `git checkout main && git pull --prune`.
+        >
+        > Everything before it is done: branch opened, four commits, pushed, **PR #21**
+        > created via MCP with no fallback needed, branch doc removed, plan stamped
+        > `merged — PR #21 — 2026-09-08`. No master-plan item is closed alongside it — the
+        > backlink grep returns nothing, which is correct for a standalone branch and is
+        > reported rather than skipped.
+        >
+        > **CI: none configured.** `get_status` returned `total_count: 0`, which is the case
+        > `/smart-merge` step 8 warns about — its `state` reads `"pending"` when nothing has
+        > reported, so counting before reading state is what keeps a CI-less repo from
+        > looking like it has work in flight. `gh pr checks` agreed. `get_check_runs` 403'd,
+        > exactly as that step documents: GitHub offers no `Checks` permission for
+        > fine-grained PATs at all, so it is a property of the credential and there is no
+        > permission for the user to go and grant.
+        >
+        > **The dogfooding paid three times, not once.** The 21-vs-19 contamination was
+        > found by running the new rule to author this branch's own commits; the PR title
+        > was chosen by running it again (13 of 15 merged titles conventional); and the two
+        > bookkeeping commits `/smart-merge` itself makes — the branch-doc removal and the
+        > plan stamp — were the first real use of the rewritten sites, both landing
+        > conventional where the old templates would have written plain imperative.
         > **Half done, ahead of schedule and not by choice.** `fix/hardcoded-commit-convention`
         > was opened at G2's start with its doc at `docs/git/fix/hardcoded-commit-convention.md`
         > and plan at `docs/plan/fix-hardcoded-commit-convention/DO.md`, `**Status**: active`,
@@ -1892,10 +1924,16 @@ side. G2 makes the command say what the consumer's docs already have to.
         > new rule rather than the old template — reading this repository's history, finding
         > the 21/19 near-parity, and discovering the contamination that the fix then had to
         > account for. The defect was found by using the fix, on the fix, before it landed.
-  - [ ] Add to Section H's hand-back list: pfsmgraph's `docs/agents/claude.md` override note should
+  - [x] Add to Section H's hand-back list: pfsmgraph's `docs/agents/claude.md` override note should
         be **re-scoped, not deleted**. Its first half (the `VERSION` file, the tagging) stays
         true; only the Step 3 paragraph becomes redundant, and even that is worth keeping as
         a statement of pfsmgraph's own convention rather than as a correction of the plugin.
+        > **Added, with a second edit alongside it.** pfsmgraph's history has zero
+        > conventional-prefixed commits *because* its operator overrode the templates every
+        > time — so the same plugin polluted one consumer's history 19 times in 40 commits
+        > and left the other's pristine, decided entirely by whether the consumer noticed.
+        > That belongs in the same note: it is what makes detection trivially correct in
+        > pfsmgraph, and it is the reason the override note was written in the first place.
 
 ## Section H — Hand-back to pfsmgraph (executed elsewhere)
 
@@ -1967,3 +2005,24 @@ appearing in it is the correct result, not a miss.
 - [ ] Marketplace: nothing to build yet — **verified 2026-09-07, no `marketplace.json`
       exists in any of the user's repositories**, and `claude-plugin-tools` is unrelated.
       Note in both READMEs that the `--plugin-dir` line is interim.
+- [ ] **Re-scope pfsmgraph's `/smart-commit` override note, do not delete it** (from G3).
+      `docs/agents/claude.md` carries a standing correction of `/smart-commit` Step 3:
+      *"This repository does not use them ... the history is the authority, not the
+      command's template."* G2 makes the command say what that note has been saying, so the
+      note stops being a correction — but it should survive as a **statement of pfsmgraph's
+      own convention**, which is still worth writing down and is now what the plugin will
+      go looking for.
+      > **Do not touch the paragraphs above it.** The `VERSION`-file rule and the
+      > release-tagging note in that same section are untouched by G2 and remain true; only
+      > the Step 3 paragraph changes meaning. Re-scoping is a smaller edit than it looks —
+      > the sentences stay, their framing shifts from "the command is wrong here" to "this
+      > is what the command will detect".
+      >
+      > **There is a second edit to make in the same pass, and it is the more useful one.**
+      > pfsmgraph's history is *uncontaminated* — zero conventional-prefixed commits in the
+      > whole repository — precisely because every operator overrode the templates by hand
+      > every time. That is worth one sentence, because it is what makes the detection rule
+      > trivially correct there and it explains why the override note existed at all.
+      > Contrast `workflow-claude`, where the same templates polluted the history 19 times
+      > in 40 commits. Same plugin, opposite outcomes, decided entirely by whether the
+      > consumer noticed.
