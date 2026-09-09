@@ -519,3 +519,41 @@ These have no event that will surface them. They need to be looked at on purpose
   Nothing about this is in `core.md`'s claim that "alignment is a training accelerant for
   HMM topology search" beyond the claim itself — this entry is the mechanism that
   sentence has been standing on since the PRD.
+
+---
+
+## Trigger: the next `workflow-claude` revision
+
+The plugin lives at `plugins/workflow-claude/` in
+`github.com/PanosMavromatis/claude-plugins`; this repository consumes it from the
+`mavromatis-ai-labs` marketplace and no longer develops it. Entries here are defects found
+while *using* it, recorded so they survive between sessions.
+
+- **`/smart-commit`'s convention detection samples imported history in a subtree monorepo.**
+  Step 3 reads `git log --oneline -20` and follows the dominant subject form, discounting
+  subjects that match the plugin's own bookkeeping templates. That discount handles the
+  plugin polluting its *own* history — the case PR #21 found, where 19 of 40 subjects had
+  been written by the templates being removed. It does not handle a *second repository's*
+  history being grafted in. Measured 2026-09-09 in `claude-plugins`, the day of the import:
+  `git log --oneline -12` returns three conventions at once — the monorepo's own bare
+  imperatives, `dp-compile`'s bare imperatives, and `workflow-claude`'s `chore(repo):` /
+  `chore(plugin):` — because `git subtree add` without `--squash` grafts each plugin's full
+  history. Six commits the monorepo authored sit against hundreds it imported, so the raw
+  sample says almost nothing about the repository doing the committing.
+
+  **`--first-parent` is the candidate, not the decision.** It isolates what a repository
+  authored from what it merged, and returned exactly the right six here. But it also hides
+  everything merged through ordinary PR merges, which in a squash-free merge-commit
+  workflow is most of a repository's real history — so the rule may need to *detect*
+  grafted history rather than always filter. Settle that before writing it.
+
+  **Why it is recorded rather than fixed.** It does not affect pfsmgraph: the `.scratch/`
+  imports had their `.git` directories renamed on arrival, so no foreign history is grafted
+  into this log and the rule reads a clean sample here. It is live in `claude-plugins`,
+  which is where the plugin is developed and where the fix belongs.
+
+  **Third form of one failure.** The rule holds that the history is the authority, and
+  twice the history has turned out not to be a single repository's: first because the tool
+  wrote part of it, now because another repository supplied part of it. Whatever the fix,
+  the property to state is "read only what *this* repository chose" — which is what both
+  cases violate.

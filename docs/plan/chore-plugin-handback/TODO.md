@@ -194,7 +194,7 @@ must be `chore/plugin-handback` for rung 2 to match.
   > min-plus depends on whether revision 03 keeps the bit domain, which is that revision's
   > undecided call. Flagged in the master plan for it to resolve. Confidence about a
   > specified, measured decode does not transfer to an unimplemented forward pass.
-- [~] **Prepare both plugins for a marketplace release.** Reshaped 2026-09-09: this goal
+- [x] **Prepare both plugins for a marketplace release.** Reshaped 2026-09-09: this goal
       read *"Marketplace: nothing to build yet — verified 2026-09-07, no `marketplace.json`
       exists in any of the user's repositories… note in both READMEs that the
       `--plugin-dir` line is interim."* That premise no longer holds — the plugins are
@@ -213,6 +213,31 @@ must be `chore/plugin-handback` for rung 2 to match.
       > actually matters; both repos clean, on `main`, synced; `dp-compile` no-ops safely
       > in a repo with no manifest (F2's negative check); and the two `PreToolUse` hooks
       > match disjoint tool sets, so they stack rather than compete.
+      >
+      > **Done (2026-09-09).** Both plugins are public, MIT-licensed, imported with full
+      > history into `PanosMavromatis/claude-plugins` as the `mavromatis-ai-labs`
+      > marketplace, and consumed here through a tracked `.claude/settings.json` —
+      > `8c8d1ec` on this branch, `b6a5b17` and `d640d65` there. The two source
+      > repositories are **archived, not deleted**, their descriptions naming where the
+      > code went, which keeps `.scratch/README.md`'s provenance rows resolving. They had
+      > 0 forks and 0 stars, so the window in which retirement is free was still open.
+      >
+      > **The runbook was wrong in three places, each corrected in it.** `plugin.json`
+      > *does* carry a `dependencies` field; the version check it prescribed read
+      > `installed_plugins.json`, which is empty for plugins enabled declaratively rather
+      > than installed; and `git log --follow plugins/<name>/<file>` does **not** reach
+      > imported history — it returns zero commits, where `git blame` attributes correctly
+      > to the original repository's commits. The last is the one worth carrying forward:
+      > the history is preserved, and the tool named for reading it was the wrong one.
+      >
+      > **Verification (§14).** Catalog and both plugins validate with only accounted-for
+      > warnings; no shadowing, the skills-dir copy having reported itself inactive before
+      > the symlink was removed; every hook path quoted `"${CLAUDE_PLUGIN_ROOT}"` and all
+      > eight scripts `755`; about 2.2k tokens always-on with both enabled. Both plugins
+      > resolve to the same version `88997d2c120c` — the marketplace repo's HEAD, and a
+      > commit touching neither plugin, which is Stage 1 versioning in a monorepo behaving
+      > as designed. One item is outstanding and needs a session start: installing
+      > `dp-compile` alone into a fresh project to exercise the `dependencies` field.
   - [x] Bump both versions to describe the tree being published — `dp-compile` to `0.3.0`
         and `workflow-claude` to `0.2.0`. Minor rather than patch: each shipped new
         commands and changed behaviour, not fixes.
@@ -329,7 +354,7 @@ must be `chore/plugin-handback` for rung 2 to match.
         > **Note:** nothing is vendored in either plugin — every script imports only the
         > standard library — so there was no third-party license to stay compatible with,
         > which is what made a single-holder MIT straightforward rather than a question.
-  - [~] Rewrite the loading sections once the marketplace exists. `workflow-claude`'s
+  - [x] Rewrite the loading sections once the marketplace exists. `workflow-claude`'s
         README currently states the opposite of what is about to be true — *"loaded
         deliberately per-project via the CLI flag, **not** through a marketplace"* — and
         `dp-compile`'s table calls a marketplace install conditional on one being
@@ -355,13 +380,37 @@ must be `chore/plugin-handback` for rung 2 to match.
         > edits handed to the operator rather than made here; the same holds for the
         > absence message below. **A subgoal whose sites span two repositories cannot be
         > closed from either one** — that is the shape to expect for the rest of this goal.
-  - [ ] Fix the prescribed absence message's three load paths. F2 measured that **both**
+        >
+        > **Closed 2026-09-09 with the other two sites, in `claude-plugins` `b6a5b17`.**
+        > `workflow-claude`'s README led with *"loaded deliberately per-project via the CLI
+        > flag, not through a marketplace"* and now leads with the `mavromatis-ai-labs`
+        > declaration; `dp-compile`'s table offered a marketplace install *"once one is
+        > published"* and now names `workflow-claude@mavromatis-ai-labs`. Two further
+        > claims were **stale rather than merely incomplete** and neither was in the
+        > subgoal's scope as written: both READMEs said the `.claude/skills/` route "is how
+        > at least one repository loads it today", which stopped being true when this
+        > repository retired its symlink an hour earlier. Also completed
+        > `_meta/consumer-settings.template.json`, which registered no marketplace and so
+        > was half a template the moment one existed.
+  - [x] Fix the prescribed absence message's three load paths. F2 measured that **both**
         live runs paraphrased it away and neither named any of the three. Behaviour was
         right and only the message drifted, which is the advisory layer's cost — but
         publishing makes marketplace install the *primary* path, so the message needs
         rewriting on its own account.
         > **Blocked on the marketplace existing** for the last two: both name a path that
         > has no value until there is a marketplace to name.
+        >
+        > **Closed 2026-09-09** (`claude-plugins` `b6a5b17`). The message now names the
+        > marketplace as `workflow-claude@mavromatis-ai-labs` rather than saying "a
+        > marketplace", and all three paths survive.
+        >
+        > **What the fix turned up is worth more than the fix.** `dp-compile`'s manifest
+        > now declares `workflow-claude` in `dependencies`, so a marketplace install of one
+        > installs the other — which makes this message **unreachable** by the path most
+        > consumers will use. It is not dead: what survives is the `--plugin-dir` session,
+        > where nothing enforces co-loading. So a runtime check that was the primary
+        > safeguard is now a development-path fallback, and both READMEs say so rather than
+        > leaving a reader to wonder why a carefully worded message never appears.
 - [ ] **Re-scope pfsmgraph's `/smart-commit` override note, do not delete it** (from G3).
       `docs/agents/claude.md` carries a standing correction of `/smart-commit` Step 3:
       *"This repository does not use them ... the history is the authority, not the
