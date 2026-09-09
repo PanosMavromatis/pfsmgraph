@@ -1,6 +1,6 @@
 # chore/plugin-handback
 
-**Status**: active
+**Status**: merged — PR #20 — 2026-09-09
 **Created**: 2026-09-09
 **Subgoal**: Land the hand-back from the plugin revision — registered in
 [`docs/plan/TODO.md`](../TODO.md) under revision 02-hmm-v0.1.0.
