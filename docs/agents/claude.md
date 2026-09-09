@@ -92,10 +92,23 @@ it runs no `git` command of its own, opens no branch, and writes no plan file. I
 detect the companion by reading their own tool list, print one line when it is missing, and
 stop at the point where they would have delegated.
 
-**Loading is interim.** Neither plugin is on a marketplace yet, so both are loaded with
-`--plugin-dir` (or, for `workflow-claude` here, a symlink under `.claude/skills/`). The
-clones live under `tmp/` and are gitignored; `dp-compile.toml` is tracked, the plugin that
-reads it is not.
+**Both plugins are installed from a marketplace, and the declaration is tracked.**
+`.claude/settings.json` registers `mavromatis-ai-labs`
+(`github.com/PanosMavromatis/claude-plugins`, a monorepo holding both plugins under
+`plugins/`) and enables `workflow-claude` and `dp-compile` from it, so a fresh clone
+reproduces the setup with no manual step. It is the first tracked file under `.claude/`;
+the `tmp/` clones and the `.claude/skills/workflow-claude` symlink that preceded it are
+retired. **`dp-compile.toml` is still tracked and the plugin that reads it still is not** —
+that half did not change, and it is the point: the manifest belongs to this repository, the
+plugin does not.
+
+**`--plugin-dir` is now the development path, not the loading path.** It loads a plugin
+directory for a single session with no marketplace involved, which is what to use when
+editing the plugins themselves; pointed at the monorepo's `plugins/` directory it loads
+both at once, which is what changing their interaction needs. Do **not** register a local
+checkout as a marketplace to test it: registration is keyed on the `name` inside
+`marketplace.json`, so adding the local copy under the same name silently replaces the
+GitHub one for every project on this machine.
 
 Everything else — architecture, commands, conventions, domain invariants — belongs in
 `core.md`, which also feeds `AGENTS.md` for other agents.

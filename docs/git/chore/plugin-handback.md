@@ -27,7 +27,11 @@ The seven goals are in the branch plan, with their measurements and reasoning. I
   the vocabulary size) and TC-20 (impossibility at position 0).
 - **Correction.** Master plan lines around the phase 2-4 items: the anti-diagonal subgoal
   has an answer already, and it is that the Viterbi recurrence has no anti-diagonals at all.
-- The marketplace note in both plugin READMEs.
+- **Reshaped mid-branch.** What began as "note the marketplace absence in both plugin
+  READMEs" became publishing both: MIT licenses, a `dependencies` declaration, a pre-import
+  audit, import with history into the `PanosMavromatis/claude-plugins` monorepo, and this
+  repository consuming them through a tracked `.claude/settings.json` in place of a
+  `--plugin-dir` flag and a symlink.
 - Re-scope, do not delete, pfsmgraph's `/smart-commit` override note in
   `docs/agents/claude.md`.
 

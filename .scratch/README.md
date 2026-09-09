@@ -99,6 +99,13 @@ checkable against it while the copy is on disk.
 The copy was `main` with one uncommitted file, `notebooks/explore/gpt2.ipynb`. That
 is outside the imported scope, so nothing tracked here differs from `5f42311`.
 
+**The last two rows name repositories that no longer host their code.** `tokalign-dev` was
+renamed and generalised to `dp-compile`; it and `workflow-claude` were imported with their
+full history into `github.com/PanosMavromatis/claude-plugins` on 2026-09-09 and now live at
+`plugins/<name>/`. The URLs above are deliberately **not** repointed — this table records
+where each tree came from at import time, which is a fact about 2026-08-31 and stays true.
+The source repositories remain readable at those URLs.
+
 ## Two edits made to the imported tree
 
 Both are renames, both reversible, and both were necessary rather than tidying.

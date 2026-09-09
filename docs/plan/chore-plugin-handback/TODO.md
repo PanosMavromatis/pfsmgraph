@@ -329,7 +329,7 @@ must be `chore/plugin-handback` for rung 2 to match.
         > **Note:** nothing is vendored in either plugin — every script imports only the
         > standard library — so there was no third-party license to stay compatible with,
         > which is what made a single-holder MIT straightforward rather than a question.
-  - [ ] Rewrite the loading sections once the marketplace exists. `workflow-claude`'s
+  - [~] Rewrite the loading sections once the marketplace exists. `workflow-claude`'s
         README currently states the opposite of what is about to be true — *"loaded
         deliberately per-project via the CLI flag, **not** through a marketplace"* — and
         `dp-compile`'s table calls a marketplace install conditional on one being
@@ -342,6 +342,19 @@ must be `chore/plugin-handback` for rung 2 to match.
         > a *different repository* from the two READMEs this subgoal named, which is
         > exactly how it would have been missed. Editing it now would make a document
         > wrong in order to keep it from becoming wrong later.
+        >
+        > **Site 3 landed 2026-09-09; the subgoal stays open because the other two are now
+        > in a different repository.** `docs/agents/claude.md`'s *"Loading is interim"*
+        > paragraph is replaced — both plugins install from `mavromatis-ai-labs`
+        > (`PanosMavromatis/claude-plugins`) through a tracked `.claude/settings.json`, and
+        > `--plugin-dir` is demoted to the development path. The symlink and its
+        > `.git/info/exclude` rule went with it, a removal with **no diff at all**: the
+        > path was never tracked, which is precisely the defect the settings file fixes —
+        > what a fresh clone got was nothing, silently. The two READMEs this subgoal named
+        > are now `plugins/<name>/README.md` inside the marketplace monorepo, so they are
+        > edits handed to the operator rather than made here; the same holds for the
+        > absence message below. **A subgoal whose sites span two repositories cannot be
+        > closed from either one** — that is the shape to expect for the rest of this goal.
   - [ ] Fix the prescribed absence message's three load paths. F2 measured that **both**
         live runs paraphrased it away and neither named any of the three. Behaviour was
         right and only the message drifted, which is the advisory layer's cost — but
