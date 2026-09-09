@@ -230,6 +230,45 @@ must be `chore/plugin-handback` for rung 2 to match.
         > Folded into `0.3.0` rather than bumped again: that version is pushed but
         > published nowhere, so nothing has cached it — the cache-key argument that made
         > the bump necessary is what makes a second one unnecessary.
+  - [x] **Pre-import audit of both plugins, six checks.** Run 2026-09-09 against a
+        checklist supplied for exactly this purpose: manifest present, component layout,
+        `SKILL.md` `name` frontmatter, hook script paths, paths escaping the plugin root,
+        and executable bits. **Nothing failed.**
+        > **Result.** Manifest present in both. `dp-compile` is 7 skills + 4 commands,
+        > `workflow-claude` 14 commands and no skills — `commands/` is legacy but
+        > supported, so that is a future migration rather than a blocker. **All 7
+        > `SKILL.md` files set `name`, each matching its directory**, which was the
+        > highest-value check: without it Claude Code falls back to the install-directory
+        > basename, a version string that changes on every update, and the breakage is
+        > invisible until the first one. Both `hooks.json` files use the quoted
+        > `"${CLAUDE_PLUGIN_ROOT}"/…` form; nothing writes state beside itself, so
+        > `${CLAUDE_PLUGIN_DATA}` is not needed; zero `../` escapes; all 9 scripts are
+        > `100755` in the index, which git carries.
+        > **Note: the absent `hooks` key in both manifests is correct, and "fixing" it
+        > would break both plugins completely.** It reads as the classic omission. It is
+        > not: `f94242d` added `"hooks": "./hooks/hooks.json"` and `875f8ee` removed it,
+        > recording that it pointed at the **auto-loaded** `hooks/hooks.json` and raised
+        > *"Duplicate hooks file detected"*, **failing the entire plugin load**. The
+        > absence is load-bearing. Found only because the history contradicted the tip —
+        > reading the manifest alone shows a missing key and no reason for it.
+  - [ ] **After the first marketplace install, check whether each plugin's root
+        `CLAUDE.md` leaks into a consumer's session.** Both ship one — 221 lines in
+        `dp-compile`, 205 in `workflow-claude` — and both are *plugin-development*
+        instructions: component placement, `${CLAUDE_PLUGIN_ROOT}` discipline, version-bump
+        rules, `allowed-tools` discipline.
+        > **Why this is a post-install check rather than a pre-flight fix.** pfsmgraph's
+        > `docs/agents/claude.md` records the governing behaviour — *"Claude Code loads a
+        > `CLAUDE.md` found beside files it reads"* — and whether that fires for a plugin
+        > copied into `~/.claude/plugins/cache` is not answerable from this side. Test it,
+        > do not assume it either way.
+        > **The calculus inverts on publication, which is why it becomes a question now.**
+        > Inside this workspace the file is exactly the guidance wanted, and the ground
+        > rules accepted the cost deliberately: a session under `tmp/` *is* editing the
+        > plugin. A marketplace consumer never intends to, so the same file becomes 200+
+        > lines of irrelevant instruction pulled into a session that only wanted a command.
+        > If it does fire, the fix is the rename pfsmgraph already prescribes for imported
+        > trees — `CLAUDE.md` to `CLAUDE.md.orig` — since presence on disk is the trigger
+        > and gitignoring does not help.
   - [!] **Make both plugin repositories public.** Found 2026-09-09 by checking the README
         link just added: `PanosMavromatis/dp-compile` and `PanosMavromatis/workflow-claude`
         are **both `PRIVATE`**. A public marketplace entry points at a repository URL, so
