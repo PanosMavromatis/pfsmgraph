@@ -122,7 +122,7 @@ must be `chore/plugin-handback` for rung 2 to match.
   > reason. The specification now asserts *which error and from where*, which is the
   > observable a `>`/`>=` slip actually changes. Recovering a spec from code found a defect
   > in the spec's own source note — the reverse entrance earning its keep.
-- [ ] **Two test-coverage gaps in `pfsmgraph-hmm`, found by F2's live run.** Both sit at the
+- [x] **Two test-coverage gaps in `pfsmgraph-hmm`, found by F2's live run.** Both sit at the
       validation boundary rather than in the recurrence, which is why the 165-test suite
       misses them.
       > **TC-19 — a code exactly equal to the vocabulary size.** Existing tests use `99` and
@@ -133,6 +133,29 @@ must be `chore/plugin-handback` for rung 2 to match.
       > **TC-20 — impossibility at position 0.** Every existing impossibility test places the
       > dead symbol at position 1, so `ImpossibleSequenceError`'s position report is never
       > checked at its own lower boundary.
+  > **Done:** both landed in `packages/pfsmgraph-hmm/tests/test_viterbi.py`; the suite went
+  > **280 → 282** and is green. The formalization's TC-19 and TC-20 lose their
+  > *NOT YET IMPLEMENTED* markers, so no case there is now unimplemented.
+  > **Note: both were mutation-tested, not merely run.** A passing test says nothing about
+  > whether it would fail on the defect it names — this repository already learned that
+  > when reversing the tie-break broke nothing. Weakening the range guard to `>` fails
+  > TC-19 with `IndexError` at `_viterbi.py:98`, which is numpy's, not the `ValueError` the
+  > contract promises. Starting `_dead_symbol`'s `enumerate` at 1 fails TC-20. Both are
+  > genuine discriminators.
+  > **Note: TC-19's premise needed correcting twice, and the second correction was mine.**
+  > The source note said "code 7 decodes, code 8 raises"; a constructed model showed both
+  > raising, so the previous goal recorded "both raise"; the suite's own `build` helper then
+  > showed code 7 *does* decode there, because `code(1) = 7` is emittable under `np.full`.
+  > **Both claims were right about their own model.** The stable statement is narrower than
+  > either: whether `A-1` decodes is a property of the model, so the case is only meaningful
+  > once the model is pinned — and pinning one where `A-1` decodes gives the sharpest
+  > contrast, decode-versus-refuse rather than refuse-versus-refuse. The formalization now
+  > says that, and records the two-step correction rather than the conclusion alone.
+  > **Note:** `cp` is interactive in this shell (`cp -i`), so restoring a mutated file with
+  > `cp backup target` hangs on an overwrite prompt with no visible cause. `cat backup >
+  > target` is the non-interactive form. The kernel's SHA-256 was re-verified against the
+  > formalization's `Derived from` line afterwards, since a mutation left behind would have
+  > silently invalidated it.
 - [ ] Master plan lines 192–196 (phases 2–4 of Viterbi): note they run under
       `dp-compile`, so the first real use of the revised plugin is on the kernel it was
       revised for.

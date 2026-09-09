@@ -39,7 +39,7 @@ code actually does, say so — that divergence is worth more than a style commen
 **`dataseq` is implemented and released; `hmm` has begun; the other three members are still
 scaffolding (2026-09-04).** There is real code to review in two packages now.
 `packages/pfsmgraph-dataseq/` is six modules and 74 tests, covered further down.
-`packages/pfsmgraph-hmm/` is three modules and 165 tests — the numeric Utility code migrated
+`packages/pfsmgraph-hmm/` is three modules and 167 tests — the numeric Utility code migrated
 from the Lush original, `HMMParams`, and `_viterbi.py`, the project's first
 dynamic-programming kernel and the first row in the ADR 0003 backend matrix. Review it
 against

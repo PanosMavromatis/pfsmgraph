@@ -465,6 +465,62 @@ def test_a_negative_code_is_refused():
         viterbi(params, SequenceRecord(np.array([-5], dtype=np.int32)))
 
 
+def test_a_code_exactly_at_the_end_of_the_symbol_axis_is_the_boundary():
+    """The `>=` in the range guard, pinned. TC-19 of the formalization.
+
+    The two range tests above use `99` and `-5`, both far from the edge, so a
+    guard written `>` where it should be `>=` passes the entire suite while
+    letting code `A` through to `output_p[:, :, A]` -- an `IndexError` from
+    numpy rather than the `ValueError` this promises.
+
+    Both halves are asserted against *this* model deliberately. Whether `A - 1`
+    decodes is a property of the model, not of the guard: here `code(1)` is
+    `A - 1` and `np.full` makes it emittable, so the contrast is
+    decode-versus-refuse, which discriminates far better than
+    refuse-versus-refuse. A model that cannot emit `A - 1` raises
+    `ImpossibleSequenceError` there instead, which would pass a carelessly
+    written version of this test for an unrelated reason.
+    """
+    params = build(
+        np.array([0.5, 0.5]),
+        np.array([[0.5, 0.5], [0.5, 0.5]]),
+        np.full((2, 2, 2), 0.5),
+    )
+    axis = params.n_symbols
+    assert code(1) == axis - 1, "the last user symbol must be the last valid code"
+
+    # `A - 1` is in range and emittable, so it decodes.
+    assert viterbi(params, SequenceRecord(np.array([axis - 1], dtype=np.int32)))
+
+    # `A` is out of range by exactly one.
+    with pytest.raises(ValueError, match="outside the model's symbol axis") as excinfo:
+        viterbi(params, SequenceRecord(np.array([axis], dtype=np.int32)))
+    assert f"[0, {axis})" in str(excinfo.value)
+
+
+def test_impossibility_is_reported_at_position_zero():
+    """The lower boundary of the position report. TC-20 of the formalization.
+
+    Every other impossibility test places the dead symbol at position 1 or
+    later, so `_dead_symbol`'s `enumerate` has never been checked at its own
+    first iteration -- an off-by-one there would report symbol 1, or fall
+    through to the `AssertionError` its docstring calls unreachable.
+
+    The record is impossible on its *first* symbol: only state 0 is reachable,
+    and state 0 emits nothing but "a".
+    """
+    transition_p = np.array([[1.0, 0.0], [0.0, 1.0]])
+    user_output = np.zeros((2, 2, 2))
+    user_output[0, 0, 0] = 1.0  # state 0 loops emitting "a"
+    user_output[1, 1, 1] = 1.0  # state 1 loops emitting "b"
+    params = build(np.array([1.0, 0.0]), transition_p, user_output)
+
+    with pytest.raises(ImpossibleSequenceError) as excinfo:
+        viterbi(params, record(1))
+    assert "symbol 0 of the record" in str(excinfo.value)
+    assert "reaches path position 1" in str(excinfo.value)
+
+
 def test_the_range_error_names_the_likely_cause():
     """A vocabulary mismatch, which is what this almost always is."""
     params = build(

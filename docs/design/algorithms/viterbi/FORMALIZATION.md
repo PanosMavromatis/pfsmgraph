@@ -298,27 +298,33 @@ satisfies, so a reader must be able to tell a specified behaviour from a ratifie
 ### TC-18: an impossible start state is never chosen — `extracted`, exact
     Expect: a state with init_p == 0 never begins the path
 
-### TC-19: a code exactly equal to the vocabulary size — `constructed`, exact — **NOT YET IMPLEMENTED**
+### TC-19: a code exactly equal to the vocabulary size — `constructed`, exact
     Input:  a record containing code A, where out_p has shape (S, S, A)
     Expect: ValueError, naming the range [0, A)
     Why:    the existing range tests use 99 and -5, both far from the edge, so a guard
             written `>` where it should be `>=` passes the entire suite while letting the
             boundary code through to the emission lookup.
 
-    State the assertion as WHICH error and FROM WHERE, not as decodes-vs-raises.
-    Verified 2026-09-09 on a constructed 2-state model with A = 8: code 7 passes the
-    range guard and fails downstream on the arithmetic (ImpossibleSequenceError, since
-    that model emits nothing for 7), while code 8 is refused BY the guard with a plain
-    ValueError. Both raise, so a case written "A-1 decodes, A raises" is model-dependent
-    and passes for the wrong reason wherever A-1 happens to be emittable. What a `>`/`>=`
-    slip changes is that code A stops being refused by the guard and reaches the lookup —
-    that is the observable to assert.
+    PIN THE MODEL: whether A-1 decodes is a property of the model, not of the guard.
+    In the suite's `build` helper A = 8 and code(1) = 7 = A-1 is emittable, so A-1
+    decodes and the contrast is decode-versus-refuse — the sharpest available. In a model
+    that cannot emit A-1 it raises ImpossibleSequenceError instead, and a case written
+    without pinning the model then passes or fails for an unrelated reason. What the
+    `>`/`>=` slip actually changes is that code A stops being refused by the guard and
+    reaches `output_p[:, :, A]`.
 
-### TC-20: impossibility at position 0 — `constructed`, exact — **NOT YET IMPLEMENTED**
+    Implemented 2026-09-09 as `test_a_code_exactly_at_the_end_of_the_symbol_axis_is_the_boundary`.
+    Mutation-tested: with the guard weakened to `>`, the case fails with IndexError at
+    `_viterbi.py:98` — numpy's, not the ValueError the contract promises.
+
+### TC-20: impossibility at position 0 — `constructed`, exact
     Input:  a record whose FIRST symbol cannot be emitted from any reachable state
     Expect: ImpossibleSequenceError naming symbol index 0
-    Why:    every existing impossibility test places the dead symbol at position 1, so
-            the error's position report is never checked at its own lower boundary.
+    Why:    every other impossibility test places the dead symbol at position 1 or later,
+            so `_dead_symbol`'s `enumerate` is never checked at its own first iteration.
+
+    Implemented 2026-09-09 as `test_impossibility_is_reported_at_position_zero`.
+    Mutation-tested: with `enumerate(codes, start=1)`, the case fails.
 
 ## Notes
 
@@ -330,8 +336,15 @@ satisfies, so a reader must be able to tell a specified behaviour from a ratifie
   behaviour, not specified behaviour.
 - **`Derived from` decides staleness.** When `_viterbi.py`'s SHA-256 no longer matches the
   recorded hash, this document is stale and must be re-derived rather than patched.
-- **Two cases are specified but unimplemented** (TC-19, TC-20). They are the honest state of
-  the suite as of 2026-09-09, not an aspiration: both were found by drafting this document
-  against the code, which is the entrance earning its keep.
+- **TC-19 and TC-20 were specified here before they existed**, found by drafting this
+  document against the code, and implemented the same day — the suite went 280 to 282. Both
+  were **mutation-tested rather than merely run**: a test that passes says nothing about
+  whether it would fail on the defect it names. Weakening the range guard to `>` fails
+  TC-19; starting `_dead_symbol`'s `enumerate` at 1 fails TC-20.
+- **TC-19's premise took two corrections**, which is worth recording because the stable
+  form is narrower than either draft. The source note said "code 7 decodes, code 8 raises";
+  a constructed model showed both raising; the resolution is that *both are right about
+  their own model*, and the case is only meaningful once the model is pinned. A boundary
+  assertion that does not say which model it holds in is not yet a specification.
 - **Phase 3 must not invent a decomposition.** See *Parallel decomposition*; "undetermined"
   is the answer until a kernel that exists settles it.
