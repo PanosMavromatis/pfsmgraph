@@ -70,6 +70,20 @@ it is a `>` blockquote.
   by the repository's own machinery whether or not the rule admits it. Better to scope it
   deliberately than to have it appear as a surprise in a diff.
 
+  **A second exception, 2026-09-09: closing this plan out.** Cutting Section H to
+  `docs/plan/chore-plugin-handback/TODO.md`, registering it in `docs/plan/TODO.md`, and
+  leaving the pointer above all edit pfsmgraph. They are admitted as **branch-closing
+  mechanics, not plan work** — the same category as `/smart-merge` deleting the branch doc
+  and stamping the branch plan, which this rule has never objected to and which nobody
+  proposed exempting. The distinction that makes it safe is that none of the three touches
+  a *subject* of the revision: no plugin, no manifest, no agent doc, no source file. They
+  move this plan's own record into the place the repository keeps records.
+
+  Recorded rather than done quietly, because the first exception's lesson was that an
+  exception is worth scoping deliberately in advance. Unlike that one, this exception **is**
+  self-limiting: it is spent the moment the plan is archived, and nothing downstream can
+  reopen it.
+
   **Landed `5dcf1e4`**, through `/smart-commit` since agent docs were affected. The
   manifest is byte-identical to the plugin's own worked example, so the two cannot drift
   into disagreement about what this repository looks like, and the commit was dry-run
@@ -1945,94 +1959,42 @@ side. G2 makes the command say what the consumer's docs already have to.
         > That belongs in the same note: it is what makes detection trivially correct in
         > pfsmgraph, and it is the reason the override note was written in the first place.
 
-## Section H — Hand-back to pfsmgraph (executed elsewhere)
+## Section H — Hand-back to pfsmgraph (moved 2026-09-09)
 
-**This section is deliberately outside this plan's completion criteria.** Every item here
-runs on a *later* pfsmgraph branch, through pfsmgraph's own process, so none of them can be
-closed while this branch is open. It is a handoff manifest, not work this plan performs.
+**The seven items that were here have been cut to
+[`docs/plan/chore-plugin-handback/TODO.md`](../docs/plan/chore-plugin-handback/TODO.md)**,
+a branch plan filed ahead of the branch that will work them. Work them with `/hitl-step`,
+which finds that file by name and needs no path argument. They are registered in the master
+plan under revision 02-hmm-v0.1.0, with a `> **Branch:** chore/plugin-handback` backlink.
 
-Read the progress check accordingly: **A–G closing is this plan finishing; H stays open by
-design** until the follow-up branch picks it up. It was moved out of Section F on
-2026-09-08 for exactly that reason — a structurally uncloseable goal sitting inside a work
-section made the section-completion check, which is this plan's main progress signal,
-permanently red for a reason that was not incomplete work.
+**This is a cut, not a copy** — the items appear in exactly one file, verified after the
+move. Two live copies of a checklist drift the moment either is worked, and the copy nobody
+is looking at is the one that goes stale.
 
-**Two items left this list the same day** and are no longer hand-backs: landing the root
-`dp-compile.toml`, and the `docs/agents/claude.md` section. Both moved into the plan under
-the ground rule's one exception, because F2 cannot run without the first and the second
-arrives with it whether or not the rule admits it.
+**Why they left.** Every item edits pfsmgraph, which this plan's first ground rule forbids;
+they were collected here as a manifest, never as work this plan performs. Leaving them
+would have left seven permanently open items inside the archived record of a finished plan,
+which reads as incomplete forever. That is the same failure this section was created to fix
+on 2026-09-08, when the items were moved *out* of Section F because a structurally
+uncloseable goal made the section-completion check permanently red for a reason that was
+not incomplete work. Applying it once more, at file level, is what closes this plan.
 
-Count this plan's progress over A–G only:
+> **Note:** a `/hitl-step 1 tmp/TODO.md` run on 2026-09-09 resolved to this file, found H's
+> first item as the next pending top-level goal, and stopped without executing it — the
+> immediate cause of the move. Its target was `docs/plan/DEFERRED.md`, outside the two-file
+> exception, so working it here would have breached the ground rule this plan spent a
+> decision scoping and mixed the plugin revision and the hand-back into one PR.
+>
+> **Q:** Section H's items are the only pending goals, and the plan places them outside this
+> branch. How should the run resolve?
+> **A:** Stop. A–G is complete at 33 of 33; the seven remaining items are a handoff manifest
+> by design. A later `/hitl-step` needs a pfsmgraph branch to have anything to do.
+
+With the cut, **this plan has no open items at any indent.** Both checks now agree, and the
+A–G restriction in the first one is retained deliberately — it is the record of how this
+plan was counted while H was still here, and rewriting it would erase that:
 
 ```bash
-awk '/^## Section [A-G] /{a=1} /^## Section H/{a=0} a&&/^- \[/{t++} a&&/^- \[[x-]\]/{d++} \
-     END{print d" of "t}' tmp/TODO.md
+awk '/^## Section [A-G] /{a=1} /^## Section H/{a=0} a&&/^- \[/{t++} a&&/^- \[[x-]\]/{d++} END{print d" of "t}' tmp/TODO.md
+awk '/^## /{s=$0} /^[[:space:]]*- \[[ ~!]\]/{print s}' tmp/TODO.md | sort | uniq -c
 ```
-
-The open-items-by-section check is unchanged and still runs over the whole file — H
-appearing in it is the correct result, not a miss.
-
-- [ ] Close `DEFERRED.md`'s "how the development plugin fits the multi-package family"
-      entry: one generic plugin, per-repo manifest, this plan as the record.
-- [ ] **ADR 0016's Open section on phase-3 naming: close it, and correct the claim it
-      rests on.** The record says its proposal mirrors "the existing `_python.py` /
-      `_cython.pyx` / `_cuda.py` per-phase naming seen in `.scratch/align-poc/tokalign`".
-      That repository has only `_python.py` and `_cython.pyx`; there is no `_cuda.py` and
-      no `_numba.py`, and its third phase was never implemented under any name. So the
-      deferral's stated reason is void, not merely unmet — settle
-      `_<algorithm>_cpu_parallel.py` per A5, matching `meson.build`'s existing
-      `_viterbi_cython` pattern, and fix the factual claim in the same edit rather than
-      leaving a closed decision resting on a wrong sentence.
-- [ ] Land the recovered Viterbi `FORMALIZATION.md` from D4 where the manifest says.
-      > **Note:** F2's read-only real-tree run drafted this document in full and was
-      > correctly **denied the write** — nothing reached disk, and phase 0 is not done. It
-      > verified every line citation the kernel's docstrings claim
-      > (`hmm-trainer.lsh:216-218`, `:219`, `:197-198`, `:712-727`, `util.lsh:431-444`) and
-      > measured rather than quoted: oracle agreement **3806/3807** across three models,
-      > divergence at position 0 of `m008_0001_008` and nowhere else, seed margin
-      > **0.004218 bits**, and **0 exact ties in 3804** recurrence positions. Regenerate
-      > rather than reuse, but these numbers are checkable against it.
-- [ ] **Two test-coverage gaps in `pfsmgraph-hmm`, found by F2's live run.** Both sit at the
-      validation boundary rather than in the recurrence, which is why the 165-test suite
-      misses them.
-      > **TC-19 — a code exactly equal to the vocabulary size.** Existing tests use `99` and
-      > `-5`, both far from the edge, so a guard written `>` where it should be `>=` passes
-      > the entire suite while letting the boundary code through to the emission lookup.
-      > Verified as correct today (`A = 8`; code 7 decodes, code 8 raises) — but nothing
-      > pins it, so the next edit is free to break it silently.
-      > **TC-20 — impossibility at position 0.** Every existing impossibility test places the
-      > dead symbol at position 1, so `ImpossibleSequenceError`'s position report is never
-      > checked at its own lower boundary.
-- [ ] Master plan lines 192–196 (phases 2–4 of Viterbi): note they run under
-      `dp-compile`, so the first real use of the revised plugin is on the kernel it was
-      revised for.
-      > **Note: phase 3 has no anti-diagonal, and F2's run says so with a reason.** The
-      > Viterbi recurrence is 1-D over time with dense S×S coupling, so there are **no
-      > anti-diagonals at all** — the decomposition ADR 0016 names is not merely unchosen
-      > here, it does not exist for this kernel. ADR 0016's own Open section anticipated
-      > this. Carry "undetermined" forward as the honest answer rather than letting phase 3
-      > discover that an invented decomposition is a race.
-- [ ] Marketplace: nothing to build yet — **verified 2026-09-07, no `marketplace.json`
-      exists in any of the user's repositories**, and `claude-plugin-tools` is unrelated.
-      Note in both READMEs that the `--plugin-dir` line is interim.
-- [ ] **Re-scope pfsmgraph's `/smart-commit` override note, do not delete it** (from G3).
-      `docs/agents/claude.md` carries a standing correction of `/smart-commit` Step 3:
-      *"This repository does not use them ... the history is the authority, not the
-      command's template."* G2 makes the command say what that note has been saying, so the
-      note stops being a correction — but it should survive as a **statement of pfsmgraph's
-      own convention**, which is still worth writing down and is now what the plugin will
-      go looking for.
-      > **Do not touch the paragraphs above it.** The `VERSION`-file rule and the
-      > release-tagging note in that same section are untouched by G2 and remain true; only
-      > the Step 3 paragraph changes meaning. Re-scoping is a smaller edit than it looks —
-      > the sentences stay, their framing shifts from "the command is wrong here" to "this
-      > is what the command will detect".
-      >
-      > **There is a second edit to make in the same pass, and it is the more useful one.**
-      > pfsmgraph's history is *uncontaminated* — zero conventional-prefixed commits in the
-      > whole repository — precisely because every operator overrode the templates by hand
-      > every time. That is worth one sentence, because it is what makes the detection rule
-      > trivially correct there and it explains why the override note existed at all.
-      > Contrast `workflow-claude`, where the same templates polluted the history 19 times
-      > in 40 commits. Same plugin, opposite outcomes, decided entirely by whether the
-      > consumer noticed.
