@@ -198,11 +198,20 @@ fix and most expensive to leave:
   or PyTorch zero-fill silently means something other than "absent". Encoding is strict by
   default; any `UNK` fallback that is not explicitly opted into is a bug. Watch for the
   proof-of-concept's old allocation-from-4 surviving the merge.
-- `packages/pfsmgraph-{align,hmm}/src/**/_cython*.pyx` — typed memoryviews with
+> **The `_*_` in these globs is load-bearing.** This family's packages are flat, so a phase
+> file carries its algorithm in its own name — `_viterbi_cython.pyx`, not
+> `needleman_wunsch/_cython.pyx`. These patterns read `_*_cython*.pyx` rather than
+> `_cython*.pyx` for that reason; the narrower form matches **nothing** here, which was
+> measured 2026-09-09 and had been true of all three since they were written. The shape was
+> inherited from a proof-of-concept that identifies an algorithm by *directory*, the same
+> mis-transfer [ADR 0016](../design/adr/0016-numba-cpu-parallel-phase.md) records under
+> `## Resolved`.
+
+- `packages/pfsmgraph-{align,hmm}/src/**/_*_cython*.pyx` — typed memoryviews with
   `boundscheck(False)` / `wraparound(False)`. Bounds checking is *off*, so an index error is
   memory corruption, not an exception. Verify comma-form indexing (`M[i-1, j-1]`, never
   `M[i-1][j-1]` — the bracket form materializes an intermediate 1-D view per access).
-- `**/_cpu_parallel*.py` — Numba CPU-parallel (`prange`), anti-diagonal. Shares the
+- `**/_*_cpu_parallel*.py` — Numba CPU-parallel (`prange`), anti-diagonal. Shares the
   anti-diagonal indexing arithmetic and two-preceding-diagonal dependency with the CUDA
   phase below, but the risk shape differs: a `prange` iteration must write only its own
   diagonal's cells and read only already-completed prior-diagonal cells, with no shared
@@ -210,7 +219,7 @@ fix and most expensive to leave:
   This is the first point the anti-diagonal decomposition is checked under real
   concurrent execution ([ADR 0016](../design/adr/0016-numba-cpu-parallel-phase.md)), so a
   bug caught here is cheaper than the same bug caught one phase later.
-- `**/_cuda*.py` — Numba CUDA anti-diagonal wavefront. Anti-diagonal indexing arithmetic,
+- `**/_*_cuda*.py` — Numba CUDA anti-diagonal wavefront. Anti-diagonal indexing arithmetic,
   the two-preceding-diagonal dependency, boundary diagonals, and synchronization between
   wavefront steps. This is the single highest-payoff review surface in the project and the
   one where a wrong answer is least likely to announce itself.

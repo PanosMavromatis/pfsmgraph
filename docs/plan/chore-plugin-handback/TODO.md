@@ -54,7 +54,7 @@ must be `chore/plugin-handback` for rung 2 to match.
   > section titled "Out of scope for this document". A reader seeing a cited section that
   > looks stale would otherwise "fix" it, turning a scope declaration into a live-questions
   > list.
-- [ ] **ADR 0016's Open section on phase-3 naming: close it, and correct the claim it
+- [x] **ADR 0016's Open section on phase-3 naming: close it, and correct the claim it
       rests on.** The record says its proposal mirrors "the existing `_python.py` /
       `_cython.pyx` / `_cuda.py` per-phase naming seen in `.scratch/align-poc/tokalign`".
       That repository has only `_python.py` and `_cython.pyx`; there is no `_cuda.py` and
@@ -63,6 +63,30 @@ must be `chore/plugin-handback` for rung 2 to match.
       `_<algorithm>_cpu_parallel.py` per A5, matching `meson.build`'s existing
       `_viterbi_cython` pattern, and fix the factual claim in the same edit rather than
       leaving a closed decision resting on a wrong sentence.
+  > **Done:** ADR 0016's `## Open` now keeps only the anti-diagonal bullet; the naming
+  > bullet moved to a new `## Resolved` section, settled as `_<algorithm>_cpu_parallel.py`
+  > — `_viterbi_cpu_parallel.py` for the decode. Format copied from ADR 0003, which already
+  > carries both sections; the record stays `Accepted`, so the index row is unchanged.
+  > **Note: the claim was false, but not in the way this goal recorded it.** There is no
+  > `_cuda.py` and never was — but a **zero-byte `_numba.py`** did exist, in the *upstream*
+  > tree rather than the import. A stale mypy cache entry records `size: 0` for
+  > `tokalign.algorithms.needleman_wunsch._numba` against a path under
+  > `Developer/Projects/tokalign/`, last modified 2026-04-18, and tokalign's `_backends.py`
+  > maps `"numba": "_numba"` — a live pointer to a module nobody wrote. A5 found the
+  > registry string; the cache entry is the other half. Together they say the phase was
+  > *scaffolded and abandoned*, which is a weaker thing to mirror than a convention in use.
+  > **Note: the citation could not have transferred, and that is what produced the wrong
+  > proposal.** tokalign identifies an algorithm by *directory*, so its phase files carry no
+  > algorithm in their names. This family's packages are flat, and phase 2 is already
+  > `_viterbi_cython.pyx` — named so deliberately because `_viterbi.py` is the phase-1
+  > reference and the two must coexist. A bare `_cpu_parallel.py` names no algorithm and
+  > breaks at the second kernel. So the error was not a missing file in a sound analogy; the
+  > analogy was unsound, and the missing file was the visible symptom.
+  > **Note:** the anti-diagonal bullet was **deliberately left open**, with F2's
+  > corroboration recorded beneath it. The master plan schedules that decision for phase 3,
+  > "against a kernel that exists"; closing it on corroborating evidence would preempt a
+  > deferral taken on purpose. The note exists so the next reader sees it was weighed, not
+  > missed. ADR 0002 names no module files, so it carries no matching defect.
 - [ ] Land the recovered Viterbi `FORMALIZATION.md` from D4 where the manifest says.
       > **Note:** F2's read-only real-tree run drafted this document in full and was
       > correctly **denied the write** — nothing reached disk, and phase 0 is not done. It
