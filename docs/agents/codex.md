@@ -216,6 +216,18 @@ fix and most expensive to leave:
   This is the first point the anti-diagonal decomposition is checked under real
   concurrent execution ([ADR 0016](../design/adr/0016-numba-cpu-parallel-phase.md)), so a
   bug caught here is cheaper than the same bug caught one phase later.
+
+  **The decomposition is family-dependent, and for `hmm` it is not anti-diagonal.** The
+  paragraph above describes `align`, whose two-dimensional matrix has mutually independent
+  anti-diagonals. A Viterbi recurrence is 1-D over time with dense S×S coupling and has
+  **no anti-diagonals at all** — verified against the landed `_viterbi.py` and recorded in
+  [`docs/design/algorithms/viterbi/FORMALIZATION.md`](../design/algorithms/viterbi/FORMALIZATION.md)'s
+  `Parallel decomposition` section, which is `undetermined` pending phase 3. So on an `hmm`
+  kernel, **anti-diagonal structure is itself the defect**: reviewing it for correct
+  wavefront arithmetic would ratify a decomposition the dependency structure does not
+  support, which is a race wearing the right shape. Read that document's
+  `Parallel decomposition` section before reviewing either parallel phase, and check the
+  kernel against what it says rather than against this list.
 - `**/_*_cuda*.py` — Numba CUDA anti-diagonal wavefront. Anti-diagonal indexing arithmetic,
   the two-preceding-diagonal dependency, boundary diagonals, and synchronization between
   wavefront steps. This is the single highest-payoff review surface in the project and the

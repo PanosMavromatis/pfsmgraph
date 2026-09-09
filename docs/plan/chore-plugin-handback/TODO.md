@@ -156,7 +156,7 @@ must be `chore/plugin-handback` for rung 2 to match.
   > target` is the non-interactive form. The kernel's SHA-256 was re-verified against the
   > formalization's `Derived from` line afterwards, since a mutation left behind would have
   > silently invalidated it.
-- [ ] Master plan lines 192–196 (phases 2–4 of Viterbi): note they run under
+- [x] Master plan lines 192–196 (phases 2–4 of Viterbi): note they run under
       `dp-compile`, so the first real use of the revised plugin is on the kernel it was
       revised for.
       > **Note: phase 3 has no anti-diagonal, and F2's run says so with a reason.** The
@@ -165,6 +165,35 @@ must be `chore/plugin-handback` for rung 2 to match.
       > here, it does not exist for this kernel. ADR 0016's own Open section anticipated
       > this. Carry "undetermined" forward as the honest answer rather than letting phase 3
       > discover that an invented decomposition is a race.
+  > **Done:** the three phase items are annotated in `docs/plan/TODO.md`. One note under
+  > phase 2 covers the trio: they run under `dp-compile`, their phase-0 specification
+  > already exists, and each phase is written against **it** rather than against the
+  > phase-1 source — naming the two things there that are contract (the tie-break and the
+  > min-plus objective) and the settled module paths. The anti-diagonal subgoal gains the
+  > corroboration **without** the decision: it still owns the call, because the deferral to
+  > "a kernel that exists" was taken deliberately.
+  > **Note: the goal's own line numbers were stale, and locating by content is what caught
+  > it.** It says "lines 192–196"; the items are at 199, 200 and 203, displaced by a
+  > subgoal inserted into the master plan earlier the same day. A line number in a plan is
+  > a pointer into a file that other goals edit — the master plan especially, since it
+  > grows without bound. Cite by content.
+  > **Note: the sweep found a semiring inversion, in two places, and it is the one error
+  > this project guards against hardest.** The anti-diagonal subgoal said "an associative
+  > scan over time in the **(max, +)** semiring", and revision 02's preamble called Viterbi
+  > "a single **max-plus** pass with a backtrace". Both are now `(min, +)` / min-plus. The
+  > accumulated quantity is a description length in bits, which *grows* as probability
+  > falls, so the decode is a min-sum — `core.md`, `_viterbi.py`'s docstring and the
+  > formalization all say so, and the general Viterbi literature's max-plus is where the
+  > phrasing came from. It mattered most where it sat: an associative scan is the one
+  > candidate that would be **built** from that sentence, by someone reading it at the
+  > moment they implement phase 3. Recorded in place rather than fixed silently, since a
+  > silent fix is indistinguishable from the error never having been there.
+  > **Note: a third instance was found and deliberately not touched.**
+  > `planned/03-hmm-v0.2.0.md` asks whether "the max-plus/logsumexp associative scan" is
+  > worth implementing — but that is the **forward** recurrence, and whether it should read
+  > min-plus depends on whether revision 03 keeps the bit domain, which is that revision's
+  > undecided call. Flagged in the master plan for it to resolve. Confidence about a
+  > specified, measured decode does not transfer to an unimplemented forward pass.
 - [ ] Marketplace: nothing to build yet — **verified 2026-09-07, no `marketplace.json`
       exists in any of the user's repositories**, and `claude-plugin-tools` is unrelated.
       Note in both READMEs that the `--plugin-dir` line is interim.
