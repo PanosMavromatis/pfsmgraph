@@ -453,6 +453,29 @@ These have no event that will surface them. They need to be looked at on purpose
 - **How the Claude Code development plugin fits the multi-package family** — one
   family-wide dev plugin, or one per package. Explicitly out of scope for the PRD (§10)
   and never discussed.
+  **Settled (2026-09-09): one generic plugin, and the entry is closed.** The answer is a
+  third option this entry did not list. `dp-compile` is neither family-wide nor
+  per-package: it knows nothing about pfsmgraph at all, and a per-repository
+  `dp-compile.toml` at the repo root supplies the layout it operates on — kernel paths per
+  phase, build and test commands, where backends are registered, and which documents a
+  phase skill must read before writing. **It has no defaults**, so a repository without
+  the file is told so, rather than resolving paths under a layout it does not have and
+  reporting "algorithm not found" — a missing file misdiagnosed as a missing algorithm.
+
+  Both listed options were rejected for the same reason, from opposite directions.
+  **Per-package** would duplicate one lifecycle five times: the ADR 0002/0016 chain is a
+  property of the family, not of a member, and five copies would drift. **Family-wide**,
+  in the sense of a plugin that knows *this* family, is precisely the defect the revision
+  removed — the plugin began as `tokalign-dev`, built around one repository's layout, and
+  was therefore wrong here rather than merely narrow. One manifest covers all five members
+  because `[phases]` templates expand `{package}` and `{algorithm}`; algorithms are listed
+  rather than globbed, since these packages are flat and `_*.py` would match `_numeric.py`
+  and `_params.py` beside `_viterbi.py`.
+
+  The record is `docs/plan/chore-revise-plugins/TODO.md`, which points at `tmp/TODO.md`
+  where the plan and its inline Q&A live (PR #19); `docs/agents/claude.md` carries the
+  operational summary. **PRD §10 is deliberately not amended** — it says the question
+  "was not discussed", which is a true claim about that document's scope and stays true.
 
 ## Trigger: `align` able to produce a multiple alignment
 

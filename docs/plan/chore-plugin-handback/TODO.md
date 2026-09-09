@@ -35,8 +35,23 @@ must be `chore/plugin-handback` for rung 2 to match.
 
 ## Goals
 
-- [ ] Close `DEFERRED.md`'s "how the development plugin fits the multi-package family"
+- [x] Close `DEFERRED.md`'s "how the development plugin fits the multi-package family"
       entry: one generic plugin, per-repo manifest, this plan as the record.
+  > **Done:** closed in place per that file's own convention — the entry is never deleted,
+  > it gains a bolded `**Settled (date) … and the entry is closed.**` paragraph. Eight of
+  > its thirty-five entries are now closed.
+  > **Note:** the entry posed a **false dichotomy**, and the closure says so rather than
+  > picking the nearer horn. "One family-wide dev plugin, or one per package" assumed the
+  > plugin would know the family either way; what shipped makes it know *nothing* about
+  > the family, pushing every repository-specific fact into `dp-compile.toml`. Per-package
+  > would have duplicated one lifecycle five times and drifted; family-wide-in-the-sense-of-
+  > knowing-this-family is the exact defect the revision removed, since the plugin began as
+  > `tokalign-dev` built around one repository's layout.
+  > **Note:** **PRD §10 was deliberately left alone**, and the closure records why. It says
+  > the question "was not discussed" — a true claim about that document's scope, in a
+  > section titled "Out of scope for this document". A reader seeing a cited section that
+  > looks stale would otherwise "fix" it, turning a scope declaration into a live-questions
+  > list.
 - [ ] **ADR 0016's Open section on phase-3 naming: close it, and correct the claim it
       rests on.** The record says its proposal mirrors "the existing `_python.py` /
       `_cython.pyx` / `_cuda.py` per-phase naming seen in `.scratch/align-poc/tokalign`".
