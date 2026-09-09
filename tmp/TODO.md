@@ -1704,8 +1704,8 @@ check turned what looked like one command's defect into a uniform one across six
 section is placed where it was discovered rather than where it logically belongs, so the
 order of the file still reads as the order of the work.
 
-**Cleanup by size, not by landing.** Eight sites across six files, all prose — no logic, no
-script, no new concept — so no revision is opened. **The landing is still a branch and a
+**Cleanup by size, not by landing.** Nine sites across seven files, all prose — no logic,
+no script, no new concept — so no revision is opened. **The landing is still a branch and a
 PR**, because A7 established that `workflow-claude` states no cleanup exemption and routes
 everything through one. That matters more than usual here: the change edits the very
 commands that define the branch lifecycle, so taking a shortcut past them would be the one
@@ -1728,6 +1728,24 @@ Measured 2026-09-08:
 | `open-revision.md:57` — `docs(plan): open revision <label>` | conventional | pfsmgraph |
 | `smart-commit.md:50` — "Follow conventional commit format" | conventional | pfsmgraph |
 | `smart-merge.md:72` — PR title "imperative mood, sentence case" | imperative | `workflow-claude` |
+| `hitl-step.md:227` — `feat(docker): <section topic>` | conventional | pfsmgraph |
+
+> **Note:** the table read **eight sites across six files** until G1's sweep, which is the
+> subgoal that asked whether any _other_ site encodes a convention. `hitl-step.md:227` is
+> the ninth, and F3's audit missed it for a reason worth keeping: it is an `e.g.` inside a
+> report bullet rather than a `git commit -m` string, so it matches neither of the two
+> shapes the original audit grepped for. Its sibling `/step` proposes **no** message at all
+> — the two loop commands already disagree, and `/step` is what the corrected shape looks
+> like.
+>
+> Two candidates were checked and are deliberately **not** counted. `smart-commit.md:32`,
+> the `CHANGELOG` heading, reads "a heading naming it, _e.g._ `## [0.2.0]`" — the `e.g.`
+> makes it detection rather than prescription, and it accepts any heading that names the
+> version. `smart-commit.md:74`, `git tag -a <tag> -m "Release <tag>"`, is explicitly the
+> fallback for when no `CHANGELOG.md` exists, so it makes no claim about the consumer's
+> history. Recording the near-misses matters as much as the hits: a later reader who
+> re-runs the sweep will find them again, and without this note would assume they were
+> overlooked.
 
 **The evidence runs both ways, which is what makes it a defect rather than a preference.**
 pfsmgraph has **zero** conventional-prefixed commits in its entire history, and
@@ -1749,38 +1767,69 @@ the authority, not the command's template."* A consumer repository writing an ov
 because the plugin encodes a convention it cannot know is the defect stated from the other
 side. G2 makes the command say what the consumer's docs already have to.
 
-- [ ] Settle how a command learns the repository's convention.
+- [x] Settle how a command learns the repository's convention.
   > **Q:** How does a command decide the message format — read it from the repository's
   > recent history, take it from a config field, or state nothing and leave it to the model?
-  > **A:**
+  > **A:** Read it from the history. A config field is a second thing to keep true, and a
+  > stale field is silently wrong where a history never is.
   > **Q:** Do the plan-lifecycle commands keep a *suggested* message, or stop proposing one
   > at all?
-  > **A:**
-  - [ ] **Recommendation: read it from the history**, in one shared sentence reused at every
-        site — inspect the last ~20 subjects and match the dominant form. It needs no config
+  > **A:** Keep it, as content only. The form defers to the convention rule.
+  > **Q:** Does the rule live in one shared fragment or at each site?
+  > **A:** At each site, one sentence. The fragment mechanism stays unused in this plugin.
+  - [x] **Settled: read it from the history**, in one sentence reused at every site —
+        inspect the last ~20 subjects and match the dominant form. It needs no config
         field, is self-correcting when a repository changes convention, and is exactly what
         pfsmgraph's own override note already prescribes. It also follows the precedent A6
         settled for detection: `/smart-merge` reasons that *there is no shell command that
         reports MCP availability, you can see your own tools, so judge from that* — here,
         there is no config that reports the convention, and the history is visible.
-  - [ ] **Recommendation: keep a suggested message, drop the hardcoded format.** The
+  - [x] **Settled: keep a suggested message, drop the hardcoded format.** The
         templates carry real information — *which* commit this is — and only their prefix is
         wrong. So `Record merge of <branch> in plans (PR #N)` stays as the *content* and the
         form is left to the convention rule, rather than deleting the proposal and making
         every merge author one from nothing.
-  - [ ] Decide whether the rule lives in each command or in one place. `workflow-claude` has
-        **no `commands/references/` fragment mechanism** (checked — `dp-compile` has one,
-        this plugin does not), so a shared fragment is a new mechanism rather than a reuse.
-        Weigh that against eight near-duplicate paragraphs.
-- [ ] Apply the fix across all eight sites.
+  - [x] **Settled: at each site, no shared fragment.** The rule is two sentences, and
+        `workflow-claude` uses **no `@import` anywhere at all** — sharper than the original
+        "no `commands/references/` directory", and it needed checking: `grep '^@'` returns
+        two hits in `agents-docs-init.md`, but both sit _inside a fenced block_ showing the
+        `CLAUDE.md` dispatcher that command generates. Example content, not imports.
+        > **Measured:** `dp-compile`'s three fragments are **116, 226 and 295 lines**. The
+        > mechanism earns its indirection there because the shared content is
+        > unmaintainable in triplicate; a two-sentence rule is not. The deciding argument is
+        > that a fragment pays **both** costs rather than one — `dp-compile`'s own
+        > `@references/workflow-claude.md` says every command "`@`-includes it and then
+        > states its own severity", so even with a fragment each site still needs a local
+        > line saying the rule applies there. Nine local sentences against nine local
+        > sentences plus a file plus six import lines.
+        >
+        > The mechanism is Claude Code's, not `dp-compile`'s invention, and F2 proved it
+        > resolves inside a plugin command. So this is a judgement about size, not
+        > availability, and it reverses cleanly if the rule ever grows.
+- [ ] Apply the fix across all nine sites.
   - [ ] The six literal `git commit -m` strings.
   - [ ] `/smart-commit` Step 3's "Follow conventional commit format", which is the site the
         consumer already had to override in writing.
   - [ ] `/smart-merge` step 3's PR-title rule — the same defect in the same command, and the
         one most easily missed because it is prose rather than a `-m` string.
-  - [ ] Check no *other* site encodes a convention: tag messages, the `CHANGELOG` heading
+  - [ ] `/hitl-step` step 6's `feat(docker): <section topic>` example. Compare `/step`,
+        which proposes no message at all — deciding whether this one keeps its content or
+        simply goes is the one site where the G1 answer "keep the content" may not apply,
+        since a section topic is not a specific commit the way "Remove branch doc" is.
+  - [x] Check no *other* site encodes a convention: tag messages, the `CHANGELOG` heading
         format, and `README.md:156` which advertises `/smart-commit` as "Conventional commit
         format" in the command table.
+        > **Ran** during G1, since the answer to "one place or nine" needs the count first.
+        > Found one new site — `hitl-step.md:227` — and cleared both `smart-commit.md`
+        > candidates as detection rather than prescription; the table above carries the
+        > reasoning. `README.md:156` stands as a real site and is prose, so it joins G2's
+        > list rather than needing its own. That makes the sweep's yield **one added, two
+        > dismissed, one confirmed**, and G2 now edits nine sites across seven command files
+        > plus the README row.
+  - [ ] `README.md:156` — the command table advertises `/smart-commit` as "Conventional
+        commit format", which is the defect facing the *reader* rather than the model.
+        Confirmed by the sweep; listed separately because it is documentation of the
+        command, not an instruction inside it.
 - [ ] Land it, and record what it makes redundant elsewhere.
   - [ ] Branch via `/new-branch`, `**Status**: standalone`, then `/smart-merge` — per A7,
         and dogfooding the commands being changed. Expect `/file-plans` to report
