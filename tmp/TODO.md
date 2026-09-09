@@ -1806,16 +1806,60 @@ side. G2 makes the command say what the consumer's docs already have to.
         > The mechanism is Claude Code's, not `dp-compile`'s invention, and F2 proved it
         > resolves inside a plugin command. So this is a judgement about size, not
         > availability, and it reverses cleanly if the rule ever grows.
-- [ ] Apply the fix across all nine sites.
-  - [ ] The six literal `git commit -m` strings.
-  - [ ] `/smart-commit` Step 3's "Follow conventional commit format", which is the site the
+- [x] Apply the fix across all nine sites.
+  > **Ran** 2026-09-08 on `fix/hardcoded-commit-convention`, commit `518c23a` — nine sites
+  > across eight files, +124/-25. The branch had to be opened **before** the edits, which
+  > inverts G2 and G3's first subgoal: `/new-branch` step 3 refuses on a dirty tree, so
+  > editing first would make the command G3 asks us to dogfood refuse at the moment we
+  > reached for it. The section is numbered by logical dependency; the precondition is not.
+  >
+  > **The G1 rule is self-contaminating, and this repository proved it on first use.** Run
+  > plainly — last ~20 subjects, dominant form — it reads **21 conventional against 19 not**
+  > over the last 40 non-merge commits here. Near-parity, so a rule reading only that split
+  > reports no clear convention. **All 19 were template-generated**, and all 21 a human
+  > chose were conventional. The six templates had polluted the very history the rule reads,
+  > and did it worst in the repository that generated them. So Step 3 gained a clause naming
+  > the templates and saying to discount them: removing them stops the pollution growing,
+  > but git history is permanent. This is the finding G2 was most at risk of shipping past —
+  > the rule would have looked correct and been wrong in exactly one repository, this one.
+  >
+  > **The PR-title site needed no such clause, and the asymmetry is the lesson.**
+  > `/smart-merge` never hardcoded a title *string*, only a form, so no template ever wrote
+  > one and every merged title is a form someone chose. Measured: **13 of 15** here are
+  > conventional, **15 of 15** in pfsmgraph are plain imperative — both unanimous. Same
+  > defect at both sites; only the one emitting literal strings corrupted its own evidence.
+  >
+  > **No `allowed-tools` change was needed** — checked rather than assumed, since an
+  > instruction the frontmatter forbids would trade a silent defect for a permission prompt
+  > on every run. All seven edited commands already carry `Bash(git log:*)`, and
+  > `/smart-merge` already carries `Bash(gh pr list:*)`.
+  - [x] The six literal `git commit -m` strings.
+        > Each code block now reads `git commit -m "<subject>"` and the content moves into a
+        > four-line `>` note beside it. Putting a *reworded* subject in the block would have
+        > replaced one hardcoded form with another, which is the trap this goal exists to
+        > avoid; a generic placeholder cannot encode a convention at all.
+  - [x] `/smart-commit` Step 3's "Follow conventional commit format", which is the site the
         consumer already had to override in writing.
-  - [ ] `/smart-merge` step 3's PR-title rule — the same defect in the same command, and the
+        > Rewritten as the one full statement of the rule — the two forms, how to read them,
+        > the discount clause with its measurement, and an instruction to *ask* rather than
+        > guess when the split stays close after discounting. G1 settled "one sentence at
+        > each site"; stating the rule once here, in the command that owns commit messages,
+        > and pointing five sites at it keeps that answer while the sentence grew ~60%. No
+        > fragment, no `@import`, no new mechanism — the decision stands as taken.
+  - [x] `/smart-merge` step 3's PR-title rule — the same defect in the same command, and the
         one most easily missed because it is prose rather than a `-m` string.
-  - [ ] `/hitl-step` step 6's `feat(docker): <section topic>` example. Compare `/step`,
+        > Now reads merged PR titles via `gh pr list` or MCP `list_pull_requests`. Note it
+        > described pfsmgraph *perfectly* — "imperative mood, sentence case" is 15 of 15
+        > there — which is what made it invisible from that side for so long.
+  - [x] `/hitl-step` step 6's `feat(docker): <section topic>` example. Compare `/step`,
         which proposes no message at all — deciding whether this one keeps its content or
         simply goes is the one site where the G1 answer "keep the content" may not apply,
         since a section topic is not a specific commit the way "Remove branch doc" is.
+        > **Resolved: content stays, and the rule is not restated.** It keeps "a proposed
+        > message naming the section topic" and gains an explicit *do not put a subject form
+        > on it*. This is the one site that needs no pointer to the rule, because the
+        > command it suggests — `/smart-commit` — is the command that owns it; a form pasted
+        > here would be a guess arriving ahead of the command that actually knows.
   - [x] Check no *other* site encodes a convention: tag messages, the `CHANGELOG` heading
         format, and `README.md:156` which advertises `/smart-commit` as "Conventional commit
         format" in the command table.
@@ -1826,14 +1870,28 @@ side. G2 makes the command say what the consumer's docs already have to.
         > list rather than needing its own. That makes the sweep's yield **one added, two
         > dismissed, one confirmed**, and G2 now edits nine sites across seven command files
         > plus the README row.
-  - [ ] `README.md:156` — the command table advertises `/smart-commit` as "Conventional
+  - [x] `README.md:156` — the command table advertises `/smart-commit` as "Conventional
         commit format", which is the defect facing the *reader* rather than the model.
         Confirmed by the sweep; listed separately because it is documentation of the
         command, not an instruction inside it.
+        > Now reads "Reads the subject convention from the repository's own history rather
+        > than prescribing one" — which is also the line that tells a prospective consumer
+        > the plugin will not fight their conventions, so it earns its place in the table.
 - [ ] Land it, and record what it makes redundant elsewhere.
-  - [ ] Branch via `/new-branch`, `**Status**: standalone`, then `/smart-merge` — per A7,
+  - [~] Branch via `/new-branch`, `**Status**: standalone`, then `/smart-merge` — per A7,
         and dogfooding the commands being changed. Expect `/file-plans` to report
         `no backlink`, as E4's branch did.
+        > **Half done, ahead of schedule and not by choice.** `fix/hardcoded-commit-convention`
+        > was opened at G2's start with its doc at `docs/git/fix/hardcoded-commit-convention.md`
+        > and plan at `docs/plan/fix-hardcoded-commit-convention/DO.md`, `**Status**: active`,
+        > `**Subgoal**: standalone` — because `/new-branch` refuses on a dirty tree. Two
+        > commits sit on it, `391a64a` and `518c23a`, neither pushed. What remains here is
+        > the push, the PR and `/smart-merge`.
+        >
+        > **The dogfooding already paid, twice.** Both commits were authored by running the
+        > new rule rather than the old template — reading this repository's history, finding
+        > the 21/19 near-parity, and discovering the contamination that the fix then had to
+        > account for. The defect was found by using the fix, on the fix, before it landed.
   - [ ] Add to Section H's hand-back list: pfsmgraph's `docs/agents/claude.md` override note should
         be **re-scoped, not deleted**. Its first half (the `VERSION` file, the tagging) stays
         true; only the Step 3 paragraph becomes redundant, and even that is worth keeping as
