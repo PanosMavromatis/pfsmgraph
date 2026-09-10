@@ -89,9 +89,10 @@ Two properties of the manifest matter when editing it:
 **The plugin ships a blocking `PreToolUse` hook on `Bash`, and the manifest is what arms
 it.** Before a `git commit` whose *staged set* touches a kernel path, it runs `[commands]
 build` and `test` and blocks on failure. Scoping is what makes blocking tolerable: with
-this manifest it arms on exactly four paths — `_viterbi.py` and its three unwritten
-siblings — so a commit touching `docs/`, a helper module such as `_numeric.py`, or even a
-phase-0 `FORMALIZATION.md` passes silently. Phase 0 is excluded by design: a Markdown
+this manifest it arms on exactly four paths — `_viterbi.py`, `_viterbi_cython.pyx` since
+2026-09-09, and the two still-unwritten Numba siblings — so a commit touching `docs/`, a
+helper module such as `_numeric.py`, a *test*, or even a phase-0 `FORMALIZATION.md` passes
+silently. Phase 0 is excluded by design: a Markdown
 specification compiles to nothing and is imported by nothing, so staging it cannot break a
 backend.
 
@@ -102,6 +103,16 @@ other commit. This is what makes `dp-compile` safe to delegate committing to
 happens to be driving. The two plugins' `PreToolUse` hooks match **disjoint** tool sets —
 `dp-compile` on `Bash`, `workflow-claude`'s `protect-agent-docs.py` on
 `Write|Edit|MultiEdit` — so no tool call matches both and they stack rather than compete.
+
+**The gate is silent when it is inert, and its output does not reach the model.** Measured
+2026-09-09, on the commit that landed the first `.pyx` and again by feeding the hook script
+a synthetic `git commit` payload in both states. With no kernel in the staged set it exits 0
+having printed nothing at all — not "skipped", nothing — so silence is indistinguishable
+from the hook being absent. With a kernel staged it announces itself, runs `[commands]
+build` and `test`, and reports passing. Either way that text goes to the *transcript*, not
+into the `Bash` tool result, so a session can watch a gated commit succeed and be unable to
+tell from its own tool output whether the gate ran. Do not infer from silence that the hook
+is missing; run the script directly against a payload if it matters.
 
 `dp-compile` **assumes `workflow-claude` is present** and delegates rather than duplicating:
 it runs no `git` command of its own, opens no branch, and writes no plan file. Its commands

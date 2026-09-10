@@ -364,10 +364,69 @@ target **write `cython`**.
     > comparison in this file agrees with phase 1 by construction. The three `.vpath.xls`
     > files came out of a Lush runtime that no longer exists here — running the compiled
     > backend against them is what stops phase 2 inheriting that circularity unexamined.
-- [ ] Update whatever the change makes stale
-  - [ ] `core.md`: the backend matrix stops having one row, and the four-phase lifecycle
+- [x] Update whatever the change makes stale
+  > **Done:** twelve stale claims corrected across five files — `core.md` (5), `codex.md`
+  > (4), `README.md` (2), `claude.md` (1) — plus `DEFERRED.md`'s first-`.pyx` trigger
+  > discharged, and `AGENTS.md` / `AGENTS.override.md` regenerated. Suite 291, header
+  > `backends: python ✓ · cython ✓`.
+  > **Note:** **a diff-driven sweep would have missed most of this, which is why the goal
+  > exists as its own goal.** `/agents-docs-update` evaluates docs against the *staged
+  > diff*, and goals 4 and 5 were already committed by the time this ran — so the changes
+  > that falsified these sentences were no longer visible to it. Two of the twelve were
+  > caught earlier, inside `/smart-commit`, precisely because they were staged at the time.
+  > The rest needed a deliberate grep. Worth remembering when judging whether a doc sweep
+  > can be delegated to the commit path: it can, but only for what is in that commit.
+  > **Note:** the last stale claim was found by grepping *after* believing the sweep was
+  > finished — `codex.md:258` still said "the matrix holds one row as of 2026-09-04". Nine
+  > files had been read carefully by then. The grep cost nothing and the belief was wrong.
+  - [x] `core.md`: the backend matrix stops having one row, and the four-phase lifecycle
         gains its first compiled occupant
-  - [ ] `claude.md` only if something names a Claude Code feature; the `dp-compile`
+    > **Note:** five edits. Three are counts that move together and are easy to fix by
+    > halves — the suite total, the per-directory split, and the root breakdown's
+    > backend-matrix figure — now 291 = 74 + 175 + 42, with 19 of the root 42 covering the
+    > matrix. The fourth rewrites the matrix paragraph for two rows. The fifth is the ADR
+    > 0003 invariant, and it is the one that needed thought rather than substitution: the
+    > old text said `backends: python ✓` means the kernel imports, "not that any suite ran
+    > twice", which was exactly right for one row and becomes *misleading* at two, since a
+    > reader could take two ticks as evidence of parameterization. It now says both kernels
+    > import, the shared cases still run once, and the labelled section holds the only
+    > assertions entitled to the word equivalence.
+    > **Note:** `hmm` is now described as "three Python modules, one Cython kernel" rather
+    > than "three modules". The distinction is load-bearing for anyone counting: the `.pyx`
+    > is a module in every sense that matters to the backend matrix, and in none of the
+    > senses that matter to `install_sources`.
+  - [x] `claude.md` only if something names a Claude Code feature; the `dp-compile`
         section already describes the hook and the manifest
-  - [ ] Neither is edited directly for `core.md` — `/agents-docs-build` regenerates the
+    > **Note:** the qualifier earned its keep — there *was* something, and it was wrong
+    > rather than merely absent. The hook paragraph said the gate "arms on exactly four
+    > paths — `_viterbi.py` and its three unwritten siblings"; one of those siblings is
+    > written now, so the sentence has to name it. Corrected to `_viterbi.py`,
+    > `_viterbi_cython.pyx`, and the two remaining Numba paths.
+    > **Note:** one genuinely new Claude Code fact added, from goal 4's measurement: the
+    > gate prints **nothing at all** when no kernel is staged, and its output goes to the
+    > transcript rather than into the `Bash` tool result. So a session can watch a gated
+    > commit succeed and be unable to tell from its own output whether the gate ran — which
+    > is exactly what happened at `c9df9c6`, and is recorded so the next reader does not
+    > conclude from silence that the hook is missing.
+  - [x] Neither is edited directly for `core.md` — `/agents-docs-build` regenerates the
         artifacts, and `/smart-commit` runs `/agents-docs-update` ahead of the commit
+    > **Note:** honoured — every edit went to a `docs/agents/` source and the script
+    > produced the artifacts, twice (once mid-sweep, once after the late `codex.md` fix).
+    > `AGENTS.md` 486 → 494 lines and `AGENTS.override.md` 529 → 547. The
+    > `protect-agent-docs.py` hook would have blocked a direct edit to either, but it was
+    > never reached, which is the correct relationship to a guard rail.
+    > **Note:** `DEFERRED.md` was swept in the same pass though this subgoal does not name
+    > it. Its **`## Trigger: the first `.pyx`` has now fired**: the meson-python revert was
+    > closed earlier this branch, and the comma-form indexing fix is closed here. The
+    > `numba-cuda` pin is left open deliberately and the mismatch is written down — its own
+    > text defers it to "once the wavefront backend lands", ADR 0002 phase 4, so it is
+    > filed under a trigger that is not its condition. Naming that is better than moving
+    > it, since a fired trigger showing an open entry should be explicable rather than
+    > surprising.
+    > **Note:** closing the comma-form entry surfaced something the entry could not have
+    > anticipated: the template was fixed in time and then **not used**. The phase-2 kernel
+    > was written from the phase-0 formalization, not by copying a Needleman-Wunsch kernel,
+    > so the first consumer of the corrected template is still ahead of us. Fixing it early
+    > was still right — a defect in a template propagates looking like house style — but
+    > the entry's premise, "apply it while moving the file", described a move that did not
+    > happen.

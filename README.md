@@ -2,7 +2,7 @@
 
 A composable ecosystem of Python packages for modeling symbolic data sequences. Probabilistic finite-state models (PFSMs) are the unifying core, bridging sequence alignment, hierarchical segmentation, HMMs (Baum-Welch), deep learning (RNNs, Transformers), interpretability, and graph operations.
 
-> **Status: one package released, one begun, three scaffolded.** The workspace layout, package boundaries, and build backends are in place. `pfsmgraph-dataseq` — the base layer every other member depends on — is implemented, tested, documented at [`docs/api/dataseq/`](docs/api/dataseq/README.md), and released at 0.1.0. `pfsmgraph-hmm` has begun: its migrated numeric helpers are in place and tested, and it now exports the frozen parameter value `HMMParams` together with the Viterbi decode over it — the project's first dynamic-programming kernel, checked against the original implementation's own saved decodes. The other three are still empty namespace subpackages, and all four unreleased names still hold dependency-free `0.0.0` placeholders. See [`docs/design/PRD.md`](docs/design/PRD.md) for the design and [`docs/design/adr/`](docs/design/adr/README.md) for the decision records, which are authoritative.
+> **Status: one package released, one begun, three scaffolded.** The workspace layout, package boundaries, and build backends are in place. `pfsmgraph-dataseq` — the base layer every other member depends on — is implemented, tested, documented at [`docs/api/dataseq/`](docs/api/dataseq/README.md), and released at 0.1.0. `pfsmgraph-hmm` has begun: its migrated numeric helpers are in place and tested, and it now exports the frozen parameter value `HMMParams` together with the Viterbi decode over it — the project's first dynamic-programming kernel, checked against the original implementation's own saved decodes. That decode reached [ADR 0002](docs/design/adr/0002-three-phase-algorithm-lifecycle.md) phase 2 on 2026-09-09 as `_viterbi_cython.pyx`, the first compiled code this repository carries and the first non-trivial row in its backend matrix. The other three are still empty namespace subpackages, and all four unreleased names still hold dependency-free `0.0.0` placeholders. See [`docs/design/PRD.md`](docs/design/PRD.md) for the design and [`docs/design/adr/`](docs/design/adr/README.md) for the decision records, which are authoritative.
 
 ## Packages
 
@@ -56,7 +56,7 @@ Requires [uv](https://docs.astral.sh/uv/) and Python ≥ 3.10.
 
 ```bash
 uv sync                             # venv + all five members editable + dev tools
-uv run pytest                       # run the suite (282: 74 dataseq, 167 hmm, 41 root)
+uv run pytest                       # run the suite (291: 74 dataseq, 175 hmm, 42 root)
 uv build --package pfsmgraph-align  # build one distribution
 uv lock                             # refresh uv.lock (committed; one per family)
 ```

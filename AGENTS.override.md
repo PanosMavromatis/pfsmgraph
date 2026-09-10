@@ -188,8 +188,12 @@ fix and most expensive to leave:
   trigger, not after. A change that fires a trigger without discharging its entries is a
   finding. The example this rule was written from -- the reserved-block renumbering with the
   `dataseq` merge -- was discharged on 2026-09-01 and its entry is now closed, so do not
-  report it; the live one is the `_cython.pyx` comma-form indexing fix, which must land
-  before that file is copied into `pfsmgraph-align`.
+  report it. The `_cython.pyx` comma-form indexing fix was the live one and was **applied
+  2026-09-09**, before the first `.pyx` landed, so it is no longer a finding either. What
+  remains under that trigger is the `numba-cuda` lower bound, whose own text defers it to
+  the wavefront backend rather than to this trigger -- so the trigger has fired with one
+  entry still legitimately open. That mismatch is worth reporting; a *silently* open entry
+  under a fired trigger is not the same thing.
 
 **As implementation lands, these become the targets** — in the order the phases arrive:
 
@@ -211,6 +215,15 @@ fix and most expensive to leave:
   `boundscheck(False)` / `wraparound(False)`. Bounds checking is *off*, so an index error is
   memory corruption, not an exception. Verify comma-form indexing (`M[i-1, j-1]`, never
   `M[i-1][j-1]` — the bracket form materializes an intermediate 1-D view per access).
+  **This pattern stopped matching nothing on 2026-09-09**: `_viterbi_cython.pyx` is the
+  first file it selects.
+
+  > **Every memoryview over an `HMMParams` array must be `const`.** ADR 0017 freezes those
+  > arrays (`writeable = False`), and Cython 3 refuses to bind a mutable typed memoryview to
+  > a read-only buffer. A `double[:, ::1]` where `const double[:, ::1]` was needed compiles
+  > cleanly and raises `ValueError: buffer source array is read-only` on *every* call, so it
+  > is invisible in review and fatal at runtime. This is the highest-value single check on a
+  > `.pyx` here, and it is caused by a decision made elsewhere for unrelated reasons.
 - `**/_*_cpu_parallel*.py` — Numba CPU-parallel (`prange`), anti-diagonal. Shares the
   anti-diagonal indexing arithmetic and two-preceding-diagonal dependency with the CUDA
   phase below, but the risk shape differs: a `prange` iteration must write only its own
@@ -245,15 +258,18 @@ fix and most expensive to leave:
   `pytest_report_header` is a startup hook, and a conftest loaded during collection has its
   hook discarded with no warning. `tests/test_backends.py` pins the placement for that
   reason; treat a change that deletes those wiring tests as the same finding.
-  **The matrix holds one row as of 2026-09-04 and the suites are still not parameterized,
+  **The matrix holds two rows as of 2026-09-09 and the suites are still not parameterized,
   which is a constraint rather than the finding it looks like.** ADR 0003 wants the backend
   as a fixture parameter *and* the tests written against the public API only;
   `viterbi(params, record)` has nowhere to put a backend, and adding one is the
   backend-selection API that ADR's Open section routes to `align`. So "a test that quietly
-  exercises only one backend" describes every test in `hmm` today, by design and with only
-  one backend to exercise. What *is* a finding: reading `backends: python ✓` as evidence
-  that anything ran twice, or folding `test_viterbi.py`'s labelled kernel-level section
-  back in among the public-API tests — ADR 0003 asks for that separation unconditionally.
+  exercises only one backend" describes every test *above the line* in `hmm` today, by
+  design. Below it, the labelled kernel-level section now holds six tests that call both
+  kernels and compare — the only equivalence assertions here, added with phase 2. What *is*
+  a finding: reading `backends: python ✓ · cython ✓` as evidence that the shared cases ran
+  twice (they ran once), or folding that labelled section back in among the public-API
+  tests — ADR 0003 asks for the separation unconditionally, and folding it in would also
+  break it, since those tests import a backend module by name.
 - **`docs/api/` and the test that executes it** (ADR 0013). The pages are hand-written, so
   their examples are the only guard against prose drifting from the code they describe;
   `tests/test_api_docs.py` executes every block and compares its output — pasted exception
@@ -325,7 +341,9 @@ and are not.
 - **Its tests are not backend-parameterized, and must not be.** ADR 0003 parameterizes over
   backends for dynamic programming; `dataseq` is a container with no DP algorithm, so it has no
   backends, and under that ADR a lifecycle phase not yet reached contributes no parameter at all.
-  The `pytest_report_header` backend matrix is triggered by the first `.pyx`, not by this suite.
+  The `pytest_report_header` backend matrix is filled by DP kernels, never by this suite --
+  it gained its first row at Viterbi's phase 1 on 2026-09-04, *before* any `.pyx` existed,
+  and its first compiled row at phase 2 on 2026-09-09.
   One skip is deliberate and narrow: `test_torch_interop.py` verifies the `DataLoader`
   integration and skips when torch is absent, since torch is a dependency of no member.
 - **`isinstance(dataset, torch.utils.data.Dataset)` is `False` on purpose**, and is pinned by a
