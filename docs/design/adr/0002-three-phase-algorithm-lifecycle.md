@@ -2,7 +2,12 @@
 
 - **Status:** Accepted — but see [ADR 0016](0016-numba-cpu-parallel-phase.md), which
   inserts a phase (Numba CPU-parallel) between Cython and CUDA, renumbering CUDA from
-  phase 3 to phase 4.
+  phase 3 to phase 4, and which also **withdraws this record's claim that the
+  anti-diagonal wavefront is the same transformation for every DP kernel in the family**
+  (the *Consequences → Positive* bullet "The anti-diagonal formulation is reusable", and
+  the universal reading of the *Decision*'s phase-3 item) — see its `Resolved` section.
+  The claim holds for the alignment family; `hmm`'s Viterbi has no anti-diagonals, and
+  applying one there would be a race.
 - **Date:** 2025 (proof-of-concept); formalized 2026-08-29
 - **Source:** PRD §1.2, §6 — inherited from the proof-of-concept alignment library
 

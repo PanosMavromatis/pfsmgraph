@@ -51,11 +51,57 @@ instinct on a recovered graph is the opposite.
   > advancing past phase 1 on the declared oracles actually being used, because phases 2–4
   > are checked against phase 1 and an unexercised oracle leaves the whole chain agreeing
   > only with itself.
-- [ ] Settle the anti-diagonal question — the decision this phase owns
-  - [ ] Decide the decomposition, against the kernels that now exist
-  - [ ] Decide ADR 0002:53's disposition: wording fix scoped to alignment kernels, or a
+- [x] Settle the anti-diagonal question — the decision this phase owns
+  > **Q:** Which parallel decomposition does phase 3 implement for Viterbi — states within
+  > one timestep (`prange` over `j`), an associative scan over time in min-plus, or a batch
+  > of independent sequences?
+  > **A:** States within one timestep. It is the only one available at this signature and
+  > the only one that preserves the tie-break; see the notes below.
+  > **Q:** How should ADR 0002's falsified generality claim be recorded — closed in ADR
+  > 0016's `Resolved` section, edited in place in ADR 0002, or given a new ADR number?
+  > **A:** Closed in ADR 0016's `Resolved` section, with a pointer added to ADR 0002's
+  > Status line and that record's text left untouched.
+  > **Done:** all three artifacts written and the suite green at 291.
+  > `FORMALIZATION.md`'s Metadata row and `Parallel decomposition` section now record the
+  > decision instead of **Undetermined**; ADR 0016's sole `Open` item moved to `Resolved`
+  > as the withdrawal of ADR 0002's generality claim; ADR 0002 gained a Status pointer and
+  > nothing else. What is withdrawn is a *generality*, not a decision — the four-phase
+  > lifecycle stands, and the anti-diagonal wavefront still stands for `align`, whose
+  > two-dimensional matrix does have independent anti-diagonals.
+  > **Note:** the finding is sharper than "no anti-diagonals", and the sharper form is
+  > checkable. In an alignment matrix `{i + j = c}` is independent *because* a cell reads
+  > only its three neighbours. Here the array is time by state and `delta[t, j]` reads
+  > **every** `delta[t-1, i]`, so `{t + j = c}` contains `(t, j)` and `(t-1, j+1)` and the
+  > first reads the second as its `i = j+1` term. Anti-diagonal structure in an `hmm`
+  > kernel is therefore the defect itself, not an optimisation to review for correctness.
+  > **Note:** the tie-break decides which axis may be parallelised, which was not obvious
+  > going in. `prange` over `j` keeps each reduction over `i` serial and ascending, so
+  > first-wins survives; `prange` over `i` is a parallel reduction that combines partials
+  > in unspecified order and resolves ties arbitrarily. It would fail **silently** — the
+  > oracles hold 0 exact ties in 3804 positions, so no differential test can see it, and
+  > the constructed uniform-model case from phase 2 is the only guard. That test was
+  > written for revision 03's initialisation, not for concurrency; it now guards a design
+  > choice it was never aimed at.
+  > **Note:** the parallelism is thin and this kernel may be *slower* than phase 2. `S` is
+  > 5 and 8 in the fixtures and around 50 at the ceiling, so `prange` over `j` offers at
+  > most `S`-way parallelism over an `S`-element reduction, and per-timestep thread
+  > overhead may exceed the work. Recorded in advance rather than discovered at goal 4:
+  > ADR 0016 scopes phase 3 to parallel *correctness*, so losing on wall-clock is within
+  > what the phase is for and is not a reason to abandon the decomposition.
+  > **Note:** the line citations rotted twice, and both records now cite by section
+  > instead. This plan and the branch doc said `ADR 0002:53` for a claim that was at `:55`;
+  > adding the withdrawal pointer to ADR 0002's Status block then shifted it to `:59`,
+  > invalidating the citation in the same change that wrote it. A citation into a record
+  > the same change is editing cannot be a line number.
+  > **Note:** `docs/agents/codex.md` still tells a reviewer the `Parallel decomposition`
+  > section is "`undetermined` pending phase 3", which these edits make false. Left for
+  > `/agents-docs-update` at commit time rather than fixed here — it is an agent-docs
+  > source, and editing it out of band skips the `/agents-docs-build` rebuild that
+  > sequences with it.
+  - [x] Decide the decomposition, against the kernels that now exist
+  - [x] Decide ADR 0002:53's disposition: wording fix scoped to alignment kernels, or a
         reversal warranting its own ADR number
-  - [ ] Record it in `FORMALIZATION.md` — Metadata row and `Parallel decomposition`
+  - [x] Record it in `FORMALIZATION.md` — Metadata row and `Parallel decomposition`
         section, both of which read **Undetermined** today
 - [ ] Decide `numba`'s place in `pfsmgraph-hmm`'s declared dependencies
   - [ ] Runtime dependency or optional extra, given `hardware=None` makes a failed import

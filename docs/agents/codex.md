@@ -235,12 +235,22 @@ fix and most expensive to leave:
   anti-diagonals. A Viterbi recurrence is 1-D over time with dense S×S coupling and has
   **no anti-diagonals at all** — verified against the landed `_viterbi.py` and recorded in
   [`docs/design/algorithms/viterbi/FORMALIZATION.md`](../design/algorithms/viterbi/FORMALIZATION.md)'s
-  `Parallel decomposition` section, which is `undetermined` pending phase 3. So on an `hmm`
+  `Parallel decomposition` section, **settled 2026-09-10 at phase 3**. So on an `hmm`
   kernel, **anti-diagonal structure is itself the defect**: reviewing it for correct
   wavefront arithmetic would ratify a decomposition the dependency structure does not
   support, which is a race wearing the right shape. Read that document's
   `Parallel decomposition` section before reviewing either parallel phase, and check the
   kernel against what it says rather than against this list.
+
+  **The single highest-value check on an `hmm` parallel kernel is which axis `prange` runs
+  over.** The decomposition settled on is states within one timestep: `prange` over `j`,
+  with the reduction over `i` serial and ascending. A `prange` over `i` is a parallel
+  min-reduction that combines partials in unspecified order, so it resolves ties
+  arbitrarily and breaks the first-wins rule ADR 0003 makes contract. **It fails silently
+  and no differential test can see it** — the `.vpath.xls` oracles contain 0 exact ties in
+  3804 positions, because learned float parameters do not collide. The only guard is the
+  constructed uniform-model case, which ties at every position. Treat a parallelised `i`
+  loop as a defect on sight, even where the suite is green.
 - `**/_*_cuda*.py` — Numba CUDA anti-diagonal wavefront. Anti-diagonal indexing arithmetic,
   the two-preceding-diagonal dependency, boundary diagonals, and synchronization between
   wavefront steps. This is the single highest-payoff review surface in the project and the
