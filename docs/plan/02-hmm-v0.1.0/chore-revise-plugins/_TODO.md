@@ -1979,7 +1979,7 @@ side. G2 makes the command say what the consumer's docs already have to.
 ## Section H — Hand-back to pfsmgraph (moved 2026-09-09)
 
 **The seven items that were here have been cut to
-[`docs/plan/chore-plugin-handback/TODO.md`](../docs/plan/chore-plugin-handback/TODO.md)**,
+[`chore-plugin-handback/TODO.md`](../chore-plugin-handback/TODO.md)**,
 a branch plan filed ahead of the branch that will work them. Work them with `/hitl-step`,
 which finds that file by name and needs no path argument. They are registered in the master
 plan under revision 02-hmm-v0.1.0, with a `> **Branch:** chore/plugin-handback` backlink.

@@ -238,8 +238,8 @@ __marimo__/
 # the mavromatis-ai-labs marketplace and this repository began consuming them
 # through `.claude/settings.json` instead. The plan for revising them was tracked
 # from this root as `tmp/TODO.md` under a `!tmp/TODO.md` negation until the same
-# day; it now lives at docs/plan/chore-revise-plugins/_TODO.md and the negation is
-# retired.
+# day; it now lives at docs/plan/02-hmm-v0.1.0/chore-revise-plugins/_TODO.md and
+# the negation is retired.
 #
 # `tmp/*` rather than `tmp/` is kept deliberately even with no negation left: git
 # never descends into an ignored directory, so a bare `tmp/` would silently make any
