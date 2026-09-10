@@ -453,6 +453,29 @@ These have no event that will surface them. They need to be looked at on purpose
 - **How the Claude Code development plugin fits the multi-package family** — one
   family-wide dev plugin, or one per package. Explicitly out of scope for the PRD (§10)
   and never discussed.
+  **Settled (2026-09-09): one generic plugin, and the entry is closed.** The answer is a
+  third option this entry did not list. `dp-compile` is neither family-wide nor
+  per-package: it knows nothing about pfsmgraph at all, and a per-repository
+  `dp-compile.toml` at the repo root supplies the layout it operates on — kernel paths per
+  phase, build and test commands, where backends are registered, and which documents a
+  phase skill must read before writing. **It has no defaults**, so a repository without
+  the file is told so, rather than resolving paths under a layout it does not have and
+  reporting "algorithm not found" — a missing file misdiagnosed as a missing algorithm.
+
+  Both listed options were rejected for the same reason, from opposite directions.
+  **Per-package** would duplicate one lifecycle five times: the ADR 0002/0016 chain is a
+  property of the family, not of a member, and five copies would drift. **Family-wide**,
+  in the sense of a plugin that knows *this* family, is precisely the defect the revision
+  removed — the plugin began as `tokalign-dev`, built around one repository's layout, and
+  was therefore wrong here rather than merely narrow. One manifest covers all five members
+  because `[phases]` templates expand `{package}` and `{algorithm}`; algorithms are listed
+  rather than globbed, since these packages are flat and `_*.py` would match `_numeric.py`
+  and `_params.py` beside `_viterbi.py`.
+
+  The record is `docs/plan/chore-revise-plugins/_TODO.md` — the plan and its inline Q&A,
+  archived beside the branch plan that points at it (PR #19); `docs/agents/claude.md`
+  carries the operational summary. **PRD §10 is deliberately not amended** — it says the question
+  "was not discussed", which is a true claim about that document's scope and stays true.
 
 ## Trigger: `align` able to produce a multiple alignment
 
@@ -496,3 +519,41 @@ These have no event that will surface them. They need to be looked at on purpose
   Nothing about this is in `core.md`'s claim that "alignment is a training accelerant for
   HMM topology search" beyond the claim itself — this entry is the mechanism that
   sentence has been standing on since the PRD.
+
+---
+
+## Trigger: the next `workflow-claude` revision
+
+The plugin lives at `plugins/workflow-claude/` in
+`github.com/PanosMavromatis/claude-plugins`; this repository consumes it from the
+`mavromatis-ai-labs` marketplace and no longer develops it. Entries here are defects found
+while *using* it, recorded so they survive between sessions.
+
+- **`/smart-commit`'s convention detection samples imported history in a subtree monorepo.**
+  Step 3 reads `git log --oneline -20` and follows the dominant subject form, discounting
+  subjects that match the plugin's own bookkeeping templates. That discount handles the
+  plugin polluting its *own* history — the case PR #21 found, where 19 of 40 subjects had
+  been written by the templates being removed. It does not handle a *second repository's*
+  history being grafted in. Measured 2026-09-09 in `claude-plugins`, the day of the import:
+  `git log --oneline -12` returns three conventions at once — the monorepo's own bare
+  imperatives, `dp-compile`'s bare imperatives, and `workflow-claude`'s `chore(repo):` /
+  `chore(plugin):` — because `git subtree add` without `--squash` grafts each plugin's full
+  history. Six commits the monorepo authored sit against hundreds it imported, so the raw
+  sample says almost nothing about the repository doing the committing.
+
+  **`--first-parent` is the candidate, not the decision.** It isolates what a repository
+  authored from what it merged, and returned exactly the right six here. But it also hides
+  everything merged through ordinary PR merges, which in a squash-free merge-commit
+  workflow is most of a repository's real history — so the rule may need to *detect*
+  grafted history rather than always filter. Settle that before writing it.
+
+  **Why it is recorded rather than fixed.** It does not affect pfsmgraph: the `.scratch/`
+  imports had their `.git` directories renamed on arrival, so no foreign history is grafted
+  into this log and the rule reads a clean sample here. It is live in `claude-plugins`,
+  which is where the plugin is developed and where the fix belongs.
+
+  **Third form of one failure.** The rule holds that the history is the authority, and
+  twice the history has turned out not to be a single repository's: first because the tool
+  wrote part of it, now because another repository supplied part of it. Whatever the fix,
+  the property to state is "read only what *this* repository chose" — which is what both
+  cases violate.

@@ -162,8 +162,48 @@ library, only earlier use of one of its targets.
   phase 3 is where it is first validated under real concurrency. For `align`, phase 3
   unambiguously applies. For `hmm`, phase 3's actual content is contingent on revision
   02's still-open finding, at the same point ADR 0002's CUDA phase already deferred it to.
-- **The phase-3 module naming convention.** This ADR proposes `_cpu_parallel.py` (glob
-  `_cpu_parallel*.py`), mirroring the existing `_python.py` / `_cython.pyx` / `_cuda.py`
-  per-phase naming seen in `.scratch/align-poc/tokalign`, but it is not yet exercised
-  against a real kernel and may need revisiting once the first phase-3 implementation
-  lands.
+
+  *Corroborated but deliberately still open (2026-09-09).* A read-only pass over the
+  landed `_viterbi.py` reached the same conclusion independently — the recurrence is 1-D
+  over time with dense S×S coupling, so it has **no anti-diagonals at all**, and the
+  decomposition is not merely unchosen here but absent. That is evidence, not the
+  decision: `docs/plan/TODO.md` schedules this to be settled at phase 3, "against a kernel
+  that exists", and closing it early would preempt a deferral the plan took on purpose.
+  Left open so the phase-3 subgoal decides it, not so it can be rediscovered.
+
+## Resolved
+
+- **The phase-3 module naming convention.** This ADR proposed `_cpu_parallel.py` (glob
+  `_cpu_parallel*.py`), on the stated grounds that it mirrored "the existing `_python.py` /
+  `_cython.pyx` / `_cuda.py` per-phase naming seen in `.scratch/align-poc/tokalign`".
+  **Settled 2026-09-09 as `_<algorithm>_cpu_parallel.py`** — for `hmm`'s decode,
+  `_viterbi_cpu_parallel.py`. The proposal is superseded rather than confirmed, because the
+  citation it rested on was wrong in two ways, both verified on disk.
+
+  **There is no `_cuda.py` in that repository, and there never was.**
+  `src/tokalign/algorithms/needleman_wunsch/` contains exactly `_python.py` and
+  `_cython.pyx`; its third phase was never implemented. What existed is a **zero-byte
+  `_numba.py`**, and only in the upstream working tree rather than in the import: a stale
+  mypy cache entry records `size: 0` for
+  `tokalign.algorithms.needleman_wunsch._numba` against a path under
+  `Developer/Projects/tokalign/`, last modified 2026-04-18. So the name that repository
+  reached for was `_numba`, consistent with its own ADR 0007, its `gpu-parallelization`
+  skill's `example-numba-impl.py`, and its `_backends.py`, whose registry maps
+  `"numba": "_numba"` — a live pointer to a module nobody wrote. Not `_cuda`, at any point.
+  Note what the two artefacts say together: the registry expected the module, and the
+  zero-byte file was what briefly satisfied it. The phase was scaffolded and abandoned,
+  which is a weaker thing to mirror than a convention in use.
+
+  **The deeper error is that the citation could not have transferred anyway, and that is
+  what produced the wrong proposal.** tokalign identifies an algorithm by *directory* —
+  `algorithms/needleman_wunsch/_python.py` — so its phase files need no algorithm in their
+  names. This family's packages are flat: the phase-1 reference is
+  `src/pfsmgraph/hmm/_viterbi.py`, and phase 2 is already `_viterbi_cython.pyx`, named so
+  deliberately because "`_viterbi.py` is the phase-1 reference and the two must coexist"
+  (`packages/pfsmgraph-hmm/meson.build`). A bare `_cpu_parallel.py` carries no algorithm
+  and would not say which kernel it implements the moment a second one exists. Mirroring a
+  differently-shaped repository did not merely cite a missing file; it proposed a name this
+  layout cannot use.
+
+  The settled form is already in force outside this record: `dp-compile.toml`'s `[phases]`
+  table reads `_{algorithm}_cpu_parallel.py`, and the glob follows it.

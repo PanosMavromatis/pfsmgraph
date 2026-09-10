@@ -25,10 +25,26 @@ command; both are places where a single-component assumption meets a five-packag
   (see [`core.md`](core.md) under "Commands"), which is why `/smart-commit` reporting "no
   tag created" on a release commit is the correct outcome rather than a gap to fill.
 
-Its Step 3 also specifies conventional-commit subjects (`feat(scope): …`). This repository
-does not use them: every commit is an imperative subject with no prefix and a substantial
-body explaining why. Follow the repository's convention — the history is the authority, not
-the command's template.
+**This repository's commit convention, stated rather than corrected.** Every commit is a
+capitalised imperative subject with no prefix, followed by a substantial body explaining
+why. Step 3 of `/smart-commit` used to prescribe conventional-commit subjects
+(`feat(scope): …`) and this paragraph existed to override it; since `workflow-claude`
+PR #21 the command reads the convention from `git log` instead of asserting one, so the
+override is spent. The statement stays, because it is now what the command goes looking
+for — and a convention worth following is worth writing down rather than leaving to be
+inferred from a sample.
+
+**Both ways that detection can be fooled are absent here, which is why it can be trusted.**
+Measured 2026-09-09 over the last 40 non-merge commits: 40 plain imperative, 0
+conventional. Three match the plugin's own bookkeeping templates (`Add the branch doc
+for …`, `Record the merge of …`, `Remove the branch doc …`), which the rule discounts — and
+discounting them changes nothing, because those templates are *also* plain imperative here.
+**A template pollutes a history only when its form disagrees with the repository's**; in
+`workflow-claude`'s own repository it disagreed, and 19 template-written subjects sat
+against 21 human ones. The second failure mode — a subtree import grafting another
+repository's convention into the log — cannot arise here either, since every `.scratch/`
+import had its `.git` renamed on arrival. See [`../plan/DEFERRED.md`](../plan/DEFERRED.md)
+under "the next `workflow-claude` revision" for where that one is live.
 
 ## A nested `CLAUDE.md` in imported source
 
@@ -92,10 +108,23 @@ it runs no `git` command of its own, opens no branch, and writes no plan file. I
 detect the companion by reading their own tool list, print one line when it is missing, and
 stop at the point where they would have delegated.
 
-**Loading is interim.** Neither plugin is on a marketplace yet, so both are loaded with
-`--plugin-dir` (or, for `workflow-claude` here, a symlink under `.claude/skills/`). The
-clones live under `tmp/` and are gitignored; `dp-compile.toml` is tracked, the plugin that
-reads it is not.
+**Both plugins are installed from a marketplace, and the declaration is tracked.**
+`.claude/settings.json` registers `mavromatis-ai-labs`
+(`github.com/PanosMavromatis/claude-plugins`, a monorepo holding both plugins under
+`plugins/`) and enables `workflow-claude` and `dp-compile` from it, so a fresh clone
+reproduces the setup with no manual step. It is the first tracked file under `.claude/`;
+the `tmp/` clones and the `.claude/skills/workflow-claude` symlink that preceded it are
+retired. **`dp-compile.toml` is still tracked and the plugin that reads it still is not** —
+that half did not change, and it is the point: the manifest belongs to this repository, the
+plugin does not.
+
+**`--plugin-dir` is now the development path, not the loading path.** It loads a plugin
+directory for a single session with no marketplace involved, which is what to use when
+editing the plugins themselves; pointed at the monorepo's `plugins/` directory it loads
+both at once, which is what changing their interaction needs. Do **not** register a local
+checkout as a marketplace to test it: registration is keyed on the `name` inside
+`marketplace.json`, so adding the local copy under the same name silently replaces the
+GitHub one for every project on this machine.
 
 Everything else — architecture, commands, conventions, domain invariants — belongs in
 `core.md`, which also feeds `AGENTS.md` for other agents.

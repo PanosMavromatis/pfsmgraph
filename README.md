@@ -35,8 +35,10 @@ A composable ecosystem of Python packages for modeling symbolic data sequences. 
 ```
 pyproject.toml                 # uv workspace root (virtual — not a package)
 dp-compile.toml                # manifest for the dp-compile plugin (see docs/agents/claude.md)
+.claude/settings.json          # marketplace + enabled plugins (see docs/agents/claude.md)
 docs/design/PRD.md             # authoritative design document
 docs/design/adr/               # decision records (authoritative)
+docs/design/algorithms/        # per-algorithm formalizations, one directory each
 docs/api/                      # API documentation, one subdirectory per package
 packages/
 ├── pfsmgraph-dataseq/         # + meson.build
@@ -54,7 +56,7 @@ Requires [uv](https://docs.astral.sh/uv/) and Python ≥ 3.10.
 
 ```bash
 uv sync                             # venv + all five members editable + dev tools
-uv run pytest                       # run the suite (280: 74 dataseq, 165 hmm, 41 root)
+uv run pytest                       # run the suite (282: 74 dataseq, 167 hmm, 41 root)
 uv build --package pfsmgraph-align  # build one distribution
 uv lock                             # refresh uv.lock (committed; one per family)
 ```

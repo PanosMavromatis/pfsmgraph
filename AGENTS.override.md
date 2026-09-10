@@ -42,7 +42,7 @@ code actually does, say so — that divergence is worth more than a style commen
 **`dataseq` is implemented and released; `hmm` has begun; the other three members are still
 scaffolding (2026-09-04).** There is real code to review in two packages now.
 `packages/pfsmgraph-dataseq/` is six modules and 74 tests, covered further down.
-`packages/pfsmgraph-hmm/` is three modules and 165 tests — the numeric Utility code migrated
+`packages/pfsmgraph-hmm/` is three modules and 167 tests — the numeric Utility code migrated
 from the Lush original, `HMMParams`, and `_viterbi.py`, the project's first
 dynamic-programming kernel and the first row in the ADR 0003 backend matrix. Review it
 against
@@ -198,11 +198,20 @@ fix and most expensive to leave:
   or PyTorch zero-fill silently means something other than "absent". Encoding is strict by
   default; any `UNK` fallback that is not explicitly opted into is a bug. Watch for the
   proof-of-concept's old allocation-from-4 surviving the merge.
-- `packages/pfsmgraph-{align,hmm}/src/**/_cython*.pyx` — typed memoryviews with
+> **The `_*_` in these globs is load-bearing.** This family's packages are flat, so a phase
+> file carries its algorithm in its own name — `_viterbi_cython.pyx`, not
+> `needleman_wunsch/_cython.pyx`. These patterns read `_*_cython*.pyx` rather than
+> `_cython*.pyx` for that reason; the narrower form matches **nothing** here, which was
+> measured 2026-09-09 and had been true of all three since they were written. The shape was
+> inherited from a proof-of-concept that identifies an algorithm by *directory*, the same
+> mis-transfer [ADR 0016](../design/adr/0016-numba-cpu-parallel-phase.md) records under
+> `## Resolved`.
+
+- `packages/pfsmgraph-{align,hmm}/src/**/_*_cython*.pyx` — typed memoryviews with
   `boundscheck(False)` / `wraparound(False)`. Bounds checking is *off*, so an index error is
   memory corruption, not an exception. Verify comma-form indexing (`M[i-1, j-1]`, never
   `M[i-1][j-1]` — the bracket form materializes an intermediate 1-D view per access).
-- `**/_cpu_parallel*.py` — Numba CPU-parallel (`prange`), anti-diagonal. Shares the
+- `**/_*_cpu_parallel*.py` — Numba CPU-parallel (`prange`), anti-diagonal. Shares the
   anti-diagonal indexing arithmetic and two-preceding-diagonal dependency with the CUDA
   phase below, but the risk shape differs: a `prange` iteration must write only its own
   diagonal's cells and read only already-completed prior-diagonal cells, with no shared
@@ -210,7 +219,19 @@ fix and most expensive to leave:
   This is the first point the anti-diagonal decomposition is checked under real
   concurrent execution ([ADR 0016](../design/adr/0016-numba-cpu-parallel-phase.md)), so a
   bug caught here is cheaper than the same bug caught one phase later.
-- `**/_cuda*.py` — Numba CUDA anti-diagonal wavefront. Anti-diagonal indexing arithmetic,
+
+  **The decomposition is family-dependent, and for `hmm` it is not anti-diagonal.** The
+  paragraph above describes `align`, whose two-dimensional matrix has mutually independent
+  anti-diagonals. A Viterbi recurrence is 1-D over time with dense S×S coupling and has
+  **no anti-diagonals at all** — verified against the landed `_viterbi.py` and recorded in
+  [`docs/design/algorithms/viterbi/FORMALIZATION.md`](../design/algorithms/viterbi/FORMALIZATION.md)'s
+  `Parallel decomposition` section, which is `undetermined` pending phase 3. So on an `hmm`
+  kernel, **anti-diagonal structure is itself the defect**: reviewing it for correct
+  wavefront arithmetic would ratify a decomposition the dependency structure does not
+  support, which is a race wearing the right shape. Read that document's
+  `Parallel decomposition` section before reviewing either parallel phase, and check the
+  kernel against what it says rather than against this list.
+- `**/_*_cuda*.py` — Numba CUDA anti-diagonal wavefront. Anti-diagonal indexing arithmetic,
   the two-preceding-diagonal dependency, boundary diagonals, and synchronization between
   wavefront steps. This is the single highest-payoff review surface in the project and the
   one where a wrong answer is least likely to announce itself.

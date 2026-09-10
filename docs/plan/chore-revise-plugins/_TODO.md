@@ -1,10 +1,27 @@
 # Master plan — plugin revisions (`tokalign-dev` → `dp-compile`, with `workflow-claude`)
 
-**Status**: active
+**Status**: merged — PR #19 — 2026-09-09
 **Created**: 2026-09-04
-**Driven by**: `/hitl-step N tmp/TODO.md` — always pass the path. This file sits outside
-`docs/plan/`, so no resolution rung finds it on its own; without the argument `/hitl-step`
-resolves the pfsmgraph branch plan or master plan instead and works the wrong file.
+**Archived**: 2026-09-09, moved here from `tmp/TODO.md` by `git mv` (rename detected at
+100% similarity, so `git log --follow` traverses all 48 commits of the plan's evolution).
+
+> **This file is retained verbatim below the preamble.** Only this header changed. The
+> body still says `tmp/TODO.md` in several places — at the `**Driven by**` line's old
+> position, in the ground rules, and in the two `awk` progress checks near the end — and
+> those are **left standing on purpose**. They record what was true while the work ran,
+> and rewriting them would falsify the record rather than update it. The same treatment
+> `docs/design/arc-emission-hmm-handoff.md` gets, and for the same reason.
+>
+> What that means in practice: the two `awk` one-liners at the foot of the file take
+> `tmp/TODO.md` as an argument and will not run as written. Substitute this file's path.
+> They are kept because *what they measure*, and the A–G restriction one of them encodes,
+> is the record of how this plan counted its own progress.
+>
+> **The file is no longer resolvable, deliberately.** The `_` prefix keeps it out of
+> `/hitl-step`'s and `/step`'s `docs/plan/**/TODO.md` glob, so a finished plan cannot
+> surface in a disambiguation prompt as a place to do work — `/close-revision`'s `_DO.md`
+> convention, applied to a branch plan. `TODO.md` beside it is the resolvable branch plan
+> and carries the merge stamp; this is the body it points at.
 
 ## What this file is
 
