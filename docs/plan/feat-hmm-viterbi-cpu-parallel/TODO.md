@@ -155,7 +155,65 @@ instinct on a recovered graph is the opposite.
   - [x] Runtime dependency or optional extra, given `hardware=None` makes a failed import
         a startup error rather than a skip
   - [x] Review the `numpy>=2.1` floor alongside it, per `dp-compile.toml`'s pairing note
-- [ ] Implement the decomposition under `@njit(parallel=True)`/`prange`
-  - [ ] `_viterbi_cpu_parallel.py`, entered through `/dp-compile:next-phase viterbi`
-  - [ ] Third `_backends.py` row
-  - [ ] Differential tests in the labelled non-shared section, both tie-breaks covered
+- [x] Implement the decomposition under `@njit(parallel=True)`/`prange`
+  - [x] `_viterbi_cpu_parallel.py`, entered through `/dp-compile:next-phase viterbi`
+  - [x] Third `_backends.py` row
+  - [x] Differential tests in the labelled non-shared section, both tie-breaks covered
+  > **Done:** phase 3 `cpu_parallel` —
+  > `packages/pfsmgraph-hmm/src/pfsmgraph/hmm/_viterbi_cpu_parallel.py`, derived-from
+  > `_viterbi_cython.pyx` `sha256:79da7c8de03cf69be864a08a7d07650ae46eabb1998e13013e17a2a19a67d057`,
+  > suite green at 298. `prange` over `j`, reduction over `i` serial and ascending with a
+  > strict `<`. Registry row three is
+  > `Backend("cpu_parallel", "pfsmgraph.hmm._viterbi_cpu_parallel", optional_on="numba")`,
+  > so a run opens `backends: python ✓ · cython ✓ · cpu_parallel ✓`. Seven new tests, of
+  > which two have no phase-2 counterpart: thread-count invariance and the constructed tie
+  > run at more than one thread.
+  > **Note:** bit-identical across thread counts, verified across *processes* rather than
+  > only inside one. A digest over 60 generated decodes is the same at
+  > `NUMBA_NUM_THREADS` of 1, 2, 8 and 10:
+  > `a9cc47249678ef5e90ca105181083f2114c7c49f9ddc29c7aa81d32f412c4910`. All three kernels
+  > agree exactly, not approximately — the reduction is a `min`, which is exact and
+  > order-independent under float, so parallelising it reassociates nothing.
+  > **Note:** **the parallel kernel is far slower than phase 2, and the crossover is
+  > outside this project's range.** Measured 2026-09-10 at `N = 400`, post-compile:
+  > `S = 5` → 853× slower, `S = 16` → 100×, `S = 64` → 7.5×, `S = 160` → 1.48×. The cost is
+  > **flat at ~34 ms regardless of `S`**, which identifies it as fork/join rather than work:
+  > `t` is strictly sequential, so a parallel region opens and closes once per timestep, and
+  > the work inside each is only `O(S²)`. Speedup therefore needs `S²` to dominate ~85 µs of
+  > dispatch, i.e. `S` in the high hundreds, against a ceiling near 50 here. This is the
+  > *ordinary* phase-3 outcome ADR 0016 anticipates — the phase is scoped to parallel
+  > correctness — and it was recorded as a caveat in goal 2 before being measured.
+  > **Note:** the measurement corroborates goal 2's ranking of the decompositions not taken,
+  > and it matters for **phase 4** rather than here. Per-timestep dispatch is worse on a GPU
+  > than on a CPU, so a CUDA kernel written as a direct transliteration of this one will hit
+  > the same wall harder. The decomposition with the good speed story is the batch — `prange`
+  > or a grid over independent sequences, amortising one launch over many decodes — and it
+  > is unavailable at `viterbi(params, record)` until revision 03 introduces batching. Phase
+  > 4 should be planned knowing that, not discover it.
+  > **Note:** both tie-breaks are covered by the uniform-model test, which is worth stating
+  > because it is not obvious from the assertion. An exactly uniform model ties at every
+  > position *and* leaves `delta[n]` all-equal, so `states[0..n-1]` exercises the recurrence
+  > argmin through `psi` while `states[n]` exercises the final argmin over the last row. The
+  > test asserts the whole path is state 0, so both are pinned at once — and asserts it
+  > directly rather than only against phase 1, so a simultaneous regression in two kernels
+  > cannot pass.
+  > **Note:** writing the module without listing it in `meson.build` gave a
+  > `ModuleNotFoundError` at import — the characteristic ADR 0018 failure, and loud rather
+  > than silent, exactly as `core.md` says. meson does not glob, so a pure-Python module is
+  > as invisible to the editable finder as it would be absent from a wheel. Observed here
+  > rather than avoided by care.
+  > **Note:** the phase-3 skill was **deliberately deviated from in one place**. It
+  > prescribes numba as a hard dependency with `hardware=None`, reasoning that "a registered
+  > backend that will not import is a hard failure rather than a skip, so making the import
+  > optional would turn every install without the extra into a broken one". Sound for a
+  > registry with two states, false for this one since goal 3 gave it three: a missing numba
+  > is a reported skip, so the broken install the rule guards against cannot occur.
+  > `dp-compile.toml` was carrying the same default — `cpu_parallel` had no `extra` key
+  > while `cuda` had `extra = "gpu"` — and now reads `extra = "cpu-parallel"`, so the next
+  > `/next-phase` does not re-assert it.
+  > **Note:** five `tests/test_backends.py` assertions failed on the new row and were
+  > updated. That is not "editing tests to make the kernel pass" — they assert the registry's
+  > *contents*, which legitimately changed, and they are written to break on exactly this
+  > event. The phase-2 comment predicted its own third break and was right; the comment now
+  > names phase 4's `_viterbi_cuda` as the next one, which will be the first row to carry a
+  > genuine hardware absence.

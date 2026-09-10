@@ -47,7 +47,12 @@ require_env    = "PFSMGRAPH_REQUIRE_BACKENDS"
 # numpy>=2.1 this member declares; raising either is a reason to review the other.
 [dependencies]
 declared_in  = "packages/pfsmgraph-{package}/pyproject.toml"
-cpu_parallel = { requires = "numba>=0.61" }
+# `extra` is not decoration: without it this row asserts a hard dependency,
+# which is the phase-3 skill's default and was overridden here on 2026-09-10.
+# ADR 0004 makes acceleration opt-in, and numba imposes a numpy *ceiling*
+# (numba==0.61.* caps numpy at 2.2.6) that as a hard dependency would bind
+# every consumer, including one that only runs the pure-Python decode.
+cpu_parallel = { requires = "numba>=0.61", extra = "cpu-parallel" }
 cuda         = { requires = "numba-cuda", extra = "gpu" }
 
 [algorithms.viterbi]

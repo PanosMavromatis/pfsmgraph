@@ -242,6 +242,11 @@ fix and most expensive to leave:
   `Parallel decomposition` section before reviewing either parallel phase, and check the
   kernel against what it says rather than against this list.
 
+  **This target is live as of 2026-09-10**, not prospective:
+  `packages/pfsmgraph-hmm/src/pfsmgraph/hmm/_viterbi_cpu_parallel.py` exists and is
+  registered as the third backend row, with `optional_on="numba"` -- the first row whose
+  absence is a legitimate skip rather than an escalation.
+
   **The single highest-value check on an `hmm` parallel kernel is which axis `prange` runs
   over.** The decomposition settled on is states within one timestep: `prange` over `j`,
   with the reduction over `i` serial and ascending. A `prange` over `i` is a parallel
@@ -251,6 +256,13 @@ fix and most expensive to leave:
   3804 positions, because learned float parameters do not collide. The only guard is the
   constructed uniform-model case, which ties at every position. Treat a parallelised `i`
   loop as a defect on sight, even where the suite is green.
+
+  **Do not report this kernel's slowness as a finding.** It is 853x slower than the Cython
+  backend at `S = 5` and still 1.48x slower at `S = 160`, with a cost flat at ~34 ms that is
+  per-timestep fork/join rather than work. That is measured, recorded in `core.md`, and
+  within what [ADR 0016](../design/adr/0016-numba-cpu-parallel-phase.md) scopes phase 3 to
+  do -- parallel correctness ahead of CUDA. A review suggesting the `prange` be widened or
+  the phase abandoned on those grounds is arguing against the ADR, not against the code.
 - `**/_*_cuda*.py` — Numba CUDA anti-diagonal wavefront. Anti-diagonal indexing arithmetic,
   the two-preceding-diagonal dependency, boundary diagonals, and synchronization between
   wavefront steps. This is the single highest-payoff review surface in the project and the

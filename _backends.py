@@ -100,9 +100,28 @@ class Backend:
 #: reporting a green run over one backend. Note what this rules out: ``optional_on`` is
 #: for absences that are *legitimate* in the environment, like no CUDA device,
 #: and a missing compiler is not one of those. It is a broken working copy.
+#:
+#: ``cpu_parallel`` is the first row whose absence is **legitimate**, and it is
+#: what renamed this field. numba reaches an environment through
+#: ``pfsmgraph-hmm``'s ``cpu-parallel`` extra, so an install that declined the
+#: extra is entitled to lack the backend exactly as a machine without a GPU is
+#: entitled to lack a CUDA device -- a reported skip, named in the header, never
+#: an escalation. That is a *third* category the first two rows could not
+#: exhibit: python and cython can only fail because the working copy is broken.
+#:
+#: Note this deviates from the ``dp-compile`` phase-3 skill, deliberately. That
+#: skill prescribes numba as a hard dependency with ``hardware=None``, reasoning
+#: that "a registered backend that will not import is a hard failure rather than
+#: a skip, so making the import optional would turn every install without the
+#: extra into a broken one". The reasoning is sound for a registry with two
+#: states and false for this one: ``optional_on`` gives it three, so the broken
+#: install the rule guards against cannot occur here. ADR 0004 governs the other
+#: half -- acceleration is opt-in, and the decode is correct on the pure-Python
+#: backend.
 BACKENDS: Final[tuple[Backend, ...]] = (
     Backend("python", "pfsmgraph.hmm._viterbi"),
     Backend("cython", "pfsmgraph.hmm._viterbi_cython"),
+    Backend("cpu_parallel", "pfsmgraph.hmm._viterbi_cpu_parallel", optional_on="numba"),
 )
 
 

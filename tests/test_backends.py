@@ -30,29 +30,42 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 # --- the matrix as it stands -------------------------------------------------
 
-def test_the_matrix_is_python_then_cython():
+def test_the_matrix_is_python_then_cython_then_cpu_parallel():
     # Filled 2026-09-04 by pfsmgraph.hmm._viterbi, the first DP kernel to reach
     # ADR 0002 phase 1. This was `BACKENDS == ()` until then, and its comment
     # said it would fail when align or hmm added the first row -- which is what
     # happened. The previous version of this test then said "adding the *second*
     # row should break this one the same way", and on 2026-09-09 it did: phase 2
-    # landed as _viterbi_cython. Order is asserted, not just membership, because
+    # landed as _viterbi_cython. On 2026-09-10 it broke a third time, for phase
+    # 3 -- _viterbi_cpu_parallel. Order is asserted, not just membership, because
     # format_header prints the rows in this order and ADR 0003's header is a
-    # specified string.
+    # specified string. Rows are in lifecycle order, so the next break is phase
+    # 4's _viterbi_cuda, which will be the first row to carry a real hardware
+    # absence.
     assert BACKENDS == (
         Backend("python", "pfsmgraph.hmm._viterbi", None),
         Backend("cython", "pfsmgraph.hmm._viterbi_cython", None),
+        Backend("cpu_parallel", "pfsmgraph.hmm._viterbi_cpu_parallel", "numba"),
     )
 
 
-def test_neither_backend_may_be_skipped():
-    # optional_on=None is the whole claim, and it means something different for
-    # each row. For `python`, nothing external is needed to run pure Python at
-    # all. For `cython`, the source is committed but the extension exists only
-    # if it was built -- so ADR 0003's "implemented but not importable (missing
-    # or stale Cython build) is a hard failure" is the clause doing the work.
-    # A missing compiler is a broken working copy, never a legitimate absence.
-    assert [b.optional_on for b in BACKENDS] == [None, None]
+def test_only_the_cpu_parallel_row_may_be_skipped():
+    # optional_on is the whole claim, and it means something different on each
+    # row. For `python`, nothing external is needed to run pure Python at all.
+    # For `cython`, the source is committed but the extension exists only if it
+    # was built -- so ADR 0003's "implemented but not importable (missing or
+    # stale Cython build) is a hard failure" is the clause doing the work, and a
+    # missing compiler is a broken working copy rather than a legitimate
+    # absence.
+    #
+    # `cpu_parallel` is the first row where the absence *is* legitimate, and the
+    # reason it is not a broken working copy is a packaging decision rather than
+    # a property of the kernel: numba arrives through pfsmgraph-hmm's
+    # `cpu-parallel` extra (ADR 0004 -- acceleration is opt-in), so an install
+    # that declined it is entitled to lack this backend. Pin the value, not just
+    # its truthiness: making it None would silently escalate a legitimate skip
+    # into a startup failure for every lean install.
+    assert [b.optional_on for b in BACKENDS] == [None, None, "numba"]
 
 
 def test_every_registered_module_is_a_kernel_not_a_package():
@@ -62,6 +75,7 @@ def test_every_registered_module_is_a_kernel_not_a_package():
     assert [b.module.rsplit(".", 1)[-1] for b in BACKENDS] == [
         "_viterbi",
         "_viterbi_cython",
+        "_viterbi_cpu_parallel",
     ]
 
 
@@ -70,14 +84,22 @@ def test_the_registered_backends_actually_resolve():
     # the real matrix rather than a synthetic one. For `cython` it is also the
     # only assertion in the suite that the extension was actually built -- if it
     # was not, detect() raises BackendError here rather than returning a skip.
+    #
+    # `cpu_parallel` resolves here because numba is in the root `dev` group, not
+    # because it is required: the extra is a promise to consumers, the dev group
+    # is what makes this repository's own suite exercise the backend. A parallel
+    # backend nobody runs is worse than none, which is why both halves exist.
     assert detect() == (
         Availability("python", True, None),
         Availability("cython", True, None),
+        Availability("cpu_parallel", True, None),
     )
 
 
 def test_the_header_names_every_registered_backend():
-    assert format_header(detect()) == "backends: python ✓ · cython ✓"
+    assert format_header(detect()) == (
+        "backends: python ✓ · cython ✓ · cpu_parallel ✓"
+    )
 
 
 def test_an_empty_matrix_would_still_print_explicitly():
