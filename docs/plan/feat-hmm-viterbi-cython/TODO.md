@@ -311,12 +311,59 @@ target **write `cython`**.
     > would become a pattern matching every private module in a flat layout — `_numeric.py`
     > and `_params.py` included. `formalization` is excluded outright: a Markdown
     > specification compiles to nothing, so staging it cannot break a backend.
-- [ ] Establish equivalence
-  - [ ] Against phase 1 on constructed inputs, including the exact-tie case the learned
+- [x] Establish equivalence
+  > **Done:** six test functions added to `test_viterbi.py`'s labelled non-shared
+  > section — eight tests, since the oracle one is parameterized over all three models.
+  > File 57 → 65, suite 283 → 291. These are the only assertions in this repository
+  > entitled to the word *equivalence*: they call both kernels and compare. The shared
+  > cases above the line still run once, and will until `align` brings the selection
+  > seam, so a green run must not be read as "every test ran against both backends".
+  > **Note:** the ad-hoc check during goal 3 (405 comparisons) proved the translation but
+  > left **no test behind**, which is the failure `test-patterns.md` names in one line —
+  > "a check outside the suite is a check nobody runs". This goal is that check moved
+  > inside. Nothing new was discovered by moving it; that is the point, and the reason to
+  > do it before the branch merges rather than after.
+  - [x] Against phase 1 on constructed inputs, including the exact-tie case the learned
         fixtures cannot exhibit — there are 0 exact ties in 3804 oracle positions, so a
         differential suite alone would accept a last-wins port
-  - [ ] Against the three oracles, one of which differs at position 0 by design: the
+    > **Note:** four tests cover this: a seeded 200-model property test, the `N = 0` and
+    > `S = 1` shape boundaries, the exactly-uniform tie model, and one asserting the
+    > frozen `HMMParams` arrays reach the typed memoryviews directly. Equality is
+    > **exact**, never `approx` — both kernels perform the same two float64 operations in
+    > the same order, so an `abs=` tolerance would hide precisely the defect class the
+    > test exists to find: a reassociated expression that is close everywhere and wrong
+    > at a tie.
+    > **Note:** **randomly generated models tie far more than the learned ones do, and
+    > that was not expected.** Measured over the property test's own 200 models: **126
+    > exact ties in 15,735 `(state, position)` reductions**, with 36 of 200 models
+    > exhibiting at least one — against **0 in 3804** on the three tracked fixtures. The
+    > mechanism was not chased, so this is a measurement rather than an explanation. The
+    > practical consequence is what matters: the fixtures' tie-freedom is a property of
+    > *learned* parameters, and any generator-based suite is exercising the tie-break
+    > constantly whether or not it means to.
+    > **Ran:** mutation-tested, because this repository already learned that a passing
+    > differential suite can leave a tie-break unpinned. Flipping the recurrence's
+    > `cand < best` to `<=` in the `.pyx` failed **two** tests (the property test and the
+    > tie test); flipping the backtrace's `delta[n, j] < best` failed the tie test alone.
+    > Both mutations reverted, suite back to 291. So neither tie-break is vacuously
+    > pinned, and the uniform-model test is the one that catches both — which is exactly
+    > the test the fixtures could never have motivated.
+  - [x] Against the three oracles, one of which differs at position 0 by design: the
         δ-seeding defect is fixed rather than reproduced
+    > **Note:** two tests. The first runs the compiled kernel against each `.vpath.xls`
+    > through the existing module-scoped `oracle` fixture, and asserts agreement with the
+    > saved decode after position 0 *and* exact agreement with phase 1's states. The
+    > second pins the divergence at exactly `[0]` on `m008_0001_008` — `flatnonzero`
+    > compared to a literal list, not a count or a fraction. `test-patterns.md`'s rule is
+    > the reason: an oracle whose defect the port deliberately fixed is *wrong* exactly
+    > where the fix applies, so widening the assertion to "mostly agrees" would let a
+    > genuine phase-2 defect hide inside an allowance made for a known one.
+    > **Note:** this is the subgoal that breaks the circle, and it matters more here than
+    > it would for a forward-built kernel. The formalization was recovered from
+    > `_viterbi.py` and its test cases were extracted from the same kernel, so every other
+    > comparison in this file agrees with phase 1 by construction. The three `.vpath.xls`
+    > files came out of a Lush runtime that no longer exists here — running the compiled
+    > backend against them is what stops phase 2 inheriting that circularity unexamined.
 - [ ] Update whatever the change makes stale
   - [ ] `core.md`: the backend matrix stops having one row, and the four-phase lifecycle
         gains its first compiled occupant
