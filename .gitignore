@@ -232,11 +232,14 @@ __marimo__/
 .com.apple.timemachine.donotpresent
 .apdisk
 
-# Local repo housekeeping. Nothing under tmp/ is tracked: the clones parked here
-# (the dp-compile and workflow-claude plugin repositories) are separate repos with
-# their own histories. The plan for revising them was tracked from this root as
-# `tmp/TODO.md` until 2026-09-09, under a `!tmp/TODO.md` negation; it now lives at
-# docs/plan/chore-revise-plugins/_TODO.md and the negation is retired.
+# Local repo housekeeping. Nothing under tmp/ is tracked, and anything parked here
+# is a working copy of some other repository, with its own history. The dp-compile
+# and workflow-claude clones sat here until 2026-09-09, when both were published to
+# the mavromatis-ai-labs marketplace and this repository began consuming them
+# through `.claude/settings.json` instead. The plan for revising them was tracked
+# from this root as `tmp/TODO.md` under a `!tmp/TODO.md` negation until the same
+# day; it now lives at docs/plan/chore-revise-plugins/_TODO.md and the negation is
+# retired.
 #
 # `tmp/*` rather than `tmp/` is kept deliberately even with no negation left: git
 # never descends into an ignored directory, so a bare `tmp/` would silently make any
