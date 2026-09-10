@@ -100,6 +100,19 @@ and several of these must land *as part of* the merge rather than after it.
   recorded there, none chosen — the information needed to choose arrives with the first
   kernel. The verbatim revert recipe lives in each package's `pyproject.toml`; the root
   `dev` group needs `meson-python`, `cython`, and `ninja` restored at the same time.
+  **Settled (2026-09-04), and the entry is closed — by none of the three candidates.**
+  [ADR 0018](../design/adr/0018-family-wide-meson-python-build-backend.md) supersedes
+  ADR 0012: all five members are on meson-python, three of which compile nothing and never
+  will. Candidate 2 was refuted by measurement — two meson-python finders *chain* rather
+  than conflict, so one finder is not the problem and any finder is, which makes the fix to
+  give every member one. **This trigger never fired for this item, and that is the finding
+  worth keeping**: the finder is injected by the *editable install*, not by compilation, so
+  the question was answerable — and was answered, on `exp/meson-python-namespace` — before
+  any `.pyx` existed. ADR 0012 names the right mechanism in its Context and then reasons
+  from the wrong one in its Alternatives. The verbatim revert recipes are gone, spent; the
+  `dev` group regained `meson-python`, `cython` and `ninja` **plus `numpy`**, a build
+  requirement of `align`/`hmm` that `build-system.requires` cannot supply with build
+  isolation off.
 - **Apply the deferred `_cython.pyx` indexing fix while moving the file** (PRD §11.1).
   Every double-bracket access on the typed 2-D memoryviews `M`, `X`, `Y`, `T` becomes
   comma-form: `M[i - 1][j - 1]` → `M[i - 1, j - 1]`, `T[i][j]` → `T[i, j]`, `M[m][n]` →
@@ -372,6 +385,20 @@ and several of these must land *as part of* the merge rather than after it.
   grounds that silently absorbing a problem produces work that merely looks fine — but
   it has not been applied here.
 
+- **Parameterize the DP suites over backends, and fold the labelled non-shared tests into
+  them.** [ADR 0003](../design/adr/0003-one-parameterized-test-suite-per-algorithm.md)
+  requires that the backend be a fixture parameter *and* that tests be written against the
+  public API only. `viterbi(params, record)` has nowhere to put a backend, and adding one
+  is the selection API above, so the two requirements are jointly unsatisfiable until it
+  exists. Until then equivalence is enforced by explicit differential tests in the section
+  `packages/pfsmgraph-hmm/tests/test_viterbi.py` labels at its foot — which is what ADR
+  0003 asks for unconditionally in the meantime, not a workaround. **Filed 2026-09-09**:
+  the master plan's phase-1 note observed that this prerequisite "is not scheduled
+  anywhere", and this is where it now is. Note the scope — `hmm` completes all four
+  lifecycle phases before `align` begins, so the whole of revision 02 runs without it, and
+  `backends: python ✓` in the session header means the kernel imports rather than that any
+  suite ran twice.
+
 ## Trigger: a vocabulary outliving the process that built it
 
 - **Vocabulary persistence (`save`/`load`).** A `SymbolTable` is built from a corpus and
@@ -557,3 +584,41 @@ while *using* it, recorded so they survive between sessions.
   wrote part of it, now because another repository supplied part of it. Whatever the fix,
   the property to state is "read only what *this* repository chose" — which is what both
   cases violate.
+
+## Trigger: the next `dp-compile` revision
+
+The plugin lives at `plugins/dp-compile/` in
+`github.com/PanosMavromatis/claude-plugins`; this repository consumes it from the
+`mavromatis-ai-labs` marketplace and no longer develops it. As with the
+`workflow-claude` section above, entries here are defects found while *using* it,
+recorded so they survive between sessions.
+
+- **`cython-translation`'s prerequisite 2 has no recovered-graph carve-out.** It defines
+  phase-1 staleness as "the hash recorded in its `derived-from` header no longer matches
+  the formalization's current hash" — which asserts that phase 1 derives from phase 0. For
+  an algorithm whose formalization was **recovered** from its kernel, that edge runs the
+  other way: the kernel is the root, correctly carries no header, and the formalization's
+  header names *it*. Followed literally the prerequisite finds no header to compare, and
+  the honest fallback — mtime against a document that is necessarily newer than its own
+  source — reports the kernel stale and hands off to `algorithm-prototype` to regenerate it
+  from a description of itself. That is exactly the cycle
+  `commands/references/phase-detection.md` forbids at length, arrived at from the one
+  direction that document does not guard.
+
+  **The gap is unique to this skill, and structurally so.** Checked 2026-09-09 against all
+  three phase skills: `cpu-parallelization`'s prerequisite 1 derives from phase 2 and
+  `gpu-parallelization`'s from phase 3 (falling back to phase 2 where `cpu_parallel` is
+  undeclared), and both of those are forward edges in either graph shape.
+  `cython-translation` is the only skill whose immediate source is phase 1 — the one node
+  whose incoming edge differs between the forward chain and the recovered graph. So the fix
+  is narrow and will stay narrow.
+
+  **Why it is recorded rather than worked around.** `/next-phase` is safe: it `@`-includes
+  `phase-detection.md`, which carries the rules the skill lacks, so entering through the
+  command supplies the missing carve-out. The mitigation is therefore "enter through
+  `/dp-compile:next-phase`, never the skill directly" — which is the documented entrance
+  anyway, making the gap unreachable in normal use rather than latent. It is filed here
+  because that mitigation otherwise lives only in `feat-hmm-viterbi-cython/TODO.md`, which
+  stops being a live document at merge, and because `viterbi` is unlikely to be the last
+  kernel this family recovers rather than formalizes — `align` and `hseg` both migrate from
+  existing implementations too.
