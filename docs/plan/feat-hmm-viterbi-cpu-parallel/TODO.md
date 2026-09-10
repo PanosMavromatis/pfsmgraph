@@ -1,6 +1,6 @@
 # feat/hmm-viterbi-cpu-parallel
 
-**Status**: active
+**Status**: merged — PR #22 — 2026-09-10
 **Created**: 2026-09-09
 **Subgoal**: Implement Viterbi at ADR 0002 phase 3 (Numba CPU-parallel, `prange`) —
 `docs/plan/TODO.md`, revision 02-hmm-v0.1.0
