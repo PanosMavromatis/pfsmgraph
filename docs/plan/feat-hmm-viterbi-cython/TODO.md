@@ -95,16 +95,67 @@ target **write `cython`**.
     > *"Undetermined — and that is the finding, not a deferral"*, which is an answer
     > rather than a gap: the recurrence is one-dimensional over time with dense `S×S`
     > coupling, so it has no anti-diagonals for phases 3 and 4 to exploit.
-- [ ] Settle what this branch may claim about equivalence
-  - [ ] Reconcile the subgoal's "enforced by the parameterized suite" with `core.md`'s
+- [x] Settle what this branch may claim about equivalence
+  > **Q:** How far should the master-plan correction go — line 200 only, both lines, or
+  > neither, given the phase-1 note already records the tension?
+  > **A:** Both lines, and requalify the note. The phase-1 note quotes line 200 verbatim as
+  > "the line below", so correcting the line would silently falsify a true record.
+  > **Q:** The phase-1 note says the parameterization prerequisite "is not scheduled
+  > anywhere", which is still literally true. Schedule it?
+  > **A:** Yes — file it under `DEFERRED.md`'s existing `## Trigger: align acquiring a
+  > backend-selection API`.
+  > **Q:** Does the `cython-translation` prerequisite gap earn its own `DEFERRED.md`
+  > trigger section, or does it belong under an existing one?
+  > **A:** Its own — a new `## Trigger: the next dp-compile revision`, mirroring the
+  > `workflow-claude` section.
+  > **Done:** all three settled and landed on `main` as `8747778`, pushed. **What this
+  > branch may claim:** equivalence against phase 1 is enforced by explicit differential
+  > tests in the labelled non-shared section at the foot of `test_viterbi.py` — which is
+  > what ADR 0003 asks for unconditionally in the meantime, not a workaround. It may
+  > **not** claim the parameterized suite, at any phase in this revision.
+  - [x] Reconcile the subgoal's "enforced by the parameterized suite" with `core.md`'s
         finding that ADR 0003's parameterization cannot be in force until `align`;
         whichever is wrong is corrected on `main`, not worked around here
-  - [ ] Triage the three `first .pyx` DEFERRED items: close the meson-python revert
+    > **Note:** neither document was wrong about the *mechanism* — the tension was already
+    > recorded, in the phase-1 subgoal's `> **Done:**` block at `docs/plan/TODO.md:163-172`,
+    > which gives the same two-requirements argument and names line 200 as the problem.
+    > `core.md` was checked against ADR 0003's Decision section rather than trusted as a
+    > paraphrase: "a test is written once, against the algorithm's public API, and the
+    > backend is a fixture parameter" is verbatim. What was undone was the acting on it.
+    > **Note:** the correction is **two** lines, not one. Line 209 (phase 4) repeats the
+    > claim and is outside the phase-1 note's scope, which says "*For phase 2:*". It is
+    > unkeepable for an extra reason worth stating once: `align` follows `hmm` in
+    > implementation order, so **no phase in revision 02 can use the parameterized suite**.
+    > That is structural, so phase 4 would have rediscovered this independently.
+    > **Note:** the phase-1 note's verbatim quotation of line 200 now reads "which then
+    > read", with a parenthetical recording what was acted on. Acting on a finding tends to
+    > invalidate the finding's own wording — past tense is what makes such a record
+    > permanent, and this is the third instance of that pattern this session.
+  - [x] Triage the three `first .pyx` DEFERRED items: close the meson-python revert
         (spent by ADR 0018), schedule the tokalign comma-form indexing fix here, leave
         the `numba-cuda` pin to phase 4
-  - [ ] Decide whether the `cython-translation` prerequisite gap earns a `DEFERRED.md`
+    > **Note:** triaged exactly as predicted. The meson-python revert is closed **in place**
+    > — this file annotates rather than deletes, a convention confirmed against eight prior
+    > closures all reading "**Settled (date), and the entry is closed.**" The finding kept
+    > is that its trigger *never fired*: ADR 0012 deferred the choice to the first `.pyx`
+    > believing compilation injects the import finder, but the editable install does, so it
+    > was settled early on `exp/meson-python-namespace` and superseded by ADR 0018 with the
+    > extension blocks still dormant. The tokalign comma-form fix stays scheduled under
+    > goal 3 here and the `numba-cuda` pin stays put for phase 4; neither needed an edit.
+  - [x] Decide whether the `cython-translation` prerequisite gap earns a `DEFERRED.md`
         trigger of its own. There is no `dp-compile` trigger section yet, only a
         `workflow-claude` one
+    > **Note:** it does — `DEFERRED.md` now has 14 trigger headings, the last being
+    > `## Trigger: the next dp-compile revision`. Two measurements sharpened the entry
+    > beyond what this plan's header claims. First, the defect is worse than a missing
+    > carve-out: prerequisite 2 *asserts* that phase 1 derives from phase 0, so followed
+    > literally on a recovered algorithm it hands off to `algorithm-prototype` to regenerate
+    > the kernel from the document written out of it. Second, checked against all three
+    > phase skills, the gap is **unique to `cython-translation`** and structurally so —
+    > `cpu-parallelization` derives from phase 2 and `gpu-parallelization` from phase 3, and
+    > those are forward edges in either graph shape. It is the only skill whose immediate
+    > source is phase 1, the one node whose incoming edge differs between the forward chain
+    > and the recovered graph. So the fix is narrow and will stay narrow.
 - [ ] Advance to phase 2 via `/dp-compile:next-phase viterbi`
   - [ ] Expect its step-3 oracle gate to pass: all three `.vpath.xls` files the
         manifest declares are exercised by `test_viterbi.py` through `load_vpath`.
