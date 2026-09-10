@@ -1,6 +1,6 @@
 # feat/hmm-viterbi-cython
 
-**Status**: active
+**Status**: merged — PR #21 — 2026-09-09
 **Created**: 2026-09-09
 **Subgoal**: Implement Viterbi at ADR 0002 phase 2 (Cython), the first `.pyx` in
 a distribution — `docs/plan/TODO.md`, revision 02-hmm-v0.1.0
