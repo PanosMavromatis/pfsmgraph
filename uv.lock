@@ -24,6 +24,7 @@ dev = [
     { name = "cython", specifier = ">=3.0" },
     { name = "meson-python" },
     { name = "ninja" },
+    { name = "numba", specifier = ">=0.61" },
     { name = "numpy", specifier = ">=2.1" },
     { name = "pytest", specifier = ">=8" },
 ]
@@ -983,18 +984,22 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+cpu-parallel = [
+    { name = "numba" },
+]
 gpu = [
     { name = "numba-cuda" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "numba", marker = "extra == 'cpu-parallel'", specifier = ">=0.61" },
     { name = "numba-cuda", marker = "extra == 'gpu'" },
     { name = "numpy", specifier = ">=2.1" },
     { name = "pfsmgraph-align", editable = "packages/pfsmgraph-align" },
     { name = "pfsmgraph-dataseq", editable = "packages/pfsmgraph-dataseq" },
 ]
-provides-extras = ["gpu"]
+provides-extras = ["gpu", "cpu-parallel"]
 
 [[package]]
 name = "pfsmgraph-hseg"

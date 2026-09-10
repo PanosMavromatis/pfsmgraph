@@ -46,13 +46,13 @@ def test_the_matrix_is_python_then_cython():
 
 
 def test_neither_backend_may_be_skipped():
-    # hardware=None is the whole claim, and it means something different for
+    # optional_on=None is the whole claim, and it means something different for
     # each row. For `python`, nothing external is needed to run pure Python at
     # all. For `cython`, the source is committed but the extension exists only
     # if it was built -- so ADR 0003's "implemented but not importable (missing
     # or stale Cython build) is a hard failure" is the clause doing the work.
     # A missing compiler is a broken working copy, never a legitimate absence.
-    assert [b.hardware for b in BACKENDS] == [None, None]
+    assert [b.optional_on for b in BACKENDS] == [None, None]
 
 
 def test_every_registered_module_is_a_kernel_not_a_package():
@@ -119,13 +119,13 @@ def test_an_unbuilt_compiled_backend_escalates_rather_than_skipping():
         detect([Backend("cython", "pfsmgraph.hmm._viterbi_never_built")])
 
 
-def test_missing_hardware_backend_is_a_reported_skip():
-    (state,) = detect([Backend("cuda", "pfsmgraph._absent", hardware="CUDA device")])
+def test_backend_missing_its_optional_dependency_is_a_reported_skip():
+    (state,) = detect([Backend("cuda", "pfsmgraph._absent", optional_on="CUDA device")])
     assert state.available is False
     assert state.reason == "no CUDA device detected"
 
 
-def test_unimportable_backend_without_hardware_is_a_hard_failure():
+def test_unimportable_backend_without_optional_on_is_a_hard_failure():
     # The stale-or-missing Cython build. ADR 0003 forbids skipping this.
     with pytest.raises(BackendError, match="hard failure"):
         detect([Backend("cython", "pfsmgraph._absent")])

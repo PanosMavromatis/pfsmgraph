@@ -229,14 +229,21 @@ that failure is silent. **The matrix stopped being empty on 2026-09-04**, when
 `Backend("cython", "pfsmgraph.hmm._viterbi_cython")`, so a run opens with
 `backends: python ✓ · cython ✓`. Each row names the *kernel module*, not the package,
 because `import pfsmgraph.hmm` succeeds with or without a decode in it and a probe that
-cannot fail is not a probe. Both carry `hardware=None`, so a failed import escalates rather
-than skipping — but **the clause means something different on the compiled row, and that is
-where it first does any work**. Nothing external is needed to run pure Python, so a failed
-import there can only be a broken checkout; a compiled backend can instead be *present in
-the source tree and absent from the environment*, since the `.pyx` is committed but the
-extension exists only if it was built. `hardware` is for absences an environment is entitled
-to have — no CUDA device — and a missing build is not one, so an unbuilt extension errors
-the session at startup instead of quietly reporting a green run over one backend. `EMPTY_HEADER` stays under test — the branch
+cannot fail is not a probe. Both carry `optional_on=None`, so a failed import escalates
+rather than skipping — but **the clause means something different on the compiled row, and
+that is where it first does any work**. Nothing external is needed to run pure Python, so a
+failed import there can only be a broken checkout; a compiled backend can instead be
+*present in the source tree and absent from the environment*, since the `.pyx` is committed
+but the extension exists only if it was built. `optional_on` is for absences an environment
+is entitled to have — no CUDA device — and a missing build is not one, so an unbuilt
+extension errors the session at startup instead of quietly reporting a green run over one
+backend. **That field was called `hardware` until 2026-09-10**, and phase 3 renamed it: an
+environment that declined `pfsmgraph-hmm`'s `cpu-parallel` extra is entitled to lack numba
+exactly as one without a GPU is entitled to lack a CUDA device, so the third row's absence
+is legitimate without being a *device*. The semantics never changed — the name had been
+taken from the only instance that existed when it was written, and one example cannot
+distinguish a concept from its first instance. Correcting it costs nothing a consumer sees,
+because this module reaches no shipped artifact. `EMPTY_HEADER` stays under test — the branch
 is still live and ADR 0003 requires that an empty matrix say so in as many words. Backend
 enumeration is deliberately test-only and reaches no shipped artifact, because enumerating
 backends is most of what a runtime backend-selection API needs and ADR 0003 leaves that
@@ -351,7 +358,7 @@ a prerequisite of `build` because `dist/` is shared by all five members while th
 glob carries no version, so removing it lets a stale version of the same package be
 uploaded.
 
-All five members build through meson-python (landed 2026-09-04), so the root `dev` group carries `meson-python`, `cython`, `ninja` **and `numpy`** — the last because it is a build requirement of `align`/`hmm` that `build-system.requires` cannot supply with build isolation off. A C compiler is needed **now**: `hmm` got the first `.pyx` on 2026-09-09 -- `_viterbi_cython.pyx`, the ADR 0002 phase-2 Viterbi kernel -- so this repository compiles something for the first time. `align`'s extension block is still dormant. **The dev group alone is not sufficient**, measured 2026-09-04: the generated editable loader bakes an *absolute* `ninja` path at build time and never consults `PATH`, so under uv it points into the build-isolation directory uv deletes once the build finishes, and every import then dies `FileNotFoundError` before the namespace shadowing is even reachable. Those members must also be built without build isolation — `[tool.uv] no-build-isolation-package`.
+All five members build through meson-python (landed 2026-09-04), so the root `dev` group carries `meson-python`, `cython`, `ninja`, `numpy` **and `numba`**. `numpy` is there because it is a build requirement of `align`/`hmm` that `build-system.requires` cannot supply with build isolation off; `numba` was added 2026-09-10 so that ADR 0002 phase 3's backend actually runs under a plain `uv sync`. Consumers get numba from `pfsmgraph-hmm`'s `cpu-parallel` extra instead, and the two halves are not redundant — an extra is a promise to consumers, a dev group is a promise to this repository, and only the second is checked by anything here. A parallel backend nobody exercises is worse than none. A C compiler is needed **now**: `hmm` got the first `.pyx` on 2026-09-09 -- `_viterbi_cython.pyx`, the ADR 0002 phase-2 Viterbi kernel -- so this repository compiles something for the first time. `align`'s extension block is still dormant. **The dev group alone is not sufficient**, measured 2026-09-04: the generated editable loader bakes an *absolute* `ninja` path at build time and never consults `PATH`, so under uv it points into the build-isolation directory uv deletes once the build finishes, and every import then dies `FileNotFoundError` before the namespace shadowing is even reachable. Those members must also be built without build isolation — `[tool.uv] no-build-isolation-package`.
 
 ## Branches and pull requests
 
@@ -425,7 +432,7 @@ These constrain any code written here. They are inherited from the proof-of-conc
   workspace — a file listing shows what went into the box, not what a consumer gets out.
   All four land **in the release commit**, since they are wheel content and adding them later
   leaves a published version standing as the broken one.
-- **"GPU" means two unrelated things.** `numba-cuda` for the DP packages, `torch` for `dl`. Do not unify these into one `[gpu]` extra.
+- **"GPU" means two unrelated things.** `numba-cuda` for the DP packages, `torch` for `dl`. Do not unify these into one `[gpu]` extra. **And not everything Numba is GPU**: since 2026-09-10 `pfsmgraph-hmm` also declares `cpu-parallel = ["numba>=0.61"]` for the ADR 0002 phase-3 backend, which needs no device and is deliberately its own extra. `gpu` happens to satisfy it transitively, because `numba-cuda` depends on `numba` — a resolution accident, not a reason to merge them. numba is also the one dependency here that imposes a numpy **ceiling**: measured 2026-09-10, `numba==0.61.*` caps numpy at 2.2.6 against this member's `>=2.1` floor. That is why it is optional rather than required — as a hard dependency the ceiling would bind every consumer of `pfsmgraph-hmm`, including one that only ever runs the pure-Python decode. Note the direction: a transitive *upper* bound arriving from someone else's metadata is the mirror image of the workspace footgun below, and neither is visible in `uv.lock`, which records one resolution rather than the space of them.
 - **The ADRs outrank the imported implementations.** The `dataseq` merge takes the `dl`
   (MelodyHPO) version as its *base* because it is the most mature of the three, but base
   means starting point, not authority. Where any of the three disagrees with an Accepted

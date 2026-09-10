@@ -103,10 +103,58 @@ instinct on a recovered graph is the opposite.
         reversal warranting its own ADR number
   - [x] Record it in `FORMALIZATION.md` — Metadata row and `Parallel decomposition`
         section, both of which read **Undetermined** today
-- [ ] Decide `numba`'s place in `pfsmgraph-hmm`'s declared dependencies
-  - [ ] Runtime dependency or optional extra, given `hardware=None` makes a failed import
+- [x] Decide `numba`'s place in `pfsmgraph-hmm`'s declared dependencies
+  > **Q:** How should numba be declared — a new optional extra, a hard runtime
+  > dependency, or folded into the existing `gpu` extra?
+  > **A:** A new optional extra, `cpu-parallel = ["numba>=0.61"]`.
+  > **Q:** The `cpu_parallel` row's absence is legitimate but is not hardware. How should
+  > `_backends.py` express that — rename the field, keep `hardware` with a strained value,
+  > or keep `hardware=None` and hard-fail?
+  > **A:** Rename the field to `optional_on`.
+  > **Done:** `packages/pfsmgraph-hmm/pyproject.toml` gains
+  > `cpu-parallel = ["numba>=0.61"]` beside the untouched `gpu` extra; the root `dev` group
+  > gains `numba>=0.61`; `_backends.py`'s `hardware` field is now `optional_on`, with the
+  > three registry comments, `detect()` and four references in `tests/test_backends.py`
+  > following. `uv lock` resolved 56 packages and `uv sync` installed numba 0.67.0 and
+  > llvmlite 0.49.0. Suite green at 291 — the rename broke nothing, which is what being
+  > test-only infrastructure buys.
+  > **Note:** numba imposes a numpy **upper** bound, and that is what settled the extra
+  > question. Measured 2026-09-10: `numba>=0.61` with `numpy>=2.1` resolves to numba 0.67 /
+  > numpy 2.5.3, but pinning `numba==0.61.*` caps numpy at **2.2.6**. As a hard dependency
+  > that ceiling would bind every consumer of `pfsmgraph-hmm`, including one that only ever
+  > runs the pure-Python decode. Note the direction: this is the mirror image of the
+  > workspace footgun `core.md` documents — that one is about *our* lower bounds never
+  > failing locally, this is someone else's ceiling arriving transitively. Neither is
+  > visible in `uv.lock`, which records one resolution rather than the space of them.
+  > **Note:** the `numpy>=2.1` floor stands unchanged, and numba's ceiling was deliberately
+  > **not** mirrored into our own declaration. The floor's justification is still the
+  > compiled one — a C extension built against numpy 2.x headers will not run on 1.x — and
+  > adding an upper bound we did not derive would be drift, not caution. numba declares its
+  > own ceiling; a resolver already reads it.
+  > **Note:** no `requires-python` conflict. numba 0.67 resolves on 3.10, 3.11, 3.13 and
+  > 3.14, so `hmm`'s `>=3.10` is safe. Checked rather than assumed, because numba has
+  > historically lagged new Python releases and the failure would land at a consumer's
+  > install rather than here.
+  > **Note:** the `gpu` extra already pulls numba transitively — `numba-cuda` depends on
+  > `numba` and `llvmlite`. So phase 4's extra satisfies phase 3's requirement for free,
+  > which is coherent given phase 4 reuses the decomposition phase 3 validates. It is not
+  > a reason to fold the two together: ADR 0004 refuses to unify unrelated accelerators,
+  > and a CPU backend behind a `[gpu]` install is exactly that.
+  > **Note:** `numba` is in the root `dev` group as well as in the extra, and that half was
+  > forced rather than chosen. Without it a plain `uv sync` leaves the phase-3 backend
+  > unexercised, and validating the decomposition under real concurrency is the entire
+  > stated purpose of the phase — a parallel backend nobody runs is worse than none.
+  > **Note:** the row's `optional_on` value will read `"numba"`, not `"the cpu-parallel
+  > extra"` as the decision preview showed. `detect()` builds its reason as
+  > `f"no {optional_on} detected"`, which the longer phrase renders ungrammatical. The
+  > extra is named in the registry docstring instead, where a reader adding a row is
+  > already looking. The row itself lands in the next goal.
+  > **Note:** `docs/agents/core.md` still says both backend rows "carry `hardware=None`",
+  > which the rename makes false. Left for `/agents-docs-update` at commit time, same
+  > routing as the `codex.md` correction in the previous goal.
+  - [x] Runtime dependency or optional extra, given `hardware=None` makes a failed import
         a startup error rather than a skip
-  - [ ] Review the `numpy>=2.1` floor alongside it, per `dp-compile.toml`'s pairing note
+  - [x] Review the `numpy>=2.1` floor alongside it, per `dp-compile.toml`'s pairing note
 - [ ] Implement the decomposition under `@njit(parallel=True)`/`prange`
   - [ ] `_viterbi_cpu_parallel.py`, entered through `/dp-compile:next-phase viterbi`
   - [ ] Third `_backends.py` row
