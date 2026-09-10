@@ -785,3 +785,199 @@ def test_the_kernel_itself_reports_impossibility_numerically():
     )
     assert np.isinf(total)
     assert states.shape == (2,)
+
+
+# --- phase 2: the Cython backend against phase 1 -----------------------------
+#
+# These belong below the line for the same reason the two above do -- they call
+# `_viterbi` directly, on both backends, so they can never be parameter values.
+# But they are a different kind of non-shared test, and the difference matters
+# when reading a green run.
+#
+# The tests above the line exercise one backend, because `viterbi(params,
+# record)` has nowhere to put another. **These run both and compare**, so they
+# are the only assertions in this repository that the word "equivalence" is
+# entitled to. A green suite still does not mean the shared cases ran twice --
+# they did not, and will not until `align` brings the selection seam -- so read
+# `backends: python OK, cython OK` as "both kernels import and agree where they
+# are compared", never as "every test ran against both".
+#
+# The phase-2 failure class is boundary and type errors introduced by the
+# translation, which is why the first test generates inputs rather than reusing
+# the fixtures: the tracked models are one shape, and a translation defect is
+# most likely at a shape they do not take.
+
+from pfsmgraph.hmm._viterbi_cython import _viterbi as _viterbi_cython  # noqa: E402
+
+
+def _random_model(rng, size, n_symbols):
+    """A valid random `HMMParams`: rows and live fibres normalized."""
+    transition_p = rng.random((size, size))
+    transition_p /= transition_p.sum(axis=1, keepdims=True)
+    user_output = rng.random((size, size, n_symbols))
+    user_output /= user_output.sum(axis=2, keepdims=True)
+    init_p = rng.random(size)
+    init_p /= init_p.sum()
+    return build(init_p, transition_p, user_output, symbols=tuple(
+        f"s{i}" for i in range(n_symbols)
+    ))
+
+
+def _both(params, codes):
+    """Decode with both kernels; return the two `(states, total)` pairs."""
+    args = (params.init_state_p, params.transition_p, params.output_p, codes)
+    return _viterbi(*args), _viterbi_cython(*args)
+
+
+def test_the_cython_kernel_agrees_with_python_on_generated_models():
+    """The property test phase 2 owes: many shapes, not the fixtures' one.
+
+    Equality is exact rather than approximate, and that is a claim about the
+    translation rather than a hope. Both kernels do the same two float64
+    operations in the same order -- multiply the two probabilities, take one
+    `-log2`, add -- so the candidate values are identical bit patterns and the
+    minima are too. An `abs=` tolerance here would hide precisely the class of
+    defect this test exists to find: a reassociated expression that is close
+    everywhere and wrong at a tie.
+
+    The generator is seeded. ADR 0017 makes parameters a frozen value, which is
+    hollow if the value cannot be re-derived; a failure here is reproducible by
+    reading the seed out of this line.
+    """
+    rng = np.random.default_rng(20260909)
+    for _ in range(200):
+        size = int(rng.integers(1, 8))
+        n_symbols = int(rng.integers(1, 6))
+        params = _random_model(rng, size, n_symbols)
+        codes = np.asarray(
+            [code(int(i)) for i in rng.integers(0, n_symbols, int(rng.integers(0, 40)))],
+            dtype=np.int32,
+        )
+        (py_states, py_total), (cy_states, cy_total) = _both(params, codes)
+        assert np.array_equal(py_states, cy_states)
+        assert py_total == cy_total
+
+
+def test_the_cython_kernel_agrees_at_the_shape_boundaries():
+    """`N = 0` and `S = 1`, the two shapes an off-by-one reaches first.
+
+    An empty record still visits one state and crosses no arc, so the loop body
+    never runs and the backtrace is the seed alone -- the case where a `range`
+    written one too wide or one too narrow shows up immediately.
+    """
+    params = build(
+        np.array([0.25, 0.75]),
+        np.array([[0.5, 0.5], [0.5, 0.5]]),
+        np.full((2, 2, 2), 0.5),
+    )
+    (py_states, py_total), (cy_states, cy_total) = _both(
+        params, np.array([], dtype=np.int32)
+    )
+    assert py_states.shape == (1,)
+    assert np.array_equal(py_states, cy_states) and py_total == cy_total
+
+    single = build(np.array([1.0]), np.array([[1.0]]), np.full((1, 1, 2), 0.5))
+    codes = np.array([code(0), code(1), code(0)], dtype=np.int32)
+    (py_states, py_total), (cy_states, cy_total) = _both(single, codes)
+    assert np.array_equal(py_states, cy_states) and py_total == cy_total
+
+
+def test_the_cython_kernel_breaks_ties_the_same_way():
+    """The tie-break is contract, and no fixture exercises it.
+
+    There are 0 exact ties in 3804 oracle positions, because learned float
+    parameters do not collide -- so a differential suite alone would accept a
+    last-wins port. An exactly uniform model ties at *every* position, and that
+    is not a contrived shape: `rand_p_vector(size, noise_width=0)` returns an
+    exactly uniform vector, which is how revision 03 initialises.
+
+    The formalization makes ties resolve to the smallest index, at both the
+    recurrence and the final `argmin`. Two correct backends would otherwise
+    legitimately disagree, which is what makes this an equivalence test rather
+    than a style check.
+    """
+    size = 5
+    params = build(
+        np.full(size, 1.0 / size),
+        np.full((size, size), 1.0 / size),
+        np.full((size, size, 2), 0.5),
+    )
+    codes = np.array([code(0), code(1)] * 10, dtype=np.int32)
+    (py_states, py_total), (cy_states, cy_total) = _both(params, codes)
+
+    assert np.array_equal(py_states, cy_states)
+    assert py_total == cy_total
+    # Both must take the smallest index everywhere, not merely the same one.
+    assert np.array_equal(cy_states, np.zeros_like(cy_states))
+
+
+def test_the_cython_kernel_reads_the_frozen_parameter_arrays_directly():
+    """ADR 0017's frozen arrays reach the typed memoryviews without a copy.
+
+    The failure this rules out is silent in review and loud at runtime: Cython 3
+    refuses to bind a mutable typed memoryview to a read-only buffer, so a
+    `double[:, ::1]` where a `const double[:, ::1]` was needed compiles cleanly
+    and raises "buffer source array is read-only" on every call. Asserting the
+    inputs really are read-only is what stops this test decaying into a restatement
+    of the one above if `HMMParams` ever stopped freezing them.
+    """
+    params = build(
+        np.array([0.5, 0.5]),
+        np.array([[0.5, 0.5], [0.5, 0.5]]),
+        np.full((2, 2, 2), 0.5),
+    )
+    assert not params.init_state_p.flags.writeable
+    assert not params.transition_p.flags.writeable
+    assert not params.output_p.flags.writeable
+
+    states, total = _viterbi_cython(
+        params.init_state_p,
+        params.transition_p,
+        params.output_p,
+        record(0, 1, 0).codes,
+    )
+    assert states.dtype == STATE_DTYPE
+    assert np.isfinite(total)
+
+
+def test_the_cython_kernel_reproduces_each_saved_decode(oracle):
+    """The differential case, run against the compiled backend too.
+
+    This is the one check in the file that is not downstream of code written
+    here: the `.vpath.xls` files came out of a Lush runtime that no longer
+    exists in this repository. The formalization was *recovered* from
+    `_viterbi.py` and its test cases were extracted from the same kernel, so
+    every other comparison agrees with phase 1 by construction. Running the
+    oracle against phase 2 as well is what stops the compiled backend inheriting
+    that circularity unexamined.
+
+    Position 0 is excluded for the same reason it is excluded above: the seeding
+    defect is fixed rather than reproduced, and it reaches nothing else.
+    """
+    states, _ = _viterbi_cython(
+        oracle.params.init_state_p,
+        oracle.params.transition_p,
+        oracle.params.output_p,
+        oracle.record.codes,
+    )
+    assert np.array_equal(states[1:], oracle.states[1:])
+    assert np.array_equal(states, oracle.path.states)
+
+
+def test_the_cython_kernel_inherits_the_seeding_divergence_exactly():
+    """Pin the divergence; do not widen the assertion.
+
+    The oracle is *wrong* at exactly one position by construction, so the
+    compiled backend must disagree with it in precisely the same place and
+    nowhere else. Asserting "mostly agrees" would let a genuine phase-2 defect
+    hide inside an allowance made for a known one.
+    """
+    oracle = Oracle("m008_0001_008.hmm")
+    states, _ = _viterbi_cython(
+        oracle.params.init_state_p,
+        oracle.params.transition_p,
+        oracle.params.output_p,
+        oracle.record.codes,
+    )
+    disagreements = np.flatnonzero(states != oracle.states)
+    assert disagreements.tolist() == [0]

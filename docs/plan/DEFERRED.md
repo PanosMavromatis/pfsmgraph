@@ -121,6 +121,27 @@ and several of these must land *as part of* the merge rather than after it.
   comma-form (`scores[seq_a[i - 1], seq_b[j - 1]]`) and the 1-D memoryviews alone.
   **Do it before the file is copied** — PRD §11 designates it the reference template for
   every future kernel and wavefront pass.
+  **Done (2026-09-09), and the entry is closed.** 41 replacements across the four 2-D
+  memoryviews `M`, `X`, `Y`, `T`; the two surviving `][` occurrences are numpy slices on the
+  output arrays (`aligned_a_np[:k][::-1]`) and are correctly left alone, as is the
+  already-comma-form `scores[seq_a[i - 1], seq_b[j - 1]]`. It was applied **before** the
+  first `.pyx` landed, which is what the entry asked for. Two things it is honest to record
+  rather than let the closure imply. The file is untracked by design
+  (`.scratch/align-poc/.gitignore:170`), so this closure has **no diff to point at** and
+  the change cannot be compile-checked here — `tokalign` is not a workspace member and
+  nothing under `.scratch/` is built. And the template was fixed in time and then **not
+  used**: `_viterbi_cython.pyx` was written from the phase-0 formalization rather than by
+  copying a Needleman-Wunsch kernel, so the first consumer of the corrected template is
+  still ahead of us. Fixing it early was still right — a defect in a template is copied
+  forward looking like house style.
+
+  **This trigger has now fired**, on 2026-09-09. Both entries above are closed by it. The
+  `numba-cuda` entry below is **not**, and that is a mismatch worth naming rather than
+  quietly leaving: its own text defers it to "once the wavefront backend lands", which is
+  ADR 0002 phase 4, not the first `.pyx`. It is filed under a trigger that is not its
+  condition. Left in place rather than moved, because the phase-4 work is the same branch
+  family and moving it would lose the association; but a reader auditing fired triggers
+  should expect this one to still show an open entry.
 - **Pin the `numba-cuda` lower bound** in `align`'s (and `hmm`'s) `[gpu]` extra once the
   wavefront backend lands; it is currently unpinned.
 
