@@ -9,7 +9,7 @@
 | Family | Hidden Markov model — **arc-emission (Mealy)**, [ADR 0015](../../adr/0015-arc-emission-mealy-formulation.md) |
 | Variant | Decode — the single most probable state path. Not forward, not posterior. |
 | Objective | **Minimise the total description length of the path, in bits: the min-plus (tropical) semiring.** Its identity is `0.0` and its absorbing element is `+inf`. |
-| Parallel decomposition | **Undetermined** — this recurrence has no anti-diagonals. See the section below. |
+| Parallel decomposition | **States within one timestep** — `prange` over `j`, serial reduction over `i`. This recurrence has no anti-diagonals. See the section below. |
 | Time complexity | `O(N·S²)` |
 | Space complexity | `O(N·S)` |
 | Optimality | Optimal — exact minimisation over all `S^(N+1)` paths. |
@@ -163,30 +163,53 @@ emitted.
 
 ## Parallel decomposition
 
-**Undetermined — and that is the finding, not a deferral.**
+**States within one timestep.** Settled 2026-09-10 at phase 3, against the landed kernels,
+as [ADR 0016](../../adr/0016-numba-cpu-parallel-phase.md) deferred it to be.
 
-This recurrence is **one-dimensional over time with dense `S x S` coupling between states**,
-so it has **no anti-diagonals at all**. The decomposition [ADR 0002](../../adr/0002-three-phase-algorithm-lifecycle.md)
-calls "the same transformation for every DP kernel in the family" does not merely go
-unchosen here; it does not exist for this kernel. Do not invent one — an invented wavefront
-over a dependency structure that has none is a race, not an optimisation.
+`prange` over `j`; the reduction over `i` stays serial and ascending. For fixed `t` all `S`
+values of `j` are independent — each reads only `delta[t-1, :]` and writes only
+`delta[t, j]` and `psi[t, j]` — so the parallel loop is race-free by construction rather
+than by scheduling discipline.
 
-What *is* available, and what would settle it:
+**The `i` axis must not be the parallel one, and the reason is contract rather than
+performance.** `argmin` over `i` returns the *first* minimal index, and a parallel reduction
+combines partials in an unspecified order, so a tie between `i = 2` and `i = 7` may resolve
+to either. That breaks the tie-breaking rule below **silently**: the `.vpath.xls` oracles
+contain 0 exact ties in 3804 positions, because learned float parameters do not collide, so
+no differential test can catch it. The constructed uniform-model case is the only guard, and
+it exists because `rand_p_vector(size, noise_width=0)` ties at every position.
 
-- **States within one timestep.** For fixed `t`, all `S` values of `j` are independent: each
-  reads only `delta[t-1, :]` and writes only `delta[t, j]`. This is the candidate with an
-  argument behind it, and it parallelises the `j` loop only.
-- **A batch of independent sequences**, once revision 03 introduces batching.
+**This recurrence has no anti-diagonals, and here the anti-diagonal is worse than absent —
+it is a race.** In an alignment matrix `{i + j = c}` is an independent set *because* a cell
+reads only its three neighbours. This array is time by state, and `delta[t, j]` reads
+**every** `delta[t-1, i]`. So the anti-diagonal `{t + j = c}` holds both `(t, j)` and
+`(t-1, j+1)`, and `delta[t, j]` reads `delta[t-1, j+1]` as its `i = j+1` term: two cells on
+one anti-diagonal with a direct dependency between them. The decomposition
+[ADR 0002](../../adr/0002-three-phase-algorithm-lifecycle.md) calls "the same transformation
+for every DP kernel in the family" does not merely go unchosen here — applying it would be
+the defect. That claim is withdrawn for this family in ADR 0016's `Resolved` section.
+
+**The parallelism is thin, and that is accepted rather than overlooked.** `S` is 5 and 8 in
+the tracked fixtures and on the order of 50 at the ceiling, so `prange` over `j` offers at
+most `S`-way parallelism over an `S`-element reduction, and per-timestep thread overhead may
+exceed the work. This kernel may be slower than phase 2. ADR 0016 scopes phase 3 to parallel
+*correctness* — validating a decomposition under real concurrency before CUDA — so a phase-3
+kernel that loses on wall-clock is within what the phase is for.
+
+The two decompositions not taken:
+
+- **A batch of independent sequences.** The best speed story, and genuinely embarrassingly
+  parallel, but unavailable at this signature: `viterbi(params, record)` takes one record,
+  and batching arrives with revision 03.
 - **An associative scan over time** in the min-plus semiring, since `(min, +)` matrix
-  "multiplication" is associative — theoretically available, unevaluated here.
-
-[ADR 0016](../../adr/0016-numba-cpu-parallel-phase.md) keeps this open deliberately, to be
-settled at phase 3 against a kernel that exists. This section is evidence for that decision,
-not the decision.
+  "multiplication" is associative. Costs `O(N·S³)` against `O(N·S²)`, does not produce
+  `psi`, and re-associates the comparisons — so it forfeits bit-exactness with phases 1-2
+  and would need its own equivalence argument rather than a differential test.
 
 **The tie-breaking rule belongs here as much as in the recurrence**: smallest index wins, at
 both the recurrence and the final `argmin`. Two backends disagreeing on ties will fail an
 equivalence suite on a difference neither got wrong.
+
 
 ## Differential oracles
 

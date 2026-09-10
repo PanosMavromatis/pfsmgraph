@@ -54,12 +54,19 @@ no-build-isolation-package = [
 #                  against numpy headers). Without build isolation it cannot be
 #                  supplied by build-system.requires alone, so it is listed here
 #                  even though no member depends on it at development time.
+#   numba        - the ADR 0002 phase-3 backend's compiler, and hmm's
+#                  `cpu-parallel` extra. Here as well as there because a plain
+#                  `uv sync` has to exercise that backend: phase 3 exists to
+#                  validate a parallel decomposition under real concurrency, and
+#                  a parallel backend nobody runs is worse than no parallel
+#                  backend.
 dev = [
     "pytest>=8",
     "meson-python",
     "cython>=3.0",
     "ninja",
     "numpy>=2.1",
+    "numba>=0.61",
 ]
 
 [tool.pytest.ini_options]

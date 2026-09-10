@@ -35,6 +35,13 @@ py.install_sources(
     'src/pfsmgraph/hmm/_numeric.py',
     'src/pfsmgraph/hmm/_params.py',
     'src/pfsmgraph/hmm/_viterbi.py',
+    # ADR 0002 phase 3. Pure Python, but it still has to be listed: meson does
+    # not glob, and an unlisted module is invisible to the editable finder and
+    # absent from any built wheel. Both were observed here -- writing this file
+    # without listing it gave a ModuleNotFoundError at import, which is the
+    # characteristic ADR 0018 failure and the reason it is loud rather than
+    # silent.
+    'src/pfsmgraph/hmm/_viterbi_cpu_parallel.py',
   ],
   subdir: 'pfsmgraph/hmm',
 )

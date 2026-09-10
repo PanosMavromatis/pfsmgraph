@@ -154,22 +154,9 @@ library, only earlier use of one of its targets.
 
 ## Open
 
-- **Whether the anti-diagonal decomposition applies to `hmm`'s Viterbi at all.**
-  `docs/plan/TODO.md`'s revision 02 already carries an unresolved finding that an HMM
-  recurrence is 1-D over time with dense N×N state coupling, and may have no
-  anti-diagonals — a batch or associative-scan decomposition instead. This ADR does not
-  resolve that; it says only that *if* a kernel uses the anti-diagonal decomposition,
-  phase 3 is where it is first validated under real concurrency. For `align`, phase 3
-  unambiguously applies. For `hmm`, phase 3's actual content is contingent on revision
-  02's still-open finding, at the same point ADR 0002's CUDA phase already deferred it to.
+None. The one item this record opened — whether the anti-diagonal decomposition applies to
+`hmm`'s Viterbi — is settled below.
 
-  *Corroborated but deliberately still open (2026-09-09).* A read-only pass over the
-  landed `_viterbi.py` reached the same conclusion independently — the recurrence is 1-D
-  over time with dense S×S coupling, so it has **no anti-diagonals at all**, and the
-  decomposition is not merely unchosen here but absent. That is evidence, not the
-  decision: `docs/plan/TODO.md` schedules this to be settled at phase 3, "against a kernel
-  that exists", and closing it early would preempt a deferral the plan took on purpose.
-  Left open so the phase-3 subgoal decides it, not so it can be rediscovered.
 
 ## Resolved
 
@@ -207,3 +194,37 @@ library, only earlier use of one of its targets.
 
   The settled form is already in force outside this record: `dp-compile.toml`'s `[phases]`
   table reads `_{algorithm}_cpu_parallel.py`, and the glob follows it.
+
+- **Whether the anti-diagonal decomposition applies to `hmm`'s Viterbi at all.**
+  **Settled 2026-09-10: it does not, and this record withdraws ADR 0002's claim that it
+  applies to every DP kernel in the family.** Decided at phase 3 against the landed
+  kernels, which is where this record and `docs/plan/TODO.md` both deferred it to.
+
+  The claim withdrawn is a *generality* claim, not a decision. ADR 0002's four-phase
+  lifecycle stands unchanged, and the anti-diagonal wavefront stands for `align`, whose
+  two-dimensional matrix does have mutually independent anti-diagonals. What does not
+  survive is "the same transformation for every DP kernel in the family" — the
+  *Consequences → Positive* bullet of
+  [ADR 0002](0002-three-phase-algorithm-lifecycle.md) — and the universal reading of "that
+  is the parallel decomposition DP does admit", in that record's *Decision*. Both were
+  inherited from a proof-of-concept containing exactly one algorithm family.
+
+  **Cited by section rather than by line, deliberately.** The line numbers rotted twice
+  while this was being settled: `docs/plan/TODO.md` and this branch's doc both said `:53`
+  for a claim that was at `:55`, and adding the withdrawal pointer to ADR 0002's own Status
+  block then shifted it to `:59`. A citation into a record that the same change is editing
+  cannot be a line number.
+
+  **For Viterbi the anti-diagonal is not absent but wrong.** The array is time by state and
+  `delta[t, j]` reads every `delta[t-1, i]`, so the anti-diagonal `{t + j = c}` contains
+  `(t, j)` and `(t-1, j+1)` with a direct dependency between them. Anti-diagonal structure
+  in an `hmm` kernel is therefore itself the defect, not an optimisation to review for
+  correctness.
+
+  **The decomposition taken is states within one timestep** — `prange` over `j`, reduction
+  over `i` serial and ascending, which is what preserves the first-wins tie-break that
+  [ADR 0003](0003-one-parameterized-test-suite-per-algorithm.md) makes contract. Recorded
+  in full in
+  [`docs/design/algorithms/viterbi/FORMALIZATION.md`](../algorithms/viterbi/FORMALIZATION.md)'s
+  `Parallel decomposition` section, which is authoritative for the kernel; this entry is
+  authoritative for the withdrawal.

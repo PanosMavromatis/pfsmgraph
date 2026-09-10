@@ -981,3 +981,188 @@ def test_the_cython_kernel_inherits_the_seeding_divergence_exactly():
     )
     disagreements = np.flatnonzero(states != oracle.states)
     assert disagreements.tolist() == [0]
+
+
+# --- phase 3: the Numba CPU-parallel backend ---------------------------------
+#
+# Below the line for the same reason as phase 2's: these call `_viterbi`
+# directly on more than one backend, so they can never be parameter values.
+#
+# **The phase-3 failure class is different from phase 2's, and that is what
+# these tests are shaped around.** A translation defect is deterministic -- it is
+# there or it is not, and one input finds it. A race is a property of the
+# *interleaving*, so it can pass on every input this file contains and fail in
+# production. The only way to sample interleavings is to actually run threads,
+# which is the whole of ADR 0016's argument for putting this phase before CUDA:
+# nothing about validating a decomposition needs a GPU.
+#
+# Two of these have no phase-2 counterpart at all -- thread-count invariance and
+# the constructed tie under many threads -- and they are the ones that would be
+# skipped by someone treating this phase as another transliteration.
+
+from numba import config as _numba_config  # noqa: E402
+from numba import get_num_threads, set_num_threads  # noqa: E402
+
+from pfsmgraph.hmm._viterbi_cpu_parallel import _viterbi as _viterbi_cpu_parallel  # noqa: E402
+
+#: The largest thread count this process can actually use. `set_num_threads`
+#: refuses anything above it, and it is fixed at numba import, so a test cannot
+#: raise the ceiling -- only pick a value under it.
+MAX_THREADS = _numba_config.NUMBA_NUM_THREADS
+
+
+def _all_three(params, codes):
+    """Decode with all three kernels; return three `(states, total)` pairs."""
+    args = (params.init_state_p, params.transition_p, params.output_p, codes)
+    return _viterbi(*args), _viterbi_cython(*args), _viterbi_cpu_parallel(*args)
+
+
+def test_the_cpu_parallel_kernel_agrees_with_both_predecessors_on_generated_models():
+    """The property test phase 3 inherits, run against all three kernels.
+
+    Exact equality again, and for the same reason phase 2 could claim it: the
+    reduction is a `min`, which is order-independent under float, so
+    parallelising it reassociates nothing. **Do not copy this assertion into
+    revision 03's forward pass.** That reduction is a *sum*, `prange`
+    reassociates, and float addition is not associative -- the equivalent test
+    there needs a tolerance, and asserting equality would fail for a correct
+    kernel.
+    """
+    rng = np.random.default_rng(20260910)
+    for _ in range(200):
+        size = int(rng.integers(1, 8))
+        n_symbols = int(rng.integers(1, 6))
+        params = _random_model(rng, size, n_symbols)
+        codes = np.asarray(
+            [code(int(i)) for i in rng.integers(0, n_symbols, int(rng.integers(0, 40)))],
+            dtype=np.int32,
+        )
+        (py_s, py_t), (cy_s, cy_t), (nb_s, nb_t) = _all_three(params, codes)
+        assert np.array_equal(py_s, nb_s)
+        assert np.array_equal(cy_s, nb_s)
+        assert py_t == nb_t == cy_t
+
+
+def test_the_cpu_parallel_kernel_is_invariant_to_thread_count():
+    """A correct parallel kernel gives one answer; a racy one gives two.
+
+    This is the check phase 3 exists for, and it is not a tolerance question: a
+    disagreement between thread counts is a race, full stop, and widening an
+    assertion to accommodate one would hide exactly the defect that is most
+    expensive to find later. A racy kernel very often passes at one thread and
+    fails at many -- or passes at both on a small input and fails in production,
+    which is why this runs over generated models rather than one.
+
+    Skipped rather than silently vacuous on a single-core runner: with
+    `MAX_THREADS == 1` there is no second thread count to compare against, and a
+    green result would be a claim this machine cannot support.
+    """
+    if MAX_THREADS < 2:
+        pytest.skip(f"needs >= 2 threads to compare; this process has {MAX_THREADS}")
+
+    rng = np.random.default_rng(20260910)
+    models = []
+    for _ in range(40):
+        size = int(rng.integers(2, 8))
+        n_symbols = int(rng.integers(1, 6))
+        params = _random_model(rng, size, n_symbols)
+        codes = np.asarray(
+            [code(int(i)) for i in rng.integers(0, n_symbols, int(rng.integers(1, 60)))],
+            dtype=np.int32,
+        )
+        models.append((params, codes))
+
+    original = get_num_threads()
+    try:
+        results = {}
+        for threads in (1, MAX_THREADS):
+            set_num_threads(threads)
+            results[threads] = [
+                _viterbi_cpu_parallel(
+                    p.init_state_p, p.transition_p, p.output_p, c
+                )
+                for p, c in models
+            ]
+    finally:
+        set_num_threads(original)
+
+    for (one_s, one_t), (many_s, many_t) in zip(results[1], results[MAX_THREADS]):
+        assert np.array_equal(one_s, many_s)
+        assert one_t == many_t
+
+
+def test_the_cpu_parallel_kernel_breaks_ties_to_the_smallest_index_at_every_thread_count():
+    """The constructed tie, which real data cannot produce.
+
+    `rand_p_vector(size, noise_width=0)` returns an exactly uniform vector, and
+    a uniform model ties at *every* position -- against 0 exact ties in 3804
+    positions across the tracked fixtures, because learned float parameters do
+    not collide. So the differential tests above are evidence about the corpus
+    and say nothing at all about the tie-break.
+
+    **This is the test that catches a `prange` on the wrong axis.** Parallelising
+    the reduction over `i` instead of the states `j` resolves ties in whatever
+    order the partials combined, which is a silent contract break: ADR 0003
+    makes first-wins contract precisely because two backends breaking ties
+    differently are both correct and disagree. Run at more than one thread
+    deliberately -- a bad axis can still look first-wins on one thread.
+    """
+    size, n_symbols = 5, 3
+    params = build(
+        np.full(size, 1.0 / size),
+        np.full((size, size), 1.0 / size),
+        np.full((size, size, n_symbols), 1.0 / n_symbols),
+        symbols=tuple(f"s{i}" for i in range(n_symbols)),
+    )
+    codes = np.array([code(i % n_symbols) for i in range(24)], dtype=np.int32)
+
+    original = get_num_threads()
+    try:
+        for threads in {1, MAX_THREADS}:
+            set_num_threads(threads)
+            py_states, py_total = _viterbi(
+                params.init_state_p, params.transition_p, params.output_p, codes
+            )
+            nb_states, nb_total = _viterbi_cpu_parallel(
+                params.init_state_p, params.transition_p, params.output_p, codes
+            )
+            assert np.array_equal(py_states, nb_states), f"at {threads} thread(s)"
+            assert py_total == nb_total
+            # Every candidate ties, so first-wins means state 0 throughout --
+            # asserted directly rather than only against phase 1, so that a
+            # simultaneous regression in both kernels cannot pass.
+            assert np.array_equal(nb_states, np.zeros_like(nb_states))
+    finally:
+        set_num_threads(original)
+
+
+def test_the_cpu_parallel_kernel_reproduces_each_saved_decode(oracle):
+    """The oracle, run against the third backend too.
+
+    Same reasoning as phase 2's: the `.vpath.xls` files are the only evidence
+    here not downstream of code written in this repository, and the
+    formalization was *recovered* from `_viterbi.py`, so every other comparison
+    agrees with phase 1 by construction. Position 0 is excluded because the
+    seeding defect is fixed rather than reproduced.
+    """
+    states, _ = _viterbi_cpu_parallel(
+        oracle.params.init_state_p,
+        oracle.params.transition_p,
+        oracle.params.output_p,
+        oracle.record.codes,
+    )
+    assert np.array_equal(states[1:], oracle.states[1:])
+    assert np.array_equal(states, oracle.path.states)
+
+
+def test_the_cpu_parallel_kernel_inherits_the_seeding_divergence_exactly():
+    """Pin the divergence to position 0 alone; do not widen the assertion."""
+    oracle = Oracle("m008_0001_008.hmm")
+    states, _ = _viterbi_cpu_parallel(
+        oracle.params.init_state_p,
+        oracle.params.transition_p,
+        oracle.params.output_p,
+        oracle.record.codes,
+    )
+    disagreements = np.flatnonzero(states != oracle.states)
+    assert disagreements.tolist() == [0]

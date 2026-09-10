@@ -38,6 +38,21 @@ dependencies = [
 [project.optional-dependencies]
 # numba-cuda for the Baum-Welch core only; unrelated to dl's torch (PRD §6).
 gpu = ["numba-cuda"]
+# ADR 0002 phase 3 -- the Numba CPU-parallel Viterbi backend. Deliberately not
+# folded into `gpu`: it needs no CUDA device, and ADR 0004 refuses to unify
+# unrelated accelerators under one extra. `gpu` satisfies it transitively
+# anyway, since numba-cuda depends on numba.
+#
+# Optional rather than required, because ADR 0004 makes acceleration opt-in and
+# the decode is correct on the pure-Python backend, which is the executable
+# specification. The concrete cost of requiring it is a numpy *ceiling*:
+# measured 2026-09-10, `numba==0.61.*` with our `numpy>=2.1` floor resolves
+# numpy to 2.2.6. As a hard dependency that ceiling would bind every consumer
+# of this package, including one that never runs a parallel backend; as an
+# extra it binds only whoever opts in. Note the direction -- this is a
+# transitive *upper* bound arriving from someone else's metadata, the mirror
+# image of the workspace footgun, which is about our own lower bounds.
+cpu-parallel = ["numba>=0.61"]
 
 [build-system]
 # meson-python. The Baum-Welch core is the compiled part (revision 03); the

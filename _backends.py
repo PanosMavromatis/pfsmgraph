@@ -61,26 +61,35 @@ class Backend:
 
     :param name: what the header calls it -- ``python``, ``cython``, ``cuda``.
     :param module: the import proving it is usable in this environment.
-    :param hardware: what an absence may legitimately be blamed on, e.g.
-        ``"CUDA device"``. ``None`` means nothing external is required, so a
-        failed import is a broken working copy and is escalated.
+    :param optional_on: what an absence may legitimately be blamed on -- a short
+        noun phrase, e.g. ``"CUDA device"`` or ``"numba"``. ``None`` means
+        nothing external is required, so a failed import is a broken working
+        copy and is escalated.
+
+    Called ``hardware`` until 2026-09-10. Phase 3 produced the first backend
+    whose absence is legitimate but is not a *device*: an environment that
+    declined the ``cpu-parallel`` extra is entitled to lack numba exactly as one
+    without a GPU is entitled to lack a CUDA device. The semantics never
+    changed -- the name had been taken from the first instance rather than from
+    the concept, and this module is test-only, so correcting it costs nothing a
+    consumer can see.
     """
 
     name: str
     module: str
-    hardware: str | None = None
+    optional_on: str | None = None
 
 
 #: Adding a backend is adding a row. See the module docstring.
 #:
-#: ``python`` carries no ``hardware``, so a failed import is escalated rather
+#: ``python`` carries no ``optional_on``, so a failed import is escalated rather
 #: than skipped -- nothing external is required to run pure Python/numpy, so the
 #: only way ``pfsmgraph.hmm._viterbi`` fails to import is a broken working copy,
 #: which is precisely what a skip would conceal. The module named is the *kernel*
 #: rather than the package, because the row is a claim about one lifecycle phase
 #: of one algorithm: ``pfsmgraph.hmm`` imports fine with no decode in it.
 #:
-#: ``cython`` carries no ``hardware`` either, and here that clause finally bites
+#: ``cython`` carries no ``optional_on`` either, and here that clause finally bites
 #: rather than merely being stated. A compiled backend has a way to be *present
 #: in the source tree and absent from the environment* that a pure-Python one
 #: does not: the ``.pyx`` is committed, so the phase is unambiguously
@@ -88,12 +97,31 @@ class Backend:
 #: calls that a hard failure and never a skip -- "a backend that is implemented
 #: but not importable (missing or stale Cython build)" is its own wording -- so
 #: an unbuilt extension errors the session at startup instead of quietly
-#: reporting a green run over one backend. Note what this rules out: hardware is
+#: reporting a green run over one backend. Note what this rules out: ``optional_on`` is
 #: for absences that are *legitimate* in the environment, like no CUDA device,
 #: and a missing compiler is not one of those. It is a broken working copy.
+#:
+#: ``cpu_parallel`` is the first row whose absence is **legitimate**, and it is
+#: what renamed this field. numba reaches an environment through
+#: ``pfsmgraph-hmm``'s ``cpu-parallel`` extra, so an install that declined the
+#: extra is entitled to lack the backend exactly as a machine without a GPU is
+#: entitled to lack a CUDA device -- a reported skip, named in the header, never
+#: an escalation. That is a *third* category the first two rows could not
+#: exhibit: python and cython can only fail because the working copy is broken.
+#:
+#: Note this deviates from the ``dp-compile`` phase-3 skill, deliberately. That
+#: skill prescribes numba as a hard dependency with ``hardware=None``, reasoning
+#: that "a registered backend that will not import is a hard failure rather than
+#: a skip, so making the import optional would turn every install without the
+#: extra into a broken one". The reasoning is sound for a registry with two
+#: states and false for this one: ``optional_on`` gives it three, so the broken
+#: install the rule guards against cannot occur here. ADR 0004 governs the other
+#: half -- acceleration is opt-in, and the decode is correct on the pure-Python
+#: backend.
 BACKENDS: Final[tuple[Backend, ...]] = (
     Backend("python", "pfsmgraph.hmm._viterbi"),
     Backend("cython", "pfsmgraph.hmm._viterbi_cython"),
+    Backend("cpu_parallel", "pfsmgraph.hmm._viterbi_cpu_parallel", optional_on="numba"),
 )
 
 
@@ -111,14 +139,14 @@ def detect(backends: Sequence[Backend] = BACKENDS) -> tuple[Availability, ...]:
         try:
             importlib.import_module(backend.module)
         except ImportError as exc:
-            if backend.hardware is None:
+            if backend.optional_on is None:
                 raise BackendError(
                     f"backend {backend.name!r} is implemented but {backend.module!r} "
                     f"did not import: {exc}. ADR 0003 makes this a hard failure and "
                     f"never a skip -- a missing or stale build means the working copy "
                     f"is broken, which is precisely what a skip would conceal."
                 ) from exc
-            states.append(Availability(backend.name, False, f"no {backend.hardware} detected"))
+            states.append(Availability(backend.name, False, f"no {backend.optional_on} detected"))
         else:
             states.append(Availability(backend.name, True))
     return tuple(states)
