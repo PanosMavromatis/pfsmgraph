@@ -30,38 +30,54 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 # --- the matrix as it stands -------------------------------------------------
 
-def test_the_python_backend_is_the_whole_matrix():
+def test_the_matrix_is_python_then_cython():
     # Filled 2026-09-04 by pfsmgraph.hmm._viterbi, the first DP kernel to reach
     # ADR 0002 phase 1. This was `BACKENDS == ()` until then, and its comment
     # said it would fail when align or hmm added the first row -- which is what
-    # happened, and is why the surrounding docs were revisited in the same
-    # commit. Adding the *second* row should break this one the same way.
-    assert BACKENDS == (Backend("python", "pfsmgraph.hmm._viterbi", None),)
+    # happened. The previous version of this test then said "adding the *second*
+    # row should break this one the same way", and on 2026-09-09 it did: phase 2
+    # landed as _viterbi_cython. Order is asserted, not just membership, because
+    # format_header prints the rows in this order and ADR 0003's header is a
+    # specified string.
+    assert BACKENDS == (
+        Backend("python", "pfsmgraph.hmm._viterbi", None),
+        Backend("cython", "pfsmgraph.hmm._viterbi_cython", None),
+    )
 
 
-def test_the_python_backend_escalates_rather_than_skips():
-    # hardware=None is the whole claim: nothing external is needed to run pure
-    # Python, so a failed import is a broken working copy and never a skip.
-    (python,) = BACKENDS
-    assert python.hardware is None
+def test_neither_backend_may_be_skipped():
+    # hardware=None is the whole claim, and it means something different for
+    # each row. For `python`, nothing external is needed to run pure Python at
+    # all. For `cython`, the source is committed but the extension exists only
+    # if it was built -- so ADR 0003's "implemented but not importable (missing
+    # or stale Cython build) is a hard failure" is the clause doing the work.
+    # A missing compiler is a broken working copy, never a legitimate absence.
+    assert [b.hardware for b in BACKENDS] == [None, None]
 
 
-def test_the_registered_module_is_the_kernel_not_the_package():
+def test_every_registered_module_is_a_kernel_not_a_package():
     # `import pfsmgraph.hmm` succeeds whether or not a decode exists in it, so
-    # the package would be a row that cannot fail. The row is a claim about one
+    # the package would be a row that cannot fail. Each row is a claim about one
     # lifecycle phase of one algorithm, so it names the module carrying it.
-    (python,) = BACKENDS
-    assert python.module.rsplit(".", 1)[-1] == "_viterbi"
+    assert [b.module.rsplit(".", 1)[-1] for b in BACKENDS] == [
+        "_viterbi",
+        "_viterbi_cython",
+    ]
 
 
-def test_the_registered_backend_actually_resolves():
-    # The row is not aspirational: this is the import probe running against the
-    # real matrix rather than a synthetic one.
-    assert detect() == (Availability("python", True, None),)
+def test_the_registered_backends_actually_resolve():
+    # The rows are not aspirational: this is the import probe running against
+    # the real matrix rather than a synthetic one. For `cython` it is also the
+    # only assertion in the suite that the extension was actually built -- if it
+    # was not, detect() raises BackendError here rather than returning a skip.
+    assert detect() == (
+        Availability("python", True, None),
+        Availability("cython", True, None),
+    )
 
 
-def test_the_header_names_the_registered_backend():
-    assert format_header(detect()) == "backends: python ✓"
+def test_the_header_names_every_registered_backend():
+    assert format_header(detect()) == "backends: python ✓ · cython ✓"
 
 
 def test_an_empty_matrix_would_still_print_explicitly():
@@ -91,6 +107,16 @@ def test_header_format_matches_adr_0003():
 def test_importable_backend_is_available():
     (state,) = detect([Backend("python", "os")])
     assert state == Availability("python", True, None)
+
+
+def test_an_unbuilt_compiled_backend_escalates_rather_than_skipping():
+    # The failure mode the `cython` row exists to catch, exercised against a
+    # synthetic row so the real one stays untouched: a backend whose source is
+    # committed but whose extension was never built. ADR 0003 makes this a hard
+    # failure precisely because a skip would render it as "not available here",
+    # which is indistinguishable from a phase that was never written.
+    with pytest.raises(BackendError, match="implemented but"):
+        detect([Backend("cython", "pfsmgraph.hmm._viterbi_never_built")])
 
 
 def test_missing_hardware_backend_is_a_reported_skip():

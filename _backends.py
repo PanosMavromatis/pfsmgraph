@@ -5,16 +5,18 @@ built artifact contains it, which is deliberate: enumerating backends is most of
 what a runtime backend-selection API needs, and ADR 0003 leaves that API's
 behaviour explicitly open. Shipping the enumeration now would prejudge it.
 
-:data:`BACKENDS` holds one row as of 2026-09-04. It was empty until then, and
+:data:`BACKENDS` holds two rows as of 2026-09-09. It was empty until 2026-09-04, and
 that emptiness was the correct steady state rather than a placeholder: ADR 0002
 scopes the lifecycle to "wherever dynamic programming appears", and ``dataseq``
 contributes no backend at any maturity -- it is a container and an encoder. The
 condition named here for filling the matrix -- ``align`` or ``hmm`` landing a
 recurrence -- was met by ``pfsmgraph.hmm._viterbi``, the Viterbi decode at ADR
-0002 phase 1.
+0002 phase 1. The second row is ``pfsmgraph.hmm._viterbi_cython``, the same
+algorithm at phase 2 -- the first compiled backend this repository has had, and
+the first row whose absence would mean a *build* is broken rather than a source
+tree.
 
-**One row is as far as the matrix goes, and the algorithm suites are not yet
-parameterized over it.** ADR 0003 asks for one suite per algorithm run against
+**Two rows, and the algorithm suites are still not parameterized over them.** ADR 0003 asks for one suite per algorithm run against
 every available backend, with the backend as a fixture parameter and the tests
 "written against the public API only". Both halves cannot hold yet:
 ``viterbi(params, record)`` has nowhere to put a backend, and giving it one is
@@ -77,8 +79,21 @@ class Backend:
 #: which is precisely what a skip would conceal. The module named is the *kernel*
 #: rather than the package, because the row is a claim about one lifecycle phase
 #: of one algorithm: ``pfsmgraph.hmm`` imports fine with no decode in it.
+#:
+#: ``cython`` carries no ``hardware`` either, and here that clause finally bites
+#: rather than merely being stated. A compiled backend has a way to be *present
+#: in the source tree and absent from the environment* that a pure-Python one
+#: does not: the ``.pyx`` is committed, so the phase is unambiguously
+#: implemented, while the extension module exists only if it was built. ADR 0003
+#: calls that a hard failure and never a skip -- "a backend that is implemented
+#: but not importable (missing or stale Cython build)" is its own wording -- so
+#: an unbuilt extension errors the session at startup instead of quietly
+#: reporting a green run over one backend. Note what this rules out: hardware is
+#: for absences that are *legitimate* in the environment, like no CUDA device,
+#: and a missing compiler is not one of those. It is a broken working copy.
 BACKENDS: Final[tuple[Backend, ...]] = (
     Backend("python", "pfsmgraph.hmm._viterbi"),
+    Backend("cython", "pfsmgraph.hmm._viterbi_cython"),
 )
 
 

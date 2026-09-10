@@ -241,15 +241,76 @@ target **write `cython`**.
     > provenance line stripped (there is none) yields the same digest. So the `.pyx` is
     > `fresh` and the graph now has two recorded edges: formalization ← python, and
     > python → cython, branching at the root exactly as `phase-detection.md` draws it.
-- [ ] Make it build, install and import
-  - [ ] `packages/pfsmgraph-hmm/meson.build`: un-dormant the extension block and name
+- [x] Make it build, install and import
+  > **Commit:** deferred at the checkpoint — the next `/hitl-step` was invoked before it
+  > was answered — then committed on its own after all, once goal 5 was closed. So this
+  > goal has its own commit despite the pause, and the two goals are not entangled in
+  > the history.
+  > **Done:** the extension builds, installs and imports, and the ADR 0003 header now
+  > reads `backends: python ✓ · cython ✓` — the matrix's first compiled row. Suite 282 →
+  > 283. Only one of the three subgoals needed an edit; the other two were verifications,
+  > and both found the answer already correct for reasons worth recording.
+  - [x] `packages/pfsmgraph-hmm/meson.build`: un-dormant the extension block and name
         every new source in `install_sources` — meson does not glob, and
         `tests/test_meson_sources.py` is what catches the omission
-  - [ ] Add the backend row to `_backends.py`; a backend implemented but not importable
+    > **Note:** **no edit was needed, and that is a finding rather than a shortcut.** The
+    > extension block was already written as `if fs.exists(viterbi_pyx)`, so it
+    > un-dormanted itself the moment the `.pyx` landed — written on 2026-09-04 for a file
+    > that did not yet exist, and correct. Nor does the `.pyx` belong in
+    > `install_sources`: it is built by `py.extension_module`, and
+    > `tests/test_meson_sources.py` filters the on-disk set to `.py` plus
+    > `PACKAGE_DATA_NAMES`, so a `.pyx` is deliberately outside what that test requires.
+    > It stayed green throughout, at 16 parameterized cases.
+    > **Note:** the self-activating guard did not remove the manual step, it *moved* it.
+    > `fs.exists()` is evaluated at meson **configure** time, so a build directory
+    > configured before the file existed never sees it: `uv sync` reported "Checked 26
+    > packages", changed nothing, and the import failed `ModuleNotFoundError`.
+    > `uv sync --reinstall-package pfsmgraph-hmm` forces the reconfigure. A fresh clone is
+    > unaffected — no build directory to be stale — so this bites exactly the people who
+    > had the repository before the kernel landed. Revision 03's `_baum_welch_cython.pyx`
+    > will hit it again; phases 3 and 4 add `.py` files and will not.
+  - [x] Add the backend row to `_backends.py`; a backend implemented but not importable
         is a hard failure under ADR 0003, never a skip
-  - [ ] `dp-compile`'s `PreToolUse` hook arms on this path from the first commit that
+    > **Note:** added as `Backend("cython", "pfsmgraph.hmm._viterbi_cython")` with
+    > `hardware=None`, like `python` — but the clause means something different on this
+    > row, and this is the first row where it does any work. A compiled backend can be
+    > *present in the source tree and absent from the environment* in a way a pure-Python
+    > one cannot: the `.pyx` is committed, so the phase is unambiguously implemented,
+    > while the extension exists only if it was built. `hardware` is for absences that are
+    > legitimate in an environment — no CUDA device — and a missing build is not one of
+    > those. So an unbuilt extension errors the session at startup instead of reporting a
+    > green run over one backend.
+    > **Note:** five assertions in `tests/test_backends.py` pinned the matrix at exactly
+    > one row and failed as designed — the previous version of the first one said in its
+    > own comment that "adding the *second* row should break this one the same way", and
+    > it did. Updated rather than worked around, which is a different act from editing a
+    > test to make an implementation pass: these assert what the matrix *is*, and the
+    > matrix changed deliberately. Note *how* the resolve test failed — on the assertion,
+    > not with a `BackendError` — which is itself the evidence that the `cython` probe
+    > imported successfully. One test added (19 in that file, suite 283): an unbuilt
+    > compiled backend escalates rather than skipping, exercised against a synthetic row
+    > so the real one stays untouched.
+  - [x] `dp-compile`'s `PreToolUse` hook arms on this path from the first commit that
         stages it — `[commands] build` and `test` run before `git commit` and block on
         failure. Expect it inside `/smart-commit`; that is the design, not a leak
+    > **Ran:** verified empirically in both directions rather than assumed, by feeding the
+    > hook script a `{"tool_input":{"command":"git commit -m x"}}` payload. **Control**,
+    > nothing staged: silent, exit 0, no build and no test — the script exits 0 with no
+    > output at all when no staged path matches, which is why the real commit at `c9df9c6`
+    > looked like nothing had happened. **Armed**, with the kernel staged: "dp-compile: 1
+    > kernel file(s) staged; running the suite", then `uv sync` and `uv run pytest` (283
+    > passed), then "dp-compile: suite passed", exit 0. The throwaway staged change was
+    > reverted exactly.
+    > **Note:** the goal-3 report said the hook's firing could not be confirmed from the
+    > commit output. It now can, and the explanation is display rather than behaviour:
+    > hook stdout reaches the transcript, not the `Bash` tool result. Worth knowing before
+    > anyone concludes from silence that the gate is absent.
+    > **Note:** the scoping is what makes a blocking hook tolerable, and it is narrower
+    > than "touches the package". `kernel_paths()` expands `[phases]` against the
+    > `[algorithms]` keys rather than wildcarding, precisely because `_{algorithm}.py`
+    > would become a pattern matching every private module in a flat layout — `_numeric.py`
+    > and `_params.py` included. `formalization` is excluded outright: a Markdown
+    > specification compiles to nothing, so staging it cannot break a backend.
 - [ ] Establish equivalence
   - [ ] Against phase 1 on constructed inputs, including the exact-tie case the learned
         fixtures cannot exhibit — there are 0 exact ties in 3804 oracle positions, so a
