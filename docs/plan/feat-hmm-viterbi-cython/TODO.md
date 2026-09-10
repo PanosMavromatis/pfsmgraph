@@ -50,17 +50,51 @@ target **write `cython`**.
 
 ## Goals
 
-- [ ] Confirm the plugin's view of the algorithm matches this branch's premise
-  - [ ] Run `/dp-compile:phase-check viterbi` and record the report verbatim. Expect
+- [x] Confirm the plugin's view of the algorithm matches this branch's premise
+  > **Q:** Has `docs/design/algorithms/viterbi/FORMALIZATION.md` been reviewed and
+  > approved? (`/phase-check`'s phase-0 validation requires asking; it is the one thing
+  > in the report that is not derivable from the files.)
+  > **A:** Yes — reviewed and approved. Phase 0 stands as the contract phase 2 is written
+  > against, and the `.pyx` is written to the document as it is.
+  > **Done:** the plugin's report reproduces the premise exactly. Nominal 1, nothing
+  > stale, target *write `cython`* — the last row of `phase-detection.md`'s
+  > worked-examples table. The branch proceeds.
+  - [x] Run `/dp-compile:phase-check viterbi` and record the report verbatim. Expect
         nominal 1 and target *write cython*; anything else means the premise above is
         wrong and the branch stops here rather than proceeding on it
-  - [ ] Note whether the report names `_viterbi.py` under "any provenance header that
+    > **Ran:** 2026-09-09. Nominal phase **1**. `formalization` **fresh** — recomputed
+    > `sha256:48666ca8…` for `_viterbi.py` with its own provenance line stripped (none
+    > to strip) and it matches the recorded hash byte for byte. `python` **fresh**, as a
+    > root: no ancestors, so freshness's "no ancestor is stale or absent" clause is
+    > vacuous and its hash clause has nothing to check. `cython`, `cpu_parallel`, `cuda`
+    > all **absent**; all five phases are declared, so none is a not-applicable row.
+    > Target **write `cython`**. Tests for fresh backends: `uv run pytest
+    > packages/pfsmgraph-hmm/tests/test_viterbi.py` → **57 passed**; nothing was skipped
+    > for staleness because nothing is stale.
+    > **Note:** all three declared oracles are exercised — `m001_0001_001` and
+    > `m001_0005_005` at `test_viterbi.py:222`, `m008_0001_008` at `:229` and `:243`,
+    > all through `load_vpath`. No declared oracle is unused, which is the check that
+    > matters most here and is re-run by `/next-phase`'s step-3 gate.
+  - [x] Note whether the report names `_viterbi.py` under "any provenance header that
         was missing". It should — the header genuinely is absent — but the mtime
         fallback must **not** be reported as in use for it, since the recorded edge
         from the formalization already runs the other way
-  - [ ] Confirm the report says which entrance produced phase 0. `/phase-check`
+    > **Note:** it does, and the fallback is correctly suppressed. The report names the
+    > file as headerless *and* states that mtime is not in use for it, because the
+    > formalization's header already names it. That is the exception `phase-detection.md`
+    > spells out at length: the fallback must never reverse an edge already on record.
+    > Consequence worth keeping — the absent header is **not** a defect to tidy up. Adding
+    > one would close a cycle, and a recovered document is always newer than its source,
+    > so mtime would report the kernel stale the instant the recovery landed and
+    > regenerate the implementation from a description of itself.
+  - [x] Confirm the report says which entrance produced phase 0. `/phase-check`
         requires this, and "recovered" is the answer a reader needs in order to weigh
         how far the document can be trusted: it was read off the code it now governs
+    > **Note:** it does — `Source` reads **"Recovered from the phase-1 implementation."**
+    > All mandatory sections are filled (350 lines), and `Parallel decomposition` records
+    > *"Undetermined — and that is the finding, not a deferral"*, which is an answer
+    > rather than a gap: the recurrence is one-dimensional over time with dense `S×S`
+    > coupling, so it has no anti-diagonals for phases 3 and 4 to exploit.
 - [ ] Settle what this branch may claim about equivalence
   - [ ] Reconcile the subgoal's "enforced by the parameterized suite" with `core.md`'s
         finding that ADR 0003's parameterization cannot be in force until `align`;
