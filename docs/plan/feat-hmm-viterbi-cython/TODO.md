@@ -156,21 +156,91 @@ target **write `cython`**.
     > those are forward edges in either graph shape. It is the only skill whose immediate
     > source is phase 1, the one node whose incoming edge differs between the forward chain
     > and the recovered graph. So the fix is narrow and will stay narrow.
-- [ ] Advance to phase 2 via `/dp-compile:next-phase viterbi`
-  - [ ] Expect its step-3 oracle gate to pass: all three `.vpath.xls` files the
+- [x] Advance to phase 2 via `/dp-compile:next-phase viterbi`
+  > **Done:** phase 2 `cython` — `packages/pfsmgraph-hmm/src/pfsmgraph/hmm/_viterbi_cython.pyx`,
+  > derived-from `packages/pfsmgraph-hmm/src/pfsmgraph/hmm/_viterbi.py`
+  > `sha256:48666ca8a3126ba141ec1a0ddba8ed1823e502f93d72483181906afd24135742`,
+  > suite green at 282. Entered through `/next-phase`, which is what supplied the
+  > recovered-graph rule the skill's own prerequisite 2 lacks.
+  > **Commit:** committed here with `/smart-commit` rather than a plain commit, because
+  > `core.md`'s "nothing is compiled today" became false the moment this `.pyx` built.
+  > That pulls part of goal 6 forward deliberately: a doc sentence contradicted by the
+  > code committed beside it is the failure `/agents-docs-update` exists to prevent, and
+  > correcting it in the commit that falsifies it costs nothing.
+  > **Note:** the skill's scope overlaps the next two goals, and the overlap was **not**
+  > silently absorbed. Its "Build configuration" step needed no `meson.build` edit —
+  > the extension block is already an `if fs.exists(viterbi_pyx)` guard that activates
+  > by itself, and `tests/test_meson_sources.py` filters to `.py` plus
+  > `PACKAGE_DATA_NAMES`, so a `.pyx` is deliberately not required in
+  > `install_sources`. The `_backends.py` row is **not** added (goal 4 owns it) and the
+  > property test is **not** written into the suite (goal 5 owns it). Suite is green at
+  > 282 rather than higher precisely because no test was added here.
+  - [x] Expect its step-3 oracle gate to pass: all three `.vpath.xls` files the
         manifest declares are exercised by `test_viterbi.py` through `load_vpath`.
         The gate matters most for exactly this algorithm — a recovered formalization
         and its extracted test cases both came from the kernel, so the oracles are
         the only evidence left that could disagree with it
-  - [ ] Let it route to `dp-compile:cython-translation`; the `.pyx` is written against
+    > **Ran:** it passed. Both gates did: the phase the target depends on is `python`,
+    > whose suite was green at 282 immediately before routing, and no declared oracle
+    > is unexercised. Target resolved as **write `cython`** — an advance, not a
+    > regeneration, with no second minimal stale artifact to report.
+  - [x] Let it route to `dp-compile:cython-translation`; the `.pyx` is written against
         the phase-0 specification, whose min-plus objective and smallest-index
         tie-break are contract rather than description
-  - [ ] Apply the deferred comma-form indexing fix to the tokalign template **before**
+    > **Note:** **the frozen parameter arrays force `const` memoryviews, and this is the
+    > one thing that would have failed at runtime rather than at compile time.** ADR 0017
+    > gives `init_state_p`, `transition_p` and `output_p` `writeable = False`; a plain
+    > `double[:, ::1]` on a read-only buffer compiles cleanly and then raises
+    > "buffer source array is read-only" on *every* call. Measured, not assumed — all
+    > three are float64, C-contiguous and read-only. `codes` is `int32`, not `int64`:
+    > it is `dataseq`'s `CODE_DTYPE`, and the two state arrays are `int64` to match
+    > `_viterbi.py`'s `STATE_DTYPE`.
+    > **Note:** equivalence is bit-exact rather than approximate, by construction: the
+    > same two float64 operations in the same order (multiply, `-log2`, add), and a
+    > strict `cand < best` that keeps the earliest `i` exactly as `np.argmin` does.
+    > Verified against phase 1 on **405 comparisons** — the three tracked Lush models,
+    > 400 random models of varying `S` and vocabulary, plus the cases the fixtures
+    > cannot exhibit: an exactly uniform model (ties at *every* position), an
+    > all-`+inf` row, an empty record, `S = 1`, and `init_p` zero on four of five
+    > states. Zero mismatches, before and after the bounds-check decorators.
+    > **Note:** the arc cost is computed scalar-wise inside the `i` loop. That is the
+    > fusion `_viterbi.py`'s comment anticipates ("Phase 2 fuses this into the inner
+    > loop"), **not** the ADR 0015 hoist — the value still depends on both endpoints
+    > and is never lifted out of either loop.
+    > **Note:** `uv sync` alone does **not** pick up a new `.pyx`, and this will bite
+    > again at the next kernel. The `fs.exists()` guard is evaluated at meson
+    > *configure* time, so a build directory configured when the file was absent stays
+    > unaware of it; `uv sync` reported "Checked 26 packages" and changed nothing, and
+    > the import then failed `ModuleNotFoundError`. `uv sync --reinstall-package
+    > pfsmgraph-hmm` forces the reconfigure. Note this is the *opposite* footgun from
+    > the one `core.md` records for non-editable installs — there a source edit is
+    > served stale; here a whole new build target is.
+  - [x] Apply the deferred comma-form indexing fix to the tokalign template **before**
         it is used as the reference template. That file is deliberately untracked, so
         this goal closes with no diff to point at — record it as a note
-  - [ ] Confirm the emitted `.pyx` carries `# dp-compile: derived-from` naming
+    > **Note:** applied — **41 replacements** across `M`, `X`, `Y`, `T` in
+    > `.scratch/align-poc/tokalign/src/tokalign/algorithms/needleman_wunsch/_cython.pyx`,
+    > every 2-D access moved from `A[i][j]` to `A[i, j]`. Two `][` occurrences remain
+    > and are correct: `aligned_a_np[:k][::-1]` and `aligned_b_np[:k][::-1]` are numpy
+    > slices on the output arrays, not memoryviews. `git status` showed nothing
+    > afterwards — the file is ignored by `.scratch/align-poc/.gitignore:170`, so the
+    > subgoal's "no diff to point at" is literal. **It cannot be compile-checked here**:
+    > `tokalign` is not a workspace member and nothing under `.scratch/` is built, so
+    > this is verified by inspection. That limitation is inherent to the item.
+    > **Note:** the fix did not end up mattering for *this* `.pyx`. The template is a
+    > Needleman-Wunsch alignment over four 2-D matrices; the Viterbi kernel was written
+    > from the phase-0 specification and `_viterbi.py`, not by copying it. Applying it
+    > first was still right — PRD §11 designates that file the reference for every
+    > future kernel and wavefront pass, so phases 3 and 4 and `align` are the consumers,
+    > and a defect in a template is copied forward looking like house style.
+  - [x] Confirm the emitted `.pyx` carries `# dp-compile: derived-from` naming
         `_viterbi.py` with its current hash. The kernel is headerless as a root; the
         `.pyx` is not a root and must record its edge
+    > **Note:** confirmed by recomputation rather than by eye — the header names
+    > `_viterbi.py` and records `sha256:48666ca8…`, and hashing that file with its own
+    > provenance line stripped (there is none) yields the same digest. So the `.pyx` is
+    > `fresh` and the graph now has two recorded edges: formalization ← python, and
+    > python → cython, branching at the root exactly as `phase-detection.md` draws it.
 - [ ] Make it build, install and import
   - [ ] `packages/pfsmgraph-hmm/meson.build`: un-dormant the extension block and name
         every new source in `install_sources` — meson does not glob, and

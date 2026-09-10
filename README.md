@@ -61,7 +61,7 @@ uv build --package pfsmgraph-align  # build one distribution
 uv lock                             # refresh uv.lock (committed; one per family)
 ```
 
-All five members build through meson-python, so `ninja` (for rebuild-on-import) is needed; `uv sync` provides it via the dev group. The dev group alone is **not** enough — the editable loader bakes an absolute `ninja` path at build time rather than consulting `PATH`, so every member is also listed under `[tool.uv] no-build-isolation-package` at the workspace root. A C compiler joins the list when `align`/`hmm` get their first `.pyx`; until then nothing here is compiled.
+All five members build through meson-python, so `ninja` (for rebuild-on-import) is needed; `uv sync` provides it via the dev group. The dev group alone is **not** enough — the editable loader bakes an absolute `ninja` path at build time rather than consulting `PATH`, so every member is also listed under `[tool.uv] no-build-isolation-package` at the workspace root. A C compiler is needed too, as of 2026-09-09: `hmm` carries the first `.pyx` (`_viterbi_cython.pyx`). `align` has no compiled code yet.
 
 Because `uv sync` installs every member **editable**, imports resolve to `packages/*/src/` — so a feature can be exercised locally the moment it is written, with nothing to publish or reinstall. Two gitignored directories exist for that: [`.notebooks/`](.notebooks/README.md) is the workbench and [`.data/`](.data/README.md) holds its inputs. Each tracks only a `.gitignore` and a `README.md`; everything else written there is ignored. Nothing under `packages/` may import or read from either.
 
