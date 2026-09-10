@@ -1,4 +1,8 @@
 {
+  "enabledPlugins": {
+    "workflow-claude@mavromatis-ai-labs": true,
+    "dp-compile@mavromatis-ai-labs": true
+  },
   "extraKnownMarketplaces": {
     "mavromatis-ai-labs": {
       "source": {
@@ -6,9 +10,5 @@
         "repo": "PanosMavromatis/claude-plugins"
       }
     }
-  },
-  "enabledPlugins": {
-    "workflow-claude@mavromatis-ai-labs": true,
-    "dp-compile@mavromatis-ai-labs": true
   }
 }
