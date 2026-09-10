@@ -26,7 +26,31 @@ instinct on a recovered graph is the opposite.
 
 ## Goals
 
-- [ ] Confirm the plugin's view of the algorithm matches this branch's premise
+- [x] Confirm the plugin's view of the algorithm matches this branch's premise
+  > **Q:** Has `docs/design/algorithms/viterbi/FORMALIZATION.md` been reviewed and
+  > approved? Phase 3 is the first phase whose work *edits* it — goal 2 rewrites the
+  > `Parallel decomposition` section — so the question is whether it stands as approved
+  > contract going in, not merely whether it was approved once.
+  > **A:** Yes — approved, and it stands. Goal 2 edits it to record a decision the
+  > document itself defers, not to correct anything in it.
+  > **Done:** `/dp-compile:phase-check viterbi` reproduces this branch's premise exactly.
+  > Nominal phase **2**; `formalization`, `python` and `cython` all fresh; `cpu_parallel`
+  > and `cuda` absent; target **write `cpu_parallel`**. Both dependents record
+  > `_viterbi.py` at `sha256:48666ca8…` and the recomputed hash matches, so the graph
+  > branches at the root rather than running as a chain. Suite green at 291 with
+  > `backends: python ✓ · cython ✓` — no backend was withheld, since none is stale or
+  > blocked.
+  > **Note:** `_viterbi.py` carries no provenance header and the mtime fallback was
+  > deliberately **not** applied to it. Two artifacts' headers name it, so that edge is
+  > already on record running the other way, and a fallback guess would close a cycle —
+  > reporting the kernel stale against a document written *from* it. It is the root: no
+  > incoming edge, nothing here can make it stale. Do not "fix" this by adding a header.
+  > **Note:** all three `.vpath.xls` oracles the manifest declares are exercised by
+  > `packages/pfsmgraph-hmm/tests/` (2, 4 and 6 references, via `_lush_fixtures.load_vpath`).
+  > That matters at the *next* goal boundary rather than this one: `/next-phase` gates
+  > advancing past phase 1 on the declared oracles actually being used, because phases 2–4
+  > are checked against phase 1 and an unexercised oracle leaves the whole chain agreeing
+  > only with itself.
 - [ ] Settle the anti-diagonal question — the decision this phase owns
   - [ ] Decide the decomposition, against the kernels that now exist
   - [ ] Decide ADR 0002:53's disposition: wording fix scoped to alignment kernels, or a
