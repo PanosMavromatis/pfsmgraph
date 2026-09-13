@@ -941,7 +941,6 @@ source = { editable = "packages/pfsmgraph-hmm" }
 dependencies = [
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "pfsmgraph-align" },
     { name = "pfsmgraph-dataseq" },
 ]
 
@@ -961,7 +960,6 @@ requires-dist = [
     { name = "numba-cuda", marker = "extra == 'gpu'", specifier = ">=0.30.4" },
     { name = "numpy", specifier = ">=2.1" },
     { name = "numpy", marker = "extra == 'gpu'", specifier = "<2.5" },
-    { name = "pfsmgraph-align", editable = "packages/pfsmgraph-align" },
     { name = "pfsmgraph-dataseq", editable = "packages/pfsmgraph-dataseq" },
 ]
 provides-extras = ["gpu", "cpu-parallel"]

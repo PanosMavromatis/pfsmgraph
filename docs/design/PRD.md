@@ -81,7 +81,7 @@ Expected order thereafter:
 - **`align`** has an outlined design and a proof-of-concept type foundation.
 - **`hseg` last.** Its algorithms are the least specified — the intent is that segmentation optimizes sequence alignments across a corpus, but the specific algorithms are not yet chosen. It has the largest design gap of the five.
 
-The dependency graph (§3.4) still governs *release* order, which is a separate question: a package cannot publish before its dependencies exist on PyPI. Since `hmm` is expected to be implemented ahead of `align`, it may be finished well before it can be released.
+The dependency graph (§3.4) still governs *release* order, which is a separate question: a package cannot publish before its dependencies exist on PyPI. Since `hmm` is expected to be implemented ahead of `align`, it may be finished well before it can be released. **Qualified 2026-09-13:** it was not held back, because the `align` edge it would have waited on had no import behind it ([ADR 0019](adr/0019-declared-dependencies-follow-imports.md)).
 
 ---
 
@@ -131,7 +131,7 @@ This gives family identity, independent versioning and release per package, and 
 | `pfsmgraph-dataseq` | `pfsmgraph.dataseq` | Data sequence library; base layer, used by all four others. Designed for PyTorch `Dataset`/`DataLoader` interoperability |
 | `pfsmgraph-align` | `pfsmgraph.align` | Sequence alignment; depends on `dataseq` |
 | `pfsmgraph-hseg` | `pfsmgraph.hseg` | Hierarchical segmentation; depends on `dataseq`, `align` |
-| `pfsmgraph-hmm` | `pfsmgraph.hmm` | HMM topology search and Baum-Welch, incl. state merging/splitting; translated from an existing Lush implementation; depends on `dataseq`, `align` |
+| `pfsmgraph-hmm` | `pfsmgraph.hmm` | HMM topology search and Baum-Welch, incl. state merging/splitting; translated from an existing Lush implementation; depends on `dataseq`, and on `align` from the alignment-seeded topology revision ([ADR 0019](adr/0019-declared-dependencies-follow-imports.md)) |
 | `pfsmgraph-dl` | `pfsmgraph.dl` | Deep-learning components (PyTorch); `rnn` and `transformer` submodules; depends on `dataseq`, `align` |
 
 ### 3.4 Dependency graph
@@ -147,6 +147,8 @@ This gives family identity, independent versioning and release per package, and 
 `dataseq` sits beneath `align`, which was previously assumed to be the family's common base. Keeping `dataseq` free of intra-family dependencies is what prevents cycles and makes the release order unambiguous (§11).
 
 `align` remains a common dependency of `hseg`, `hmm`, and `dl`. Whether those three have dependencies on *each other* is still open (§8).
+
+**Qualified 2026-09-13 by [ADR 0019](adr/0019-declared-dependencies-follow-imports.md).** The graph above is intended structure. A member declares an edge only once a module in it imports across it, and release order follows declared edges. `hmm` 0.1.0 declares `dataseq` alone and releases before `align`.
 
 ### 3.5 `dataseq` composition — merging three implementations
 
@@ -395,7 +397,7 @@ Prerequisite: the remaining open questions in §8 are narrower than they were �
 - The existing codebase is a minimal proof-of-concept being brought into this structure; the module moves are mechanical given the project's relative-import discipline.
 - PyPI names are secured (§4). Placeholders should be replaced by real releases within a reasonable window.
 - Scaffold the workspace with `dataseq` first (the base layer), then `align` on **meson-python** (§6.1), then `hseg`, `hmm`, `dl`. For `align`, `setup.py` is replaced by a `meson.build`; the extension target is `pfsmgraph.align.algorithms.needleman_wunsch._cython`, with the source path package-relative under `packages/pfsmgraph-align/`.
-- **Release order follows the dependency graph:** `dataseq` → `align` → {`hseg`, `hmm`, `dl`}. A package cannot be published while a declared dependency version does not yet exist on PyPI. Note that this is *release* order, not *implementation* order — `hmm` is expected to mature first (§1.5).
+- **Release order follows the dependency graph:** `dataseq` → `align` → {`hseg`, `hmm`, `dl`}. A package cannot be published while a declared dependency version does not yet exist on PyPI. Note that this is *release* order, not *implementation* order — `hmm` is expected to mature first (§1.5). **Qualified 2026-09-13 by [ADR 0019](adr/0019-declared-dependencies-follow-imports.md):** the order follows *declared* edges, and `hmm` 0.1.0 releases directly after `dataseq`.
 - **Version bounds need deliberate attention.** In the workspace, a `workspace = true` source satisfies any constraint, so a wrong or missing bound in `[project.dependencies]` never surfaces locally — it only breaks a pip user after publish. Set real lower bounds when `dataseq` and `align` get their first actual releases, and revisit on every breaking change.
 - Author the initial ADR set from this document (§9). Start numbering at 0001; do not import earlier ADR files or their numbering.
 - **Implementation starts with `dataseq`** (§1.5, §3.5): merge the three existing implementations, taking the `dl` version as the base, before beginning the Lush `hmm` translation.

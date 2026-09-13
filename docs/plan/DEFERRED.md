@@ -590,6 +590,31 @@ These have no event that will surface them. They need to be looked at on purpose
   HMM topology search" beyond the claim itself — this entry is the mechanism that
   sentence has been standing on since the PRD.
 
+- **Re-declare `pfsmgraph-align` in `pfsmgraph-hmm`'s metadata, when the seed first
+  imports it.** Removed on `chore/release-hmm-0.1.0` (2026-09-13) under
+  [ADR 0019](../design/adr/0019-declared-dependencies-follow-imports.md): `hmm` had
+  declared `pfsmgraph-align>=0.1` since scaffolding, no module imported it, and with
+  `align` still at its `0.0.0` placeholder the bound would have made `hmm` 0.1.0
+  uninstallable. The edge was always intent rather than use, and **this revision is where
+  the intent becomes use**. Revision `03-hmm-v0.2.0` trains a fixed topology, and
+  `04-hmm-v0.3.0` ports the original's merge/split search, which starts from a
+  single-state model and takes no alignment as input. Seeding topology from an alignment
+  logically follows that search, and cannot precede it, because the seed is a better
+  *starting point for* merge/split. Nothing in `hmm` imports `align` until then. **Expected
+  to be `hmm` 0.4.0**, the first version after 0.3.0. That is an expectation rather than a
+  claim, for the reason the entry above gives a trigger instead of a number: `align` has to
+  be able to produce a multiple alignment first.
+
+  **When it fires:** add `pfsmgraph-align>=<the released align version>` to an
+  `[project.optional-dependencies]` extra, the expected form at 0.4.0, and
+  `pfsmgraph-align = { workspace = true }` to `[tool.uv.sources]`, spelled in full and
+  matching what PyPI actually carries. Confirm ADR 0019's expected answer (an extra now,
+  required by 1.x) against how the seed is exposed: a caller who can still start
+  merge/split from a single state may never need `align`. Promoting the extra to a
+  requirement is a 1.x decision, made then, when alignment has become integral to
+  training. `hmm`'s release is gated on `align` again from that version, and its release
+  notes should say it gained a family dependency.
+
 ---
 
 ## Trigger: the next `workflow-claude` revision

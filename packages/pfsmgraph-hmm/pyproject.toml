@@ -20,7 +20,10 @@ classifiers = [
 
 dependencies = [
     "pfsmgraph-dataseq>=0.1.0",
-    "pfsmgraph-align>=0.1",
+    # No pfsmgraph-align, although PRD §5.5's pattern and ADR 0009's graph show one:
+    # no module here imports it, and a declared edge lands with its first import
+    # (ADR 0019). It returns with the alignment-seeded topology revision, expected
+    # 0.4.0 -- docs/plan/DEFERRED.md, "align able to produce a multiple alignment".
     # Higher than dataseq's >=1.24, and deliberately so -- the divergence tracks
     # the pure/compiled split rather than being drift. hmm is a meson-python
     # member (ADR 0005), and build-system.requires below already spells
@@ -83,4 +86,3 @@ build-backend = "mesonpy"
 
 [tool.uv.sources]
 pfsmgraph-dataseq = { workspace = true }
-pfsmgraph-align = { workspace = true }

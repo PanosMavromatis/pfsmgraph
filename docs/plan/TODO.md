@@ -231,6 +231,7 @@ first duty is to check these boundaries. What would falsify them:
   > or release `align` first, and update `docs/api/hmm/README.md`'s dependency sentence to
   > match. Also open here: whether 0.1.0 should ship the `gpu` / `cpu-parallel` extras at
   > all, since the public `viterbi` reaches no accelerated kernel in 0.1.0.
+  > **Resolved** on chore/release-hmm-0.1.0 (2026-09-13): the bound is removed under ADR 0019 and returns under DEFERRED's "`align` able to produce a multiple alignment" trigger. The extras question is goal 3 of that branch.
 
 ## Planned revisions
 

@@ -1,6 +1,11 @@
 # 0009. `dataseq` is the dependency-graph base layer
 
-- **Status:** Accepted
+- **Status:** Accepted — amended by [ADR 0019](0019-declared-dependencies-follow-imports.md),
+  which keeps the graph below as the family's *intended* structure but lets a member
+  declare an edge only once a module in it imports across that edge. Release order follows
+  declared edges, so the order in *Consequences → Positive* describes intent rather than
+  metadata: `hmm` 0.1.0 releases before `align`. The rule that `dataseq` depends on
+  nothing is unchanged.
 - **Date:** 2026-08-21
 - **Source:** PRD §3.4 — decision D9
 
