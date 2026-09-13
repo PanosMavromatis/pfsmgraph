@@ -56,6 +56,10 @@ suite, which cannot be in force until `align`.
   again.
 - GPU present: driver 580.173.02, CUDA 13.0; no system `nvcc` (numba-cuda uses the
   pip-wheel toolkit). `numba.cuda.is_available()` is `True`.
+- **Decomposition decided (goal 3, 2026-09-13):** phase 3's states-within-a-timestep,
+  with the `-log2` arc costs computed **on the host** and uploaded once. Device `log2`
+  (libdevice) differs from glibc's by 1 ulp in ~27% of inputs, so a plain transliteration
+  would not be bit-exact; with the logs on the host the device does only `+` and `<`.
 - Phase 3 measured a flat ~34 ms per call regardless of `S` — launch overhead per
   timestep. A per-timestep CUDA kernel is expected to hit that wall harder; the
   decomposition with the good speed story is the batch, which waits on revision 03.

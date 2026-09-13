@@ -116,8 +116,41 @@ than assume — the premise is what the first goal exists to check.
     > wrong. It stays, because it states the repository's own need and would matter again
     > if the extra's cap were dropped first. This is the lock-side face of `core.md`'s
     > remark that `uv.lock` "records one resolution rather than the space of them".
-- [ ] Implement `_viterbi_cuda.py` at ADR 0002 phase 4
-  - [ ] Decide the phase-4 decomposition before writing the kernel: keep states-within-a-timestep, or choose a GPU-specific one (e.g. a device-side time loop, or batch — which `viterbi(params, record)` cannot express until revision 03). Tie-break and min-plus stay contract either way.
+- [~] Implement `_viterbi_cuda.py` at ADR 0002 phase 4
+  - [x] Decide the phase-4 decomposition before writing the kernel: keep states-within-a-timestep, or choose a GPU-specific one (e.g. a device-side time loop, or batch — which `viterbi(params, record)` cannot express until revision 03). Tie-break and min-plus stay contract either way.
+    > **Q:** Which phase-4 decomposition should `_viterbi_cuda.py` implement — phase 3's
+    > with the logarithms computed on the host, a plain transliteration computing them on
+    > the device, or a min-plus associative scan?
+    > **A:** Phase 3's decomposition, logarithms on the host. A host loop over `t` launches
+    > one kernel per timestep over `j`, with the reduction over `i` serial and ascending
+    > inside each thread. The host computes the `-log2` arc-cost table once with numpy and
+    > uploads it, and the device performs only `+` and `<` — so the kernel is bit-exact with
+    > phases 1–3 by construction rather than by tolerance. The table's shape is settled
+    > while implementing.
+    > **Note:** **device `log2` is not bit-identical to the host's, and this is what made
+    > the decomposition a correctness question rather than a speed one.** Measured
+    > 2026-09-13 on the NVIDIA L4 (numba-cuda 0.30.4, CUDA 13.0): `-math.log2(p)` in a
+    > `cuda.jit` kernel differs bitwise from `-np.log2(p)` for **1,087,159 of 4,000,008**
+    > probability-shaped inputs, each by exactly **1 ulp**; `-log2(a*b)` differs for
+    > 1,061,459 of 4,000,000. The device call lowers to libdevice, while phases 1–3 share
+    > glibc/LLVM's `log2` — which is the *only* reason those three are bit-identical. A
+    > transliteration would therefore make candidate costs differ by an ulp, let a near-tie
+    > flip an `argmin`, and turn the tie-break contract platform-dependent. The uniform
+    > model's exact ties would still pass, since identical inputs round identically on one
+    > device — so TC-06 would not have caught it. Only `+` and `<` are exact IEEE
+    > operations; the transcendental function is where agreement ends.
+    > **Note:** **per-timestep launch cost, data already on the device**, same run: ~56 µs
+    > at `S = 5`, 55 µs at `S = 16`, 62 µs at `S = 64`, 269 µs at `S = 160` — flat until
+    > the work outgrows the launch. That projects an `N = 400` decode at ~22 ms for
+    > `S ≤ 64` and ~108 ms at `S = 160`, against phase 3's measured flat ~34 ms. It is the
+    > phase-3 diagnosis on a GPU: `t` is strictly sequential, so every exact single-record
+    > decomposition pays one launch per timestep, and only revision 03's batch removes it.
+    > A projection from an isolated step kernel, not yet a measurement of `_viterbi_cuda`;
+    > goal 5 measures the real thing.
+    > **Note:** the formalization's `Parallel decomposition` section does not yet say where
+    > the logarithm is evaluated, because until now every backend evaluated it with the
+    > same function. That is contract now, and it lands in `FORMALIZATION.md` with goal 5.
+    > The scripts behind both notes were scratchpad-only (`cuda_probe.py`), not tracked.
   - [ ] Implement whichever decomposition that decision names under `cuda.jit`, keeping the kernel purely numeric
   - [ ] Register the backend in `_backends.py` with `optional_on`, and add the module to `meson.build`'s `install_sources`
 - [ ] Hold it equivalent to phases 1–3
