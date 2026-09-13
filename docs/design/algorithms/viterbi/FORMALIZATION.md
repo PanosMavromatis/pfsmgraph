@@ -5,7 +5,7 @@
 | Field | Value |
 |-------|-------|
 | Source | **Recovered from the phase-1 implementation.** `packages/pfsmgraph-hmm/src/pfsmgraph/hmm/_viterbi.py` at commit `232a207`, which was ported from `update-viterbi-path` in `.scratch/hmm-lush/Code/HMMlib/hmm-trainer.lsh:216-227`. The written account of that original is `.scratch/hmm-lush/HMMLIB-ACCOUNT.md`, §3 (the bit domain) and §7 (the two defects). |
-| Derived from | `packages/pfsmgraph-hmm/src/pfsmgraph/hmm/_viterbi.py` `sha256:48666ca8a3126ba141ec1a0ddba8ed1823e502f93d72483181906afd24135742` |
+| Derived from | `packages/pfsmgraph-hmm/src/pfsmgraph/hmm/_viterbi.py` `sha256:6b26469bd36030a2cc2fcce8c9106deab18cf2851cf934551763d5238db2438a` |
 | Family | Hidden Markov model — **arc-emission (Mealy)**, [ADR 0015](../../adr/0015-arc-emission-mealy-formulation.md) |
 | Variant | Decode — the single most probable state path. Not forward, not posterior. |
 | Objective | **Minimise the total description length of the path, in bits: the min-plus (tropical) semiring.** Its identity is `0.0` and its absorbing element is `+inf`. |

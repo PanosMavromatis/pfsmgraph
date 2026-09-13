@@ -1,6 +1,6 @@
 # API documentation
 
-One subdirectory per distribution. Four of the five members have no code yet and so
+One subdirectory per distribution. Three of the five members have no code yet and so
 have no subdirectory; each gets one when it gets an implementation.
 
 | Distribution | Import | Docs | Status |
@@ -8,7 +8,7 @@ have no subdirectory; each gets one when it gets an implementation.
 | `pfsmgraph-dataseq` | `pfsmgraph.dataseq` | [dataseq/](dataseq/) | documented |
 | `pfsmgraph-align` | `pfsmgraph.align` | — | no code yet |
 | `pfsmgraph-hseg` | `pfsmgraph.hseg` | — | no code yet |
-| `pfsmgraph-hmm` | `pfsmgraph.hmm` | — | no code yet |
+| `pfsmgraph-hmm` | `pfsmgraph.hmm` | [hmm/](hmm/) | documented |
 | `pfsmgraph-dl` | `pfsmgraph.dl` | — | no code yet |
 
 These pages are hand-written Markdown. The layout, that choice, and the rules below are

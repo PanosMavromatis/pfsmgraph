@@ -119,11 +119,13 @@ def _viterbi(init_state_p, transition_p, output_p, codes):
 class ImpossibleSequenceError(ValueError):
     """No path over this record has finite description length under this model.
 
-    Raised when every state is unreachable, which happens whenever the record
-    crosses an arc of probability zero -- an unseen bigram, or a reserved code,
-    since ``HMMParams`` requires the reserved fibres of ``output_p`` to be
-    exactly zero. ``encode(..., on_unknown="unk")`` is the documented
-    ``dataseq`` path that produces the second case.
+    Raised when every path over the record crosses at least one arc of
+    probability zero, so that after some symbol no state is reachable. A reserved
+    code does that to every path at once, since ``HMMParams`` requires the
+    reserved fibres of ``output_p`` to be exactly zero, and
+    ``encode(..., on_unknown="unk")`` is the documented ``dataseq`` path that puts
+    one into a record. An unseen bigram does it only when no route avoids the
+    dead arc.
 
     A subclass of ``ValueError`` so that ``except ValueError`` keeps working,
     and a distinct type because revision 04's topology search will decode many
@@ -144,8 +146,9 @@ class ViterbiPath:
         geometry ``dataseq``'s ``seq-state`` carries and the same one
         ``save-viterbi-path`` printed, with its leading ``-`` row.
     :param total_bits: the description length of this path -- the quantity the
-        decode minimized. Always finite; an infinite one raises
-        :class:`ImpossibleSequenceError` instead of reaching a caller.
+        decode minimized. Finite in every path :func:`viterbi` returns, since an
+        infinite one raises :class:`ImpossibleSequenceError` instead of reaching a
+        caller; this constructor does not check it.
     :param label: the decoded record's ``label``, carried through unchanged. The
         only string that crosses this boundary: ``states`` holds state indices,
         which are not vocabulary codes and have no symbol to decode to.
@@ -222,16 +225,20 @@ def viterbi(params: HMMParams, record: SequenceRecord) -> ViterbiPath:
     variable, so ``update-viterbi-path``'s placement on ``hmm-trainer`` was an
     artefact of where the corpus lived rather than a dependency.
 
-    :param params: the model. Only its three arrays and ``n_symbols`` are read.
+    :param params: the model. Only its three arrays, ``n_symbols`` and
+        ``n_states`` are read, the last for an error message.
     :param record: one ``dataseq`` ``SequenceRecord``. A record never holds
         padding, so there is no mask to consult; ``pad_collate`` batches are out
         of scope until revision 03.
     :raises ImpossibleSequenceError: if no path has finite description length.
-    :raises ValueError: if a code falls outside the model's symbol axis.
+    :raises ValueError: if a code falls outside the model's symbol axis. This is
+        a range check only: a record encoded against a different vocabulary whose
+        codes all fall in range decodes without error, against the wrong symbols.
 
     ``record.codes`` indexes ``output_p``'s third axis directly, with no offset
-    anywhere -- that is what goal 1's ``A == vocab.size`` decision bought, and it
-    is why ADR 0002's later phases have no index arithmetic to port.
+    anywhere -- that is what sizing that axis to ``vocabulary.size`` bought (see
+    :class:`HMMParams`), and it is why ADR 0002's later phases have no index
+    arithmetic to port.
     """
     codes = record.codes
     if codes.size:
