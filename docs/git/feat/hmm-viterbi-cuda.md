@@ -19,8 +19,10 @@ suite, which cannot be in force until `align`.
   target `cuda`; confirm the suite is green at 298 on this machine.
 - Settle the environment so the `dp-compile` commit gate (`uv sync`) does not uninstall
   the backend it is testing, and pin `numba-cuda`'s lower bound in `hmm`'s `gpu` extra.
-- Write `_viterbi_cuda.py` using the decomposition phase 3 settled — states within one
-  timestep, the reduction over `i` serial and ascending so the first-wins tie-break holds.
+- Decide the phase-4 decomposition first — phase 3's states-within-one-timestep is the
+  default, but a GPU-specific one is to be weighed before implementing (decided at goal 1,
+  2026-09-13) — then write `_viterbi_cuda.py` against it. The first-wins tie-break and
+  the min-plus objective stay contract either way.
 - Register it in `_backends.py` with `optional_on` so an absent device skips loudly;
   add it to `meson.build`'s `install_sources`.
 - Differential tests against phases 1–3, including the constructed uniform-model tie test.
