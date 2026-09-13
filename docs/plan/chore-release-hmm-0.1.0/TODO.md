@@ -39,10 +39,19 @@
     > **Q:** How do the recipes consume the `.envrc` token?
     > **A:** `.envrc` exports a per-package `PYPI_TOKEN_PFSMGRAPH_HMM`. On Linux `token` prints `$PYPI_TOKEN_<PKG>` and fails loudly when it is empty, while macOS keeps the Keychain. `publish` is unchanged. The runbook's "never in `.env` … or the repo tree" rule is rewritten to allow a gitignored `.envrc` on Linux, with the reasons.
     > **Note:** Implemented and verified against fake and stripped variables, never the live one. `token`/`token-test` route through `_token-read`, which uses the Keychain on macOS and `${!var}` indirect expansion of `PYPI_TOKEN_<PKG>` on Linux. An `hmm` token does not satisfy `just token pfsmgraph-align`, and `token-set` on Linux explains itself and exits. `.envrc` was already gitignored (`.gitignore:152`). **A latent `publish` defect was found while wiring this**: `UV_PUBLISH_TOKEN="$(just token pkg)" uv publish` still ran `uv publish` with an empty token when the read failed, and exited 0 in a scratch reproduction, because a failure inside `$(...)` does not stop the command it prefixes. It affected macOS too and never showed because the Keychain entry always existed. It is now `tok="$(…)" && UV_PUBLISH_TOKEN="$tok" uv publish`. `docs/ops/release.md` §2 and the recipe table are updated.
-- [ ] Settle what 0.1.0's immutable metadata says
-  - [ ] Whether to ship the `gpu` / `cpu-parallel` extras when no public call reaches an accelerated kernel
-  - [ ] `description` claims Baum-Welch and topology search, neither of which 0.1.0 contains
-  - [ ] Honest lower bounds on every intra-family dependency naming `pfsmgraph-hmm`
+- [x] Settle what 0.1.0's immutable metadata says
+  > **Q:** Declare the `gpu` and `cpu-parallel` extras in 0.1.0, when no public call reaches an accelerated kernel?
+  > **A:** Drop both for 0.1.0. They return in the version whose public API can select a backend (a `DEFERRED.md` trigger). The modules still ship, unreachable, and the dev group keeps numba and numba-cuda. Removing an extra later strands pinned installs, whereas adding one breaks nothing.
+  > **Q:** What does `description` say, when it currently claims Baum-Welch and topology search?
+  > **A:** What 0.1.0 contains, declaring Baum-Welch and topology search as forthcoming.
+  > **Q:** Keep `Programming Language :: Cython` on a wheel with no compiled code?
+  > **A:** Drop it for 0.1.0. It returns with the first compiled wheel.
+  - [x] Whether to ship the `gpu` / `cpu-parallel` extras when no public call reaches an accelerated kernel
+    > **Note:** Removed from the pyproject, which now carries a pointer comment instead. The exact rows and every measurement that shaped them (`numba`'s 2.2.6 numpy ceiling, the `numpy<2.5` cap for `np.row_stack`, the bare `numba-cuda` without a toolkit extra) moved to a restore entry under `DEFERRED.md`'s "`align` acquiring a backend-selection API". `uv lock` dropped only `hmm`'s extras entries and still resolves 57 packages, because the dev group keeps both compilers. Suite green at 318 with `python ✓ · cython ✓ · cpu_parallel ✓ · cuda ✓`. Repo-local wording that said "declined the extra" (`core.md`, `_backends.py`, `tests/test_backends.py`, root `pyproject.toml`) now says numba is not a dependency. The legitimate-skip reasoning is unchanged, only its premise is stronger. `dp-compile.toml` keeps its `extra =` keys, so phase skills do not read the absence as a hard dependency.
+  - [x] `description` claims Baum-Welch and topology search, neither of which 0.1.0 contains
+    > **Note:** Now "Arc-emission hidden Markov models for the pfsmgraph family: frozen parameters and Viterbi decoding; Baum-Welch training and topology search forthcoming." `Programming Language :: Cython` is removed, since the 0.1.0 wheel is pure, and the header comment is corrected.
+  - [x] Honest lower bounds on every intra-family dependency naming `pfsmgraph-hmm`
+    > **Note:** Nothing to change. No member declares `pfsmgraph-hmm` (checked across `packages/*/pyproject.toml`), and `hmm`'s own intra-family bound, `pfsmgraph-dataseq>=0.1.0`, is satisfied by the release on PyPI and names the version that introduced every `dataseq` API `hmm` uses.
 - [ ] Ship the four files and verify the first meson-built wheel
   - [ ] Member README (executed by `test_api_docs.py`), LICENSE copy, `Typing :: Typed`, `py.typed` in `install_sources`
   - [ ] Build 0.1.0 as a pure `py3-none-any` wheel: a meson option that skips `_viterbi_cython` **and** switches `find_installation` to `pure: true`, passed by the `build` recipe for `hmm`, with the editable dev build still compiling the extension so the suite keeps its `cython` row

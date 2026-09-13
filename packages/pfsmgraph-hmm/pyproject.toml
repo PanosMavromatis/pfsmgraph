@@ -1,4 +1,4 @@
-# pfsmgraph-hmm -- Baum-Welch training and HMM topology search.
+# pfsmgraph-hmm -- arc-emission hidden Markov models.
 #
 # Distributes as "pfsmgraph-hmm", imports as "pfsmgraph.hmm".
 # Translated from an existing Lush implementation (PRD §1.3, §1.5).
@@ -6,7 +6,7 @@
 [project]
 name = "pfsmgraph-hmm"
 version = "0.1.0.dev0"
-description = "HMM Baum-Welch and topology search via state merge/split for the pfsmgraph family."
+description = "Arc-emission hidden Markov models for the pfsmgraph family: frozen parameters and Viterbi decoding; Baum-Welch training and topology search forthcoming."
 requires-python = ">=3.10"
 license = "MIT"
 authors = [{ name = "Panos Mavromatis", email = "ai.labs@panos-mav.dev" }]
@@ -15,7 +15,6 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Cython",
 ]
 
 dependencies = [
@@ -38,36 +37,12 @@ dependencies = [
     "numpy>=2.1",
 ]
 
-[project.optional-dependencies]
-# numba-cuda for the ADR 0002 phase-4 CUDA backends -- the Viterbi decode now,
-# the Baum-Welch core in revision 03; unrelated to dl's torch (PRD §6).
-#
-# Bare numba-cuda, deliberately without its cu12/cu13 toolkit extra: numba-cuda
-# itself leaves the toolkit to the installer, and naming a CUDA major here would
-# decide driver compatibility for every consumer. One with a system or conda
-# toolkit needs nothing more; one without adds `numba-cuda[cu13]` (or `[cu12]`).
-# The workspace's dev group picks cu13 for this repository, not for consumers.
-#
-# The floor is the one version measured, 2026-09-13. `numpy<2.5` is numba-cuda's
-# ceiling rather than ours, and its own metadata omits it: 0.30.4 calls
-# `np.row_stack` at import, which numpy 2.5 removed. Carried here so a pip user
-# of this extra gets an importable stack; drop it when numba-cuda stops.
-gpu = ["numba-cuda>=0.30.4", "numpy<2.5"]
-# ADR 0002 phase 3 -- the Numba CPU-parallel Viterbi backend. Deliberately not
-# folded into `gpu`: it needs no CUDA device, and ADR 0004 refuses to unify
-# unrelated accelerators under one extra. `gpu` satisfies it transitively
-# anyway, since numba-cuda depends on numba.
-#
-# Optional rather than required, because ADR 0004 makes acceleration opt-in and
-# the decode is correct on the pure-Python backend, which is the executable
-# specification. The concrete cost of requiring it is a numpy *ceiling*:
-# measured 2026-09-10, `numba==0.61.*` with our `numpy>=2.1` floor resolves
-# numpy to 2.2.6. As a hard dependency that ceiling would bind every consumer
-# of this package, including one that never runs a parallel backend; as an
-# extra it binds only whoever opts in. Note the direction -- this is a
-# transitive *upper* bound arriving from someone else's metadata, the mirror
-# image of the workspace footgun, which is about our own lower bounds.
-cpu-parallel = ["numba>=0.61"]
+# No optional dependencies in 0.1.0, although the Numba CPU-parallel and CUDA
+# backends ship: no public call can reach them until a backend-selection API
+# exists, and an extra that changes nothing costs its users a numpy ceiling
+# while being hard to withdraw later (an upgraded install silently loses it).
+# Both return, with the measurements that shaped them, under
+# docs/plan/DEFERRED.md "`align` acquiring a backend-selection API".
 
 [build-system]
 # meson-python. The Baum-Welch core is the compiled part (revision 03); the

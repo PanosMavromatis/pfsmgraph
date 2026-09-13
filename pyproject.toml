@@ -54,14 +54,14 @@ no-build-isolation-package = [
 #                  against numpy headers). Without build isolation it cannot be
 #                  supplied by build-system.requires alone, so it is listed here
 #                  even though no member depends on it at development time.
-#   numba        - the ADR 0002 phase-3 backend's compiler, and hmm's
-#                  `cpu-parallel` extra. Here as well as there because a plain
+#   numba        - the ADR 0002 phase-3 backend's compiler. Here, although no
+#                  member requires it (hmm withholds its extras in 0.1.0), because a plain
 #                  `uv sync` has to exercise that backend: phase 3 exists to
 #                  validate a parallel decomposition under real concurrency, and
 #                  a parallel backend nobody runs is worse than no parallel
 #                  backend.
-#   numba-cuda   - the ADR 0002 phase-4 backend's compiler, and hmm's `gpu`
-#                  extra, for the same reason as numba: a plain `uv sync` (and
+#   numba-cuda   - the ADR 0002 phase-4 backend's compiler, for the same
+#                  reason as numba: a plain `uv sync` (and
 #                  every `uv run`, which syncs first) must not uninstall the
 #                  backend the dp-compile gate is about to test. The `cu13` extra
 #                  is load-bearing -- bare numba-cuda ships no NVRTC, nvJitLink or
@@ -75,8 +75,8 @@ no-build-isolation-package = [
 #                  latest, measured 2026-09-13) calls `np.row_stack` at import,
 #                  which numpy 2.5 removed, so `from numba import cuda` dies with
 #                  AttributeError. Drop the cap when a numba-cuda release stops
-#                  doing that; hmm's `gpu` extra carries the same cap for
-#                  consumers.
+#                  doing that; restore the same cap in hmm's `gpu` extra
+#                  when that returns (docs/plan/DEFERRED.md).
 dev = [
     "pytest>=8",
     "meson-python",

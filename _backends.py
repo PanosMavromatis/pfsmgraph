@@ -68,9 +68,9 @@ class Backend:
         copy and is escalated.
 
     Called ``hardware`` until 2026-09-10. Phase 3 produced the first backend
-    whose absence is legitimate but is not a *device*: an environment that
-    declined the ``cpu-parallel`` extra is entitled to lack numba exactly as one
-    without a GPU is entitled to lack a CUDA device. The semantics never
+    whose absence is legitimate but is not a *device*: an install of
+    ``pfsmgraph-hmm`` without numba, which it has never required, is entitled to
+    lack it exactly as one without a GPU is entitled to lack a CUDA device. The semantics never
     changed -- the name had been taken from the first instance rather than from
     the concept, and this module is test-only, so correcting it costs nothing a
     consumer can see.
@@ -103,9 +103,9 @@ class Backend:
 #: and a missing compiler is not one of those. It is a broken working copy.
 #:
 #: ``cpu_parallel`` is the first row whose absence is **legitimate**, and it is
-#: what renamed this field. numba reaches an environment through
-#: ``pfsmgraph-hmm``'s ``cpu-parallel`` extra, so an install that declined the
-#: extra is entitled to lack the backend exactly as a machine without a GPU is
+#: what renamed this field. numba is not a dependency of ``pfsmgraph-hmm`` (its
+#: ``cpu-parallel`` extra is withheld in 0.1.0 and optional when restored), so an
+#: install without it is entitled to lack the backend exactly as a machine without a GPU is
 #: entitled to lack a CUDA device -- a reported skip, named in the header, never
 #: an escalation. That is a *third* category the first two rows could not
 #: exhibit: python and cython can only fail because the working copy is broken.

@@ -442,6 +442,38 @@ and several of these must land *as part of* the merge rather than after it.
   `backends: python ✓` in the session header means the kernel imports rather than that any
   suite ran twice.
 
+- **Restore `pfsmgraph-hmm`'s accelerator extras**, in the version whose public API can
+  select a backend. Withheld from 0.1.0 on `chore/release-hmm-0.1.0` (2026-09-13): the
+  CPU-parallel and CUDA backends ship, but no public call reaches them, so an extra would
+  install `numba` or `numba-cuda` and a numpy ceiling for nothing. And removing an extra
+  later is the hard direction, since an upgraded install silently loses it. The rows as
+  they stood, to restore and then re-check against current releases:
+
+  ```toml
+  [project.optional-dependencies]
+  gpu = ["numba-cuda>=0.30.4", "numpy<2.5"]
+  cpu-parallel = ["numba>=0.61"]
+  ```
+
+  The reasoning that shaped them, moved here from the pyproject comments:
+  - **Two extras, not one** ([ADR 0004](../design/adr/0004-gpu-backends-and-optional-dependency-strategy.md)):
+    the CPU-parallel backend needs no device, and `gpu` happens to satisfy `cpu-parallel`
+    only because `numba-cuda` depends on `numba`. That is a resolution accident, not a
+    reason to merge them.
+  - **Optional, not required**: `numba==0.61.*` caps numpy at 2.2.6 against the `>=2.1`
+    floor (measured 2026-09-10). As a hard dependency that ceiling would bind every
+    consumer, including one who only runs the pure-Python decode.
+  - **Bare `numba-cuda`, with no `cu12`/`cu13` toolkit extra**: naming a CUDA major would
+    decide driver compatibility for every consumer. The workspace dev group picks `cu13`
+    for this repository only.
+  - **`numpy<2.5` is `numba-cuda`'s ceiling, which its own metadata omits.** 0.30.4 calls
+    `np.row_stack` at import, and numpy 2.5 removed it. Drop the cap when a `numba-cuda`
+    release stops doing that. The floor `>=0.30.4` is the one version measured.
+
+  `dp-compile.toml`'s `[dependencies]` rows still name both extras, so the phase skills keep
+  treating them as optional. `docs/api/hmm/README.md`'s "Backends and extras" section
+  returns to describing them.
+
 ## Trigger: a vocabulary outliving the process that built it
 
 - **Vocabulary persistence (`save`/`load`).** A `SymbolTable` is built from a corpus and

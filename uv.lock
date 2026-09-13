@@ -944,25 +944,11 @@ dependencies = [
     { name = "pfsmgraph-dataseq" },
 ]
 
-[package.optional-dependencies]
-cpu-parallel = [
-    { name = "numba" },
-]
-gpu = [
-    { name = "numba-cuda" },
-    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-]
-
 [package.metadata]
 requires-dist = [
-    { name = "numba", marker = "extra == 'cpu-parallel'", specifier = ">=0.61" },
-    { name = "numba-cuda", marker = "extra == 'gpu'", specifier = ">=0.30.4" },
     { name = "numpy", specifier = ">=2.1" },
-    { name = "numpy", marker = "extra == 'gpu'", specifier = "<2.5" },
     { name = "pfsmgraph-dataseq", editable = "packages/pfsmgraph-dataseq" },
 ]
-provides-extras = ["gpu", "cpu-parallel"]
 
 [[package]]
 name = "pfsmgraph-hseg"

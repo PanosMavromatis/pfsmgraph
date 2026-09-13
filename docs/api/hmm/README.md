@@ -118,16 +118,10 @@ reachable through a public call: selecting a backend at run time is an open ques
 ([ADR 0003](../../design/adr/0003-one-parameterized-test-suite-per-algorithm.md)), and
 until it is settled the public decode is the reference kernel only.
 
-Two optional extras are declared:
-
-- `pfsmgraph-hmm[cpu-parallel]` installs `numba`.
-- `pfsmgraph-hmm[gpu]` installs `numba-cuda`, and caps `numpy` below 2.5, because
-  `numba-cuda` 0.30.4 fails at import on numpy 2.5. The cap binds only an environment that
-  installs this extra.
-
-**Neither extra changes what any public call does in 0.1.0.** Installing one gets you
-nothing through `viterbi` today. GPU here means `numba-cuda`, unrelated to the `torch`
-stack `pfsmgraph-dl` uses.
+**0.1.0 declares no optional extras.** A backend you could not select would install `numba`
+or `numba-cuda` for nothing, so the extras arrive with the API that makes them reachable.
+When they do, GPU here means `numba-cuda`, unrelated to the `torch` stack `pfsmgraph-dl`
+uses.
 ([ADR 0004](../../design/adr/0004-gpu-backends-and-optional-dependency-strategy.md))
 
 ## Related records
