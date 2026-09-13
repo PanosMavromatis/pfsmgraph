@@ -1,6 +1,6 @@
 # docs/hmm-api
 
-**Status**: active
+**Status**: merged — PR #24 — 2026-09-13
 **Created**: 2026-09-13
 **Subgoal**: Write the `/docs/api/` documents that pertain to this release —
 `docs/plan/TODO.md`, revision 02-hmm-v0.1.0
