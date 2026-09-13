@@ -53,8 +53,25 @@ Two of these fail silently if placed wrong, which is why
   annotation in the package. It cannot go at the `pfsmgraph/` namespace level either, for
   the same reason no `__init__.py` may: no single distribution owns that level.
 
-`pfsmgraph-dataseq` has all four as of the 0.1.0 release commit. Each remaining member owes
-them in its own release commit; see `docs/plan/DEFERRED.md`.
+`pfsmgraph-dataseq` has all four as of the 0.1.0 release commit, and `pfsmgraph-hmm` as of
+its 0.1.0 release branch. Each remaining member owes them in its own release commit; see
+`docs/plan/DEFERRED.md`.
+
+**`just build` builds the last commit, not the working tree.** meson-python makes the sdist
+with `meson dist`, which archives `HEAD` even under `--allow-dirty`, and `uv build` then
+builds the wheel from that sdist. So an uncommitted change reaches neither artifact, and a
+build run to check a change before committing it checks the previous commit instead.
+Measured 2026-09-13, when a first `just build` on `pfsmgraph-hmm` produced the pre-change
+wheel with none of the new metadata. At release this is harmless, because `preflight`
+refuses a dirty tree. To inspect uncommitted work, build the wheel directly with
+`uv build --package <pkg> --wheel --out-dir <scratch>`.
+
+**`pfsmgraph-hmm` 0.1.0 is built with `-C setup-args=-Dcompiled=false`**, which the `build`
+recipe passes for that package alone. The option (`packages/pfsmgraph-hmm/meson.options`)
+skips the Cython kernel and installs to purelib, giving a `py3-none-any` wheel, since no
+public call in 0.1.0 reaches a compiled kernel. Both halves are needed: skipping the
+extension alone still left a platform-tagged wheel. uv's `--config-settings-package` would
+be the natural spelling, but it is silently ignored for the package being built.
 
 ### Validate
 
@@ -91,42 +108,29 @@ import from it. That is the acceptance test; the listing is a sanity check.
 
 `just release` runs `clean` first, so it rebuilds rather than uploading whatever is already
 in `dist/`. That would be a problem if the verified artifact and the rebuilt one could
-differ in substance. Measured 2026-09-02 on `pfsmgraph-dataseq` 0.1.0, from an unchanged
-package tree:
+differ. Measured 2026-09-13 on `pfsmgraph-hmm` 0.1.0.dev0, the first meson-python build of
+a member:
 
-- **The wheel is byte-identical** -- same SHA-256 across builds. Hatchling normalises
-  member timestamps (every entry reads `02-02-2020 00:00`), so the wheel is reproducible
-  and a rebuild is a no-op you can trust. This is the artifact essentially every consumer
-  installs.
-- **The sdist is not**, and the reason is worth knowing rather than dismissing as
-  timestamps: hatchling finds no `.gitignore` in the member directory, walks up to the VCS
-  root, and ships **the repo-root `.gitignore`** inside the sdist. So an edit to root
-  housekeeping -- a rule about a scratch directory, with nothing to do with this
-  distribution -- changes the sdist. That is exactly how the two builds diverged.
+- **The sdist is byte-identical across builds.** meson-python makes it with `meson dist`,
+  a `git archive` of `HEAD`, so it carries commit times and tracked files only. That is
+  also why it no longer ships the repo-root `.gitignore`, which hatchling used to add, and
+  why it cannot see uncommitted work (above). It does ship the member's `tests/`, which
+  read fixtures from the repository's `.scratch/` and so do not run from an unpacked
+  sdist. That is inert for consumers, and noted here so a failing sdist test run is not
+  mistaken for a broken package.
+- **The wheel is byte-identical only with `SOURCE_DATE_EPOCH` set.** Without it,
+  meson-python stamps build-time entry timestamps, and two builds of one commit differ in
+  those alone: the unpacked contents are identical. The `build` recipe therefore exports
+  `SOURCE_DATE_EPOCH` as the commit time, and two `just build` runs then give the same
+  SHA-256 for both artifacts.
 
-The practical consequence is small: the shipped `.gitignore` is inert noise, not a leak,
-and the sdist is otherwise a pure function of the member. But it means **the sdist is not a
-function of the member alone**, which is worth remembering before concluding that two
-differing sdists indicate a real change. `exclude = ["/.gitignore"]` under
-`[tool.hatch.build.targets.sdist]` does *not* remove it -- tried and measured, the file
-still ships -- so this is filed in `docs/plan/DEFERRED.md` rather than fixed in passing.
-
-**All of the above was measured against a hatchling build, and no member is on hatchling
-any more** (2026-09-04: all five moved to meson-python, for the namespace reason recorded
-in [ADR 0018](../design/adr/0018-family-wide-meson-python-build-backend.md), which lists
-this re-measurement among its costs). Nothing here is known to be false, and nothing here is known to
-still hold -- both findings are properties of hatchling's builder, not of this project.
-`pfsmgraph-dataseq` 0.1.0 shipped from hatchling and is the only real release so far, so
-**no wheel published from this repository has been built by meson-python yet**. The first
-one will be whichever member releases next, and the master plan schedules that as
-`pfsmgraph-hmm` 0.1.0 -- `dataseq` has no next release scheduled, so do not wait for it.
-The whole of this section has to be re-measured against that first meson build rather than
-assumed forward: whether the wheel is still
-byte-identical across builds, and what meson-python puts in an sdist. Re-verify the
-four-file invariant (`README.md`, the `LICENSE` copy, `Typing :: Typed`, and `py.typed`
-*inside* the package) against an actual built wheel in a clean venv at the same time --
-`py.typed` is the one most exposed by the switch, because meson does not glob and
-`install_sources` must name it explicitly.
+The hatchling-era findings this replaces (2026-09-02, `pfsmgraph-dataseq` 0.1.0) were the
+mirror image: a reproducible wheel, because hatchling normalises timestamps, and a
+non-reproducible sdist, because it walked up to the VCS root and shipped the root
+`.gitignore`. Both were properties of the builder rather than of this project, which is why
+[ADR 0018](../design/adr/0018-family-wide-meson-python-build-backend.md) listed the
+re-measurement among its costs. The four-file invariant was re-verified against a built
+wheel installed in a clean venv outside the workspace at the same time.
 
 **So prefer `just release` over hand-publishing the artifacts already in `dist/`.** The
 alternative -- `just check && just publish` plus a manual tag -- preserves bytes that are
@@ -162,7 +166,7 @@ just              # list all recipes
 | `just test` | The full suite |
 | `just build [pkg]` | `clean`, then `uv build --package` |
 | `just check [pkg]` | `twine check` on the built artifacts |
-| `just token-set [pkg]` | Store a PyPI token in the macOS Keychain (prompts, no echo) |
+| `just token-set [pkg]` | Store a PyPI token in the macOS Keychain (prompts, no echo); on Linux, use `.envrc` (§2) |
 | `just token [pkg]` | Read it back; fails loudly if absent |
 | `just preflight VER [pkg]` | Assert the version was built, the tree is clean, and push |
 | `just publish [pkg]` | Upload to PyPI |
@@ -170,7 +174,10 @@ just              # list all recipes
 | `just release VER [pkg]` | test -> build -> check -> preflight -> publish -> tag |
 | `*-test` variants | Same, against TestPyPI |
 
-Every recipe takes an optional package name defaulting to `pfsmgraph-dataseq`, so one file
+Every recipe takes an optional package name defaulting to `default_package`, which names
+the member under development rather than a published one. An omitted argument therefore
+builds a `.dev0` version that cannot match the requested one, so `preflight` stops the
+release before `publish`, instead of acting on a member already on PyPI. One file
 serves all five members: `just release 0.1.0 pfsmgraph-align`.
 
 ### Four design points worth knowing before you edit it
@@ -226,17 +233,35 @@ had since changed.
 A project scope is available for any name already reserved under the account, which is every
 member: all five hold `0.0.0` placeholders. There is no bootstrap-token step.
 
-Store it in the Keychain, never in `.env`, `~/.zshrc`, `~/.pypirc`, or the repo tree:
+Where it is stored depends on the host, and the recipes choose by `uname`. Never put it in a
+tracked file, `~/.zshrc` or `~/.pypirc`.
+
+**On Linux, export it from the repo-root `.envrc`** (direnv), under a per-package name:
 
 ```bash
-just token-set                          # stores it for pfsmgraph-dataseq, the default
+# .envrc -- gitignored (.gitignore line 152); run `direnv allow` after editing
+export PYPI_TOKEN_PFSMGRAPH_HMM='pypi-…'
+```
+
+`token` reads `PYPI_TOKEN_<PKG>` (hyphens to underscores, uppercased; `TESTPYPI_TOKEN_<PKG>`
+for TestPyPI) and fails naming the variable when it is unset or empty. `token-set` does not
+apply on Linux and says so. The file is kept out of git by the ignore rule, and out of the
+sdist because meson-python builds the sdist from `git archive`, which carries tracked files
+only. **The cost is that direnv exports the token to every process started in the repo**,
+not only to `publish`, which is why the name is per-package and only `token` reads it: a
+token scoped to one member cannot reach another member's upload, which finds no variable and
+stops. Adopted 2026-09-13 for `pfsmgraph-hmm` 0.1.0, the first release from a Linux host.
+
+**On macOS, store it in the Keychain:**
+
+```bash
+just token-set                          # stores it for the default package
 just token-set pfsmgraph-align          # any other member, by name
 ```
 
 Both forms are shown because every recipe here takes the package as an optional argument
 defaulting to `default_package` at the top of the `justfile`. Naming the default explicitly
-(`just token-set pfsmgraph-dataseq`) is therefore identical to the bare form, not a
-different operation.
+is therefore identical to the bare form, not a different operation.
 
 That prompts without echoing, so nothing lands in zsh history. `uv` does not read
 `.pypirc` at all -- verified against the binary -- so a token placed there would appear to
@@ -271,7 +296,16 @@ the cheapest general guard against it -- it does not care *why* the value change
 
 **Never run `just token` on its own.** It exists to be consumed by `$(...)` inside
 `publish`, and standalone it prints a live credential into your scrollback. If it happens,
-revoke the token and re-run `token-set`.
+revoke the token and re-store it.
+
+**`publish` captures the token before uploading, and the order is load-bearing.** Until
+2026-09-13 it read `UV_PUBLISH_TOKEN="$(just token pkg)" uv publish …`. A failure inside
+`$(...)` does not stop the command it prefixes, so a missing token printed its error and
+then ran `uv publish` with an empty token, which falls through to trusted-publishing
+discovery and fails as an OIDC error, exit status and all pointing away from the cause. The
+recipe now runs `tok="$(just token pkg)" && UV_PUBLISH_TOKEN="$tok" uv publish …`. The
+defect was on the macOS path too, and never showed because the Keychain entry always
+existed.
 
 The `-a`/`-s` pair the recipes pass to `security` is an arbitrary lookup key -- `$USER`
 namespaces the entry to your local login, and the service string is a name this `justfile`
@@ -306,7 +340,7 @@ just release 0.1.0
 ```
 
 Which is: test -> clean -> build -> `twine check` -> preflight -> upload -> tag
-`pfsmgraph-dataseq-v0.1.0` -> push.
+`pfsmgraph-<pkg>-v0.1.0` for the default package -> push.
 
 Two mechanics inside `publish` worth understanding:
 

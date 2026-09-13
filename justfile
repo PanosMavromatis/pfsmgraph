@@ -4,7 +4,7 @@
 # Every recipe takes an optional package name, defaulting to the one below,
 # so the same recipes serve all five members:
 #
-#   just build                          # builds pfsmgraph-dataseq
+#   just build                          # builds the default package
 #   just build pfsmgraph-align          # builds something else
 #   just release 0.1.0                  # full release of the default package
 #   just release 0.1.0 pfsmgraph-align  # full release of another
@@ -13,7 +13,11 @@
 # line above a recipe as its description, so any explanatory prose is separated
 # from the recipe by a blank line and only the one-line summary sits adjacent.
 
-default_package := "pfsmgraph-dataseq"
+# The member under development, never an already-published one: a release that
+# omits the package argument then builds a .dev0 version that cannot match the
+# requested one, so preflight stops it before publish, instead of acting on a
+# member that is already on PyPI. Move it to the next member at each release.
+default_package := "pfsmgraph-hmm"
 
 # Show available recipes.
 default:
@@ -31,9 +35,25 @@ clean:
 # that glob from picking up a stale version of the same package -- it is not
 # merely tidiness, and removing it makes the glob a live hazard.
 
+# The -C setting is chosen by package name here, because uv's own
+# `--config-settings-package` is silently ignored for the package `uv build` is
+# building -- measured 2026-09-13 on uv 0.12.13, the backend was called with
+# `build_wheel(..., {}, ...)` -- and a plain `-C` for every member would hand
+# -Dcompiled to members that define no such option. pfsmgraph-hmm 0.1.0 ships a pure py3-none-any wheel because no public call
+# reaches its compiled kernel: a platform wheel would fail preflight's
+# py3-none-any check, and PyPI refuses a plain linux_x86_64 tag. Remove the flag
+# when a public call does (docs/plan/DEFERRED.md, the extras-restore entry).
+#
+# SOURCE_DATE_EPOCH is the commit time, so the wheel is reproducible: without it
+# meson-python stamps build-time entry timestamps and two builds of one commit
+# differ (contents identical, measured 2026-09-13), which would make the wheel
+# `release` rebuilds and uploads a different file from the one you verified. The
+# sdist needs nothing -- meson dist archives HEAD and carries commit times.
+
 # Build sdist + wheel from a clean dist/.
 build package=default_package: clean
-    uv build --package {{ package }}
+    SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)" uv build --package {{ package }} \
+      {{ if package == "pfsmgraph-hmm" { "-C setup-args=-Dcompiled=false" } else { "" } }}
 
 # Validate that artifacts will render on PyPI before uploading.
 check package=default_package:
@@ -52,8 +72,16 @@ test:
 
 # --- credentials -----------------------------------------------------------
 #
-# Tokens live in the macOS Keychain, never in a dotfile or the repo tree.
-# `token-set` prompts without echoing, so nothing lands in zsh history.
+# Tokens live in one of two places, chosen by `uname`, and never in a tracked
+# file. On macOS, in the Keychain: `token-set` prompts without echoing, so
+# nothing lands in shell history. On Linux, in a per-package environment
+# variable exported from the repo's gitignored .envrc (direnv), e.g.
+# PYPI_TOKEN_PFSMGRAPH_HMM. Per-package so a token scoped to one member can
+# never be handed to another member's upload -- that run finds no variable and
+# stops. direnv exports it to every process started in the repo, which is why
+# only `token` reads it and `publish` hands it to `uv publish` explicitly.
+#
+# The rest of this block is about the macOS path.
 #
 # `-U` is what makes `token-set` idempotent, and it is required rather than
 # tidy: without it `security add-generic-password` REFUSES when the item
@@ -67,11 +95,11 @@ test:
 # Neither is a PyPI identity: `uv publish` supplies the literal `__token__`
 # username itself whenever it is given a token rather than a user/password.
 
-# Store a PyPI token for a package (prompts for the value).
-token-set package=default_package: (_token-prompt "pypi-" + package)
+# Store a PyPI token for a package (macOS Keychain; prompts for the value).
+token-set package=default_package: (_token-prompt ("pypi-" + package) ("PYPI_TOKEN_" + uppercase(replace(package, "-", "_"))))
 
-# Store a TestPyPI token for a package (prompts for the value).
-token-set-test package=default_package: (_token-prompt "testpypi-" + package)
+# Store a TestPyPI token for a package (macOS Keychain; prompts for the value).
+token-set-test package=default_package: (_token-prompt ("testpypi-" + package) ("TESTPYPI_TOKEN_" + uppercase(replace(package, "-", "_"))))
 
 # Prompt for a token, store it under `service`, and verify it round-trips.
 #
@@ -79,9 +107,13 @@ token-set-test package=default_package: (_token-prompt "testpypi-" + package)
 # read into this shell and reaches the argv of `security` alone, which is the
 # one exposure the Keychain CLI offers no way to avoid.
 
-_token-prompt service:
+_token-prompt service var:
     #!/usr/bin/env bash
     set -euo pipefail
+    if [[ "$(uname -s)" != Darwin ]]; then
+      echo "token-set writes the macOS Keychain; on Linux export {{ var }} in the repo's gitignored .envrc and run: direnv allow" >&2
+      exit 1
+    fi
     read -rsp "token for {{ service }} (input hidden): " tok; echo
     [[ -n "$tok" ]] || { echo "empty token -- nothing stored" >&2; exit 1; }
     [[ "$tok" == pypi-* ]] || { echo "token does not begin with 'pypi-' -- both PyPI and TestPyPI tokens do; nothing stored" >&2; exit 1; }
@@ -94,20 +126,36 @@ _token-prompt service:
     fi
     echo "stored ${#tok} characters under {{ service }}"
 
-# A missing keychain entry must fail loudly. An empty UV_PUBLISH_TOKEN is not an
-# error to `uv publish`: it falls through to trusted-publishing discovery, which
-# resolves only inside CI, so on a laptop the result is a confusing OIDC failure
+# A missing token must fail loudly. An empty UV_PUBLISH_TOKEN is not an error
+# to `uv publish`: it falls through to trusted-publishing discovery, which
+# resolves only inside CI, so outside CI the result is a confusing OIDC failure
 # rather than "no token stored".
 
 # Read a stored PyPI token to stdout.
-token package=default_package:
-    @security find-generic-password -a "$USER" -s pypi-{{ package }} -w \
-      || { echo "no keychain entry pypi-{{ package }} -- run: just token-set {{ package }}" >&2; exit 1; }
+token package=default_package: (_token-read ("pypi-" + package) ("PYPI_TOKEN_" + uppercase(replace(package, "-", "_"))) ("token-set " + package))
 
 # Read a stored TestPyPI token to stdout.
-token-test package=default_package:
-    @security find-generic-password -a "$USER" -s testpypi-{{ package }} -w \
-      || { echo "no keychain entry testpypi-{{ package }} -- run: just token-set-test {{ package }}" >&2; exit 1; }
+token-test package=default_package: (_token-read ("testpypi-" + package) ("TESTPYPI_TOKEN_" + uppercase(replace(package, "-", "_"))) ("token-set-test " + package))
+
+# Print the token from the Keychain (macOS) or from `var` (Linux), or fail.
+#
+# `${!var}` is indirect expansion: just interpolates the variable's *name*, and
+# the value never passes through just's templating. Every argument above is
+# parenthesised because just reads `package (...)` as a call to a function
+# named `package`.
+
+_token-read service var hint:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ "$(uname -s)" == Darwin ]]; then
+      security find-generic-password -a "$USER" -s '{{ service }}' -w \
+        || { echo "no keychain entry {{ service }} -- run: just {{ hint }}" >&2; exit 1; }
+    else
+      var='{{ var }}'
+      tok="${!var:-}"
+      [[ -n "$tok" ]] || { echo "{{ var }} is unset or empty -- export it in the repo's gitignored .envrc and run: direnv allow" >&2; exit 1; }
+      printf '%s\n' "$tok"
+    fi
 
 
 # --- publish ---------------------------------------------------------------
@@ -116,18 +164,24 @@ token-test package=default_package:
 # Moving a package from local-token publishing to Trusted Publishing means
 # editing the body of `publish` and nothing else. Every other recipe, and
 # every habit built on top of them, stays identical.
+#
+# The token is captured first and `&&` chains the upload. The earlier form,
+# `UV_PUBLISH_TOKEN="$(just token pkg)" uv publish`, ran `uv publish` with an
+# empty token when the read failed -- a failure inside `$(...)` does not stop
+# the command it prefixes -- and so produced exactly the OIDC confusion the
+# credentials block warns about. Measured 2026-09-13; it affected macOS too.
 
 # Upload built artifacts to PyPI.
 publish package=default_package:
-    UV_PUBLISH_TOKEN="$(just token {{ package }})" \
-      uv publish \
+    tok="$(just token {{ package }})" \
+      && UV_PUBLISH_TOKEN="$tok" uv publish \
         --check-url https://pypi.org/simple/{{ package }}/ \
         dist/{{ replace(package, "-", "_") }}-*
 
 # Upload built artifacts to TestPyPI instead.
 publish-test package=default_package:
-    UV_PUBLISH_TOKEN="$(just token-test {{ package }})" \
-      uv publish \
+    tok="$(just token-test {{ package }})" \
+      && UV_PUBLISH_TOKEN="$tok" uv publish \
         --publish-url https://test.pypi.org/legacy/ \
         dist/{{ replace(package, "-", "_") }}-*
 

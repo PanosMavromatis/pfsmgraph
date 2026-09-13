@@ -20,7 +20,11 @@ project(
   default_options: ['warning_level=2', 'buildtype=release'],
 )
 
-py = import('python').find_installation(pure: false)
+# `compiled` (meson.options) has to govern BOTH this and the extension block
+# below. Measured 2026-09-13: skipping the extension alone still produced a
+# cp312-linux_x86_64 wheel, because pure: false routes every installed file to
+# platlib, and a wheel with anything in platlib is platform-tagged.
+py = import('python').find_installation(pure: not get_option('compiled'))
 fs = import('fs')
 
 # --- Pure-Python sources -----------------------------------------------------
@@ -47,6 +51,9 @@ py.install_sources(
     # listed for the same reason: unlisted, it is invisible to the editable
     # finder and absent from the wheel.
     'src/pfsmgraph/hmm/_viterbi_cuda.py',
+    # PEP 561 marker. Not a .py file, and meson does not glob, so a marker at
+    # the right path but missing here reaches no wheel.
+    'src/pfsmgraph/hmm/py.typed',
   ],
   subdir: 'pfsmgraph/hmm',
 )
@@ -62,7 +69,7 @@ py.install_sources(
 # in with add_languages() only when needed, so project() above stays C-only.
 viterbi_pyx = 'src/pfsmgraph/hmm/_viterbi_cython.pyx'
 
-if fs.exists(viterbi_pyx)
+if get_option('compiled') and fs.exists(viterbi_pyx)
   add_languages('cython', native: false)
 
   numpy_inc = run_command(

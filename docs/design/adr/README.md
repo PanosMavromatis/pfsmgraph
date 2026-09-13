@@ -20,7 +20,7 @@ Numbers are permanent and never reused. To add one, copy
 | [0006](0006-single-repository-as-a-uv-workspace.md) | One repository, structured as a uv workspace | Accepted | 2026-06-29 | §5 |
 | [0007](0007-dl-as-a-single-distribution.md) | `dl` is a single distribution; there is no third namespace tier | Accepted | 2026-06-29 | §7 |
 | [0008](0008-per-package-build-backends.md) | Build backends are per-package; meson-python for compiled members | Superseded † | 2026-06-29 | §6, §6.1 |
-| [0009](0009-dataseq-as-the-base-layer.md) | `dataseq` is the dependency-graph base layer | Accepted | 2026-08-21 | §3.4 |
+| [0009](0009-dataseq-as-the-base-layer.md) | `dataseq` is the dependency-graph base layer | Accepted ‖ | 2026-08-21 | §3.4 |
 | [0010](0010-dataseq-composition-merging-three-implementations.md) | `dataseq` is a merge of three existing implementations, with `dl` as the base | Accepted ‡ | 2026-08-21 | §1.5, §3.5, §8 |
 | [0011](0011-fixed-reserved-symbol-block-and-strict-encoding.md) | Fixed reserved symbol block; encoding is strict by default | Accepted | 2026-08-21 | §3.6 |
 | [0012](0012-align-and-hmm-temporarily-on-hatchling.md) | `align` and `hmm` are temporarily on hatchling, not meson-python | Superseded ¶ | 2026-08 | — |
@@ -30,6 +30,7 @@ Numbers are permanent and never reused. To add one, copy
 | [0016](0016-numba-cpu-parallel-phase.md) | Insert a Numba CPU-parallel phase between Cython and CUDA | Accepted | 2026-09-03 | — |
 | [0017](0017-frozen-parameter-object-for-hmm.md) | `pfsmgraph.hmm` parameters are a frozen value, not a mutable model object | Accepted | 2026-09-03 | — |
 | [0018](0018-family-wide-meson-python-build-backend.md) | The build backend is family-wide: all five members on meson-python | Accepted | 2026-09-04 | — |
+| [0019](0019-declared-dependencies-follow-imports.md) | A declared intra-family dependency lands with its first import | Accepted | 2026-09-13 | — |
 
 † Was qualified in practice by 0012 until the first Cython kernel landed. Both are now
 superseded by 0018, which replaces the per-package backend with a family-wide one; the
@@ -43,6 +44,8 @@ authored, but PRD §9 required the encoder API reconciliation to be resolved dur
 merge itself; it was, and 0010 records the settled API.
 § Amended by 0016, which inserts a phase between Cython and CUDA and renumbers CUDA from
 phase 3 to phase 4.
+‖ Amended by 0019: the graph stands as intent, declared dependencies follow imports, and
+release order follows what is declared, so `hmm` releases before `align`.
 
 ## Reading order
 
@@ -76,15 +79,20 @@ phase 3 to phase 4.
   plain `.pth` is shadowed. It is the only record so far that supersedes rather than
   amends, and the three-record sequence 0008 → 0012 → 0018 is the clearest worked example
   in this directory of a decision surviving two revisions of its own evidence.
+- **0019** amends 0009: the drawn graph is intent, and a member declares an edge on another
+  member when a module in it first imports across that edge, checked at its release
+  commit. Read it before any release, since it is what lets `hmm` publish ahead of
+  `align`.
 
 ## Coverage of the PRD decision table
 
 Every decision D1–D11 in PRD §2 is covered: D1–D2 and D3–D4 by 0005, D5 by 0006, D6 by
 0007, D7–D8 by 0008 (both now superseded by 0018), D9 by 0009, D10 by 0010, D11 by 0011. The inherited §1.2 decisions
-are covered by 0001–0004. 0012, 0013, 0014, 0015, 0016, 0017 and 0018 have no PRD counterpart —
-all seven postdate the document; 0012 qualifies §6.1 and 0018 overrides it, 0013 settles a question §9 never
+are covered by 0001–0004. 0012, 0013, 0014, 0015, 0016, 0017, 0018 and 0019 have no PRD counterpart —
+all eight postdate the document; 0012 qualifies §6.1 and 0018 overrides it, 0013 settles a question §9 never
 raised, 0014 covers a working-area policy the PRD does not describe at all, 0015 answers a
 question the PRD did not know it had left open: which HMM formulation `pfsmgraph-hmm`
 implements, 0016 amends the phase count §1.2/§6 originally described as three, and 0017
 settles a class-architecture question the PRD leaves to the migration — whether
-`pfsmgraph.hmm` inherits the imported source's mutable model/working-copy split.
+`pfsmgraph.hmm` inherits the imported source's mutable model/working-copy split, and 0019
+qualifies the release order §3.4 and §11 derive from the graph.

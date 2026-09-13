@@ -84,9 +84,9 @@ def test_only_the_numba_rows_may_be_skipped():
     #
     # `cpu_parallel` is the first row where the absence *is* legitimate, and the
     # reason it is not a broken working copy is a packaging decision rather than
-    # a property of the kernel: numba arrives through pfsmgraph-hmm's
-    # `cpu-parallel` extra (ADR 0004 -- acceleration is opt-in), so an install
-    # that declined it is entitled to lack this backend. Pin the value, not just
+    # a property of the kernel: numba is not a dependency of pfsmgraph-hmm (ADR
+    # 0004 -- acceleration is opt-in; the extra is withheld in 0.1.0 and optional
+    # when restored), so an install without it is entitled to lack this backend. Pin the value, not just
     # its truthiness: making it None would silently escalate a legitimate skip
     # into a startup failure for every lean install.
     #
@@ -117,8 +117,8 @@ def test_the_registered_backends_actually_resolve():
     # was not, detect() raises BackendError here rather than returning a skip.
     #
     # `cpu_parallel` resolves here because numba is in the root `dev` group, not
-    # because it is required: the extra is a promise to consumers, the dev group
-    # is what makes this repository's own suite exercise the backend. A parallel
+    # because it is required: no install of the package promises numba, and the
+    # dev group is what makes this repository's own suite exercise the backend. A parallel
     # backend nobody runs is worse than none, which is why both halves exist.
     #
     # `cuda` is different in kind: it resolves only where a device exists, and

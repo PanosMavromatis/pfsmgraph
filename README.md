@@ -2,7 +2,7 @@
 
 A composable ecosystem of Python packages for modeling symbolic data sequences. Probabilistic finite-state models (PFSMs) are the unifying core, bridging sequence alignment, hierarchical segmentation, HMMs (Baum-Welch), deep learning (RNNs, Transformers), interpretability, and graph operations.
 
-> **Status: one package released, one begun, three scaffolded.** The workspace layout, package boundaries, and build backends are in place. `pfsmgraph-dataseq` — the base layer every other member depends on — is implemented, tested, documented at [`docs/api/dataseq/`](docs/api/dataseq/README.md), and released at 0.1.0. `pfsmgraph-hmm` has begun: its migrated numeric helpers are in place and tested, and it now exports the frozen parameter value `HMMParams` together with the Viterbi decode over it — the project's first dynamic-programming kernel, checked against the original implementation's own saved decodes. That decode reached [ADR 0002](docs/design/adr/0002-three-phase-algorithm-lifecycle.md) phase 2 on 2026-09-09 as `_viterbi_cython.pyx`, the first compiled code this repository carries and the first non-trivial row in its backend matrix. The other three are still empty namespace subpackages, and all four unreleased names still hold dependency-free `0.0.0` placeholders. See [`docs/design/PRD.md`](docs/design/PRD.md) for the design and [`docs/design/adr/`](docs/design/adr/README.md) for the decision records, which are authoritative.
+> **Status: two packages released, three scaffolded.** The workspace layout, package boundaries, and build backends are in place. `pfsmgraph-dataseq` — the base layer every other member depends on — is implemented, tested, documented at [`docs/api/dataseq/`](docs/api/dataseq/README.md), and released at 0.1.0. `pfsmgraph-hmm` has begun: its migrated numeric helpers are in place and tested, and it now exports the frozen parameter value `HMMParams` together with the Viterbi decode over it — the project's first dynamic-programming kernel, checked against the original implementation's own saved decodes. That decode reached [ADR 0002](docs/design/adr/0002-three-phase-algorithm-lifecycle.md) phase 2 on 2026-09-09 as `_viterbi_cython.pyx`, the first compiled code this repository carries and the first non-trivial row in its backend matrix. `pfsmgraph-hmm` was released at 0.1.0 on 2026-09-13, as a pure wheel; the compiled kernels stay in the repository until a public call selects them. The other three are still empty namespace subpackages, and all three unreleased names still hold dependency-free `0.0.0` placeholders. See [`docs/design/PRD.md`](docs/design/PRD.md) for the design and [`docs/design/adr/`](docs/design/adr/README.md) for the decision records, which are authoritative.
 
 ## Packages
 
@@ -13,12 +13,12 @@ A composable ecosystem of Python packages for modeling symbolic data sequences. 
 | `pfsmgraph-dataseq` | `pfsmgraph.dataseq` | Data sequence container + symbol↔code encoder; PyTorch `Dataset`-compatible base layer&nbsp;‡ | — | meson-python&nbsp;† |
 | `pfsmgraph-align` | `pfsmgraph.align` | Sequence alignment (DP-heavy, compiled) | `dataseq` | meson-python |
 | `pfsmgraph-hseg` | `pfsmgraph.hseg` | Hierarchical segmentation | `dataseq`, `align` | meson-python&nbsp;† |
-| `pfsmgraph-hmm` | `pfsmgraph.hmm` | Baum-Welch, topology search via state merge/split | `dataseq`, `align` | meson-python |
+| `pfsmgraph-hmm` | `pfsmgraph.hmm` | Arc-emission HMMs: parameters and Viterbi decode (0.1.0); Baum-Welch and merge/split topology search to follow&nbsp;‡ | `dataseq` | meson-python |
 | `pfsmgraph-dl` | `pfsmgraph.dl` | PyTorch models (`rnn`, `transformer` submodules) | `dataseq`, `align` | meson-python&nbsp;† |
 
 † `align` and `hmm` are meson-python because they get Cython + CUDA kernels. The other three are marked because they are on it for a reason unrelated to building: meson-python's editable install injects a meta-path finder that replaces `pfsmgraph.__path__`, so **a member left on a plain `.pth` is shadowed by any sibling's finder and stops importing**. Finders chain, so the fix is for every member to have one — pure ones included. Measured 2026-09-04 and recorded as [ADR 0018](docs/design/adr/0018-family-wide-meson-python-build-backend.md), which supersedes ADR 0012 and overrides ADR 0008's per-package backends. The ADR carries the measurements and the rejected alternatives; [`packages/pfsmgraph-dataseq/pyproject.toml`](packages/pfsmgraph-dataseq/pyproject.toml) carries the short form the other four members point at.
 
-‡ The only member with an implementation. Its public API is documented at [`docs/api/dataseq/`](docs/api/dataseq/README.md); the other four rows describe intent, not code.
+‡ Implemented and released. Public APIs are documented at [`docs/api/dataseq/`](docs/api/dataseq/README.md) and [`docs/api/hmm/`](docs/api/hmm/README.md); the other three rows describe intent, not code. The Depends-on column shows declared dependencies ([ADR 0019](docs/design/adr/0019-declared-dependencies-follow-imports.md)), so `hmm` gains `align` only when it imports it.
 
 ```
                   dataseq          (base — no intra-family dependencies)
@@ -56,7 +56,7 @@ Requires [uv](https://docs.astral.sh/uv/) and Python ≥ 3.10.
 
 ```bash
 uv sync                             # venv + all five members editable + dev tools
-uv run pytest                       # run the suite (318: 74 dataseq, 199 hmm, 45 root)
+uv run pytest                       # run the suite (319: 74 dataseq, 199 hmm, 46 root)
 uv build --package pfsmgraph-align  # build one distribution
 uv lock                             # refresh uv.lock (committed; one per family)
 ```
@@ -67,9 +67,9 @@ Because `uv sync` installs every member **editable**, imports resolve to `packag
 
 ## Publishing
 
-Release order follows the dependency graph: `dataseq` → `align` → {`hseg`, `hmm`, `dl`}; a package cannot publish before its dependencies exist on PyPI. `pfsmgraph-dataseq` is released at 0.1.0; the other five names — the four remaining packages plus the bare `pfsmgraph` umbrella — are still dependency-free `0.0.0` placeholders. See PRD §4 and §11.
+Release order follows declared dependencies ([ADR 0019](docs/design/adr/0019-declared-dependencies-follow-imports.md)): a package cannot publish before the family members it imports exist on PyPI, so `dataseq` goes first and `hmm`, which imports only `dataseq`, can follow it directly. `pfsmgraph-dataseq` and `pfsmgraph-hmm` are released at 0.1.0; the other four names — the three remaining packages plus the bare `pfsmgraph` umbrella — are still dependency-free `0.0.0` placeholders. See PRD §4 and §11.
 
-Releases run through the repo-root `justfile`, which requires [just](https://just.systems) (`brew install just`): `just release <version> [package]` runs test → build → `twine check` → preflight → upload → tag, defaulting to `pfsmgraph-dataseq`. `just` alone lists every recipe, and [`docs/ops/release.md`](docs/ops/release.md) is the runbook.
+Releases run through the repo-root `justfile`, which requires [just](https://just.systems) (`brew install just`): `just release <version> [package]` runs test → build → `twine check` → preflight → upload → tag, defaulting to `default_package`, the member under development, so an omitted argument can never reach a published package. `just` alone lists every recipe, and [`docs/ops/release.md`](docs/ops/release.md) is the runbook.
 
 ## License
 
