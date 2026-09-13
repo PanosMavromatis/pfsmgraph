@@ -265,5 +265,45 @@ than assume — the premise is what the first goal exists to check.
     > device detected: pfsmgraph.hmm._viterbi_cuda needs …)` — because the test wraps the
     > module's `ImportError` message, which already begins with the same words. It is
     > cosmetic and left as found; tidying it is a one-line change to `_CUDA_SKIP_REASON`.
-- [ ] Measure and record
-  - [ ] Launch overhead against phase 3's flat ~34 ms; update `core.md`, `FORMALIZATION.md` and ADR 0016 as the result warrants
+- [x] Measure and record
+  - [x] Launch overhead against phase 3's flat ~34 ms; update `core.md`, `FORMALIZATION.md` and ADR 0016 as the result warrants
+    > **Q:** Which records should the measurement update — `core.md` and
+    > `FORMALIZATION.md`, or ADR 0016 as well, with an `Evidence` addendum?
+    > **A:** `core.md` and `FORMALIZATION.md` only. ADR 0016's decision is unchanged, so it
+    > is left untouched.
+    > **Done:** all four backends re-measured **on this host** (4-vCPU Xeon, NVIDIA L4,
+    > 4 numba threads) at `N = 400`, post-compile, as a median over a ~1.5 s budget,
+    > twice, agreeing within ~3% with the GPU otherwise idle. Second run, in ms:
+    > `S = 5` python 7.5 / cython 0.11 / cpu_parallel 1.4 / **cuda 22.8**;
+    > `S = 16` 9.1 / 1.0 / 1.8 / **22.5**; `S = 64` 20.5 / 20.2 / 9.9 / **22.7**;
+    > `S = 160` 119 / 222 / 70 / **24.5**. CUDA versus Cython: 205× slower, 22× slower,
+    > 1.1× slower, **9× faster**. At `S = 64` the CUDA cost is ~1.5 ms fixed per call
+    > (`N = 1`) plus **~54 µs per timestep** (`N = 1600`). `core.md`'s four-phase invariant
+    > now attributes phase 3's figures to their host and replaces "a CUDA transliteration
+    > hits the same wall harder" with the measurement. `FORMALIZATION.md`'s `Parallel
+    > decomposition` gains two paragraphs: the logarithm runs on the host, never on a
+    > device (contract), and *which* host `log2` is contract stays open, pointing to
+    > `DEFERRED.md`. Editing the formalization stales nothing, since it is a leaf derived
+    > from `_viterbi.py`. Suite green at 315.
+    > **Note:** **phase 3's "flat ~34 ms" was a property of its host, not of the kernel.**
+    > Here `cpu_parallel` takes 1.4 ms at `S = 5` and already beats Cython at `S = 64`,
+    > where the original record put the crossover "near `S = 250`". Fork/join cost varied
+    > by an order of magnitude between the two machines, which is why `core.md` now names
+    > the host beside the numbers.
+    > **Note:** **"hits the same wall harder" was half right.** Per timestep a GPU launch
+    > (~54 µs) costs about 15× this host's CPU fork/join (1.4 ms / 400 ≈ 3.5 µs). But the
+    > GPU's cost stays flat to `S = 160` while the CPU backends grow with `S²`, so CUDA is
+    > the fastest backend at `S = 160`, and its crossover with Cython sits just above
+    > `S = 64` — close to the ~50-state ceiling rather than far past it.
+    > **Note:** **goal 3's isolated-step projection was wrong at `S = 160`, and the reason
+    > is instructive.** It projected ~108 ms; the real kernel takes 24.5 ms. The probe's
+    > step kernel evaluated `-math.log2` on the device, 25,600 calls per launch, while
+    > `_viterbi_cuda` only adds and compares. So moving the logarithm to the host, decided
+    > for correctness, is also where most of the `S = 160` speed came from. The `S ≤ 64`
+    > projection (~22 ms) held.
+    > **Note:** **Cython is slower than pure Python at `S = 160`** (222 vs 119 ms). Its
+    > inner loop makes ~`N·S²` ≈ 10⁷ scalar libm `log2` calls, while phase 1 hands numpy
+    > one `(S, S)` block per timestep for its SIMD `log2`. The logarithm dominates the
+    > compiled backend's cost — the same function behind this branch's numpy/libm finding.
+    > The benchmark script was scratchpad-only; `[commands] benchmark` stays deliberately
+    > unconfigured in `dp-compile.toml`.
