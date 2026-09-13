@@ -142,8 +142,11 @@ and several of these must land *as part of* the merge rather than after it.
   condition. Left in place rather than moved, because the phase-4 work is the same branch
   family and moving it would lose the association; but a reader auditing fired triggers
   should expect this one to still show an open entry.
-- **Pin the `numba-cuda` lower bound** in `align`'s (and `hmm`'s) `[gpu]` extra once the
-  wavefront backend lands; it is currently unpinned.
+- **Pin the `numba-cuda` lower bound** in `align`'s `[gpu]` extra once its wavefront
+  backend lands; it is currently unpinned. *Narrowed 2026-09-13:* `hmm`'s half was
+  discharged on `feat/hmm-viterbi-cuda` as `numba-cuda>=0.30.4` plus `numpy<2.5` — the
+  cap numba-cuda's metadata omits, which `align`'s pin will need too. `hmm`'s phase 4 is
+  not a wavefront (ADR 0016 `Resolved`), so "the wavefront backend" now names `align`'s alone.
 
 ## Trigger: CI existing
 

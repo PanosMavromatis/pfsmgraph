@@ -187,7 +187,7 @@ fix and most expensive to leave:
   `dataseq` merge -- was discharged on 2026-09-01 and its entry is now closed, so do not
   report it. The `_cython.pyx` comma-form indexing fix was the live one and was **applied
   2026-09-09**, before the first `.pyx` landed, so it is no longer a finding either. What
-  remains under that trigger is the `numba-cuda` lower bound, whose own text defers it to
+  remains under that trigger is `align`'s half of the `numba-cuda` lower bound (`hmm`'s was pinned 2026-09-13), whose own text defers it to
   the wavefront backend rather than to this trigger -- so the trigger has fired with one
   entry still legitimately open. That mismatch is worth reporting; a *silently* open entry
   under a fired trigger is not the same thing.

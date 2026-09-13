@@ -46,7 +46,7 @@ than assume — the premise is what the first goal exists to check.
     > **Note:** 298 passed in 5.84 s under `--no-sync`, no backend withheld. The header
     > names three backends with a GPU present, correctly — a phase not yet reached
     > contributes no row.
-- [~] Settle the GPU environment before the first gated commit
+- [x] Settle the GPU environment before the first gated commit
   > **Q:** How should `numba-cuda` survive `uv sync` / `uv run`, and so the `dp-compile`
   > gate — root `dev` group (Linux-only), `--extra gpu` in the manifest commands, or kept
   > out of the lock under `--no-sync`?
@@ -91,7 +91,31 @@ than assume — the premise is what the first goal exists to check.
     > import probe of `_viterbi_cuda` to be what catches this in the suite.
     > **Note:** `cuda-core` resolved **down**, 1.2.0 → 1.1.1, under the `cu13` extra;
     > harmless, recorded because a downgrade in a lock diff otherwise reads as a mistake.
-  - [ ] Pin the `numba-cuda` lower bound in `pfsmgraph-hmm`'s `gpu` extra and close the `DEFERRED.md` entry; check what numpy ceiling it imposes
+  - [x] Pin the `numba-cuda` lower bound in `pfsmgraph-hmm`'s `gpu` extra and close the `DEFERRED.md` entry; check what numpy ceiling it imposes
+    > **Q:** What should `pfsmgraph-hmm`'s published `gpu` extra declare — bare
+    > `numba-cuda`, `numba-cuda[cu13]`, or separate `gpu-cu12`/`gpu-cu13` extras?
+    > **A:** Bare `numba-cuda>=0.30.4` plus `numpy<2.5`. numba-cuda itself leaves the
+    > toolkit to the installer, and naming a CUDA major would decide driver compatibility
+    > for every consumer; the dev group's `cu13` stays a repository choice.
+    > **Q:** The `DEFERRED.md` entry also pins `align`'s `gpu` extra — pin it too, or narrow
+    > the entry?
+    > **A:** Narrow it to `align`, whose wavefront backend is its own phase 4 and has not
+    > landed; fix `codex.md`'s pointer to it.
+    > **Done:** `gpu = ["numba-cuda>=0.30.4", "numpy<2.5"]`, commented with why it is bare,
+    > why the floor, and whose ceiling the cap is. `DEFERRED.md`'s entry narrowed to
+    > `align` rather than closed, recording that `hmm`'s phase 4 is not a wavefront so the
+    > entry's own condition now names `align` alone; `codex.md:190` updated to match.
+    > Resolving the extra for Linux gives `numba-cuda==0.30.4`, `numpy==2.4.6`; the suite
+    > stays green at 298.
+    > **Note:** **the extra's cap binds the whole workspace lock, on every platform.** uv
+    > resolves every member's extras into one universal lock, so `numpy<2.5` in `hmm`'s
+    > `gpu` extra collapsed the numpy fork the previous commit created: `uv lock` reported
+    > `numpy v2.2.6, v2.4.6, v2.5.2 -> v2.2.6, v2.4.6`, and macOS development now resolves
+    > 2.4.6 too. Consumers are unaffected — the cap reaches only whoever opts into `gpu` —
+    > and the Linux-marked dev-group `numpy<2.5` is now redundant in the lock without being
+    > wrong. It stays, because it states the repository's own need and would matter again
+    > if the extra's cap were dropped first. This is the lock-side face of `core.md`'s
+    > remark that `uv.lock` "records one resolution rather than the space of them".
 - [ ] Implement `_viterbi_cuda.py` at ADR 0002 phase 4
   - [ ] Decide the phase-4 decomposition before writing the kernel: keep states-within-a-timestep, or choose a GPU-specific one (e.g. a device-side time loop, or batch — which `viterbi(params, record)` cannot express until revision 03). Tie-break and min-plus stay contract either way.
   - [ ] Implement whichever decomposition that decision names under `cuda.jit`, keeping the kernel purely numeric
