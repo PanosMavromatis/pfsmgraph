@@ -116,7 +116,7 @@ than assume — the premise is what the first goal exists to check.
     > wrong. It stays, because it states the repository's own need and would matter again
     > if the extra's cap were dropped first. This is the lock-side face of `core.md`'s
     > remark that `uv.lock` "records one resolution rather than the space of them".
-- [~] Implement `_viterbi_cuda.py` at ADR 0002 phase 4
+- [x] Implement `_viterbi_cuda.py` at ADR 0002 phase 4
   - [x] Decide the phase-4 decomposition before writing the kernel: keep states-within-a-timestep, or choose a GPU-specific one (e.g. a device-side time loop, or batch — which `viterbi(params, record)` cannot express until revision 03). Tie-break and min-plus stay contract either way.
     > **Q:** Which phase-4 decomposition should `_viterbi_cuda.py` implement — phase 3's
     > with the logarithms computed on the host, a plain transliteration computing them on
@@ -177,7 +177,28 @@ than assume — the premise is what the first goal exists to check.
     > probe, whose "Grid size 1" warnings printed straight through its filter. The warning
     > fires once per launch *configuration*, so the kernel builds `_step[blocks, threads]`
     > once per call, inside the filter, rather than once per timestep.
-  - [ ] Register the backend in `_backends.py` with `optional_on`, and add the module to `meson.build`'s `install_sources`
+  - [x] Register the backend in `_backends.py` with `optional_on`, and add the module to `meson.build`'s `install_sources`
+    > **Q:** Register the row as `Backend("cuda", "pfsmgraph.hmm._viterbi_cuda",
+    > optional_on="CUDA device")`, or also distinguish "numba-cuda missing" from "no
+    > device" in the skip reason?
+    > **A:** Register it with the single reason. It reads "no CUDA device detected" also
+    > where numba-cuda is absent — true in effect, and not worth widening the registry for.
+    > **Done:** fourth row registered, with a `#:` comment explaining why the probe can
+    > fail only because `_viterbi_cuda` raises `ImportError` at import. The module
+    > docstring's row count was corrected from "two" — already stale at three — to four.
+    > `meson.build` landed with the kernel in `6989720`. `tests/test_backends.py` pins the
+    > fourth row, its `optional_on` and module name. Its `detect()` and header expectations
+    > follow the device through `_device_present()`, which asks numba-cuda directly rather
+    > than going through the module under test. With the L4 present the header reads
+    > `backends: python ✓ · cython ✓ · cpu_parallel ✓ · cuda ✓` and the suite is green at
+    > 298. With `NUMBA_DISABLE_CUDA=1` it reads `… · cuda ✗ (no CUDA device detected)` and
+    > `tests/test_backends.py` stays green at 19 — a loud skip, not an escalation.
+    > **Note:** **the device expectation must not come from the module it checks.**
+    > `detect()` imports `_viterbi_cuda`, so deriving the expected row from that import
+    > would let a kernel that forgot its device guard import on a GPU-less machine, report
+    > itself available, and agree with its own test. `_device_present()` asks the same
+    > question from outside. `test_only_the_cpu_parallel_row_may_be_skipped` was renamed
+    > `test_only_the_numba_rows_may_be_skipped`, since two rows can now be skipped.
 - [ ] Hold it equivalent to phases 1–3
   - [ ] Differential tests in `test_viterbi.py`'s labelled non-shared section, including the constructed uniform-model tie test
   - [ ] Verify an absent device skips loudly and `PFSMGRAPH_REQUIRE_BACKENDS` escalates it

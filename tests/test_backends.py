@@ -28,9 +28,31 @@ from _backends import (
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
+def _device_present() -> bool:
+    """Ask numba-cuda directly, never through `_viterbi_cuda`.
+
+    Deriving the expectation from the module under test would make the `detect()`
+    assertion a tautology: a kernel module that forgot its device check would
+    import, report available, and agree with itself. This asks the question the
+    module's guard asks, from outside it.
+    """
+    try:
+        from numba import cuda
+    except ImportError:
+        return False
+    return bool(cuda.is_available())
+
+
+_EXPECTED_CUDA = (
+    Availability("cuda", True, None)
+    if _device_present()
+    else Availability("cuda", False, "no CUDA device detected")
+)
+
+
 # --- the matrix as it stands -------------------------------------------------
 
-def test_the_matrix_is_python_then_cython_then_cpu_parallel():
+def test_the_matrix_is_python_then_cython_then_cpu_parallel_then_cuda():
     # Filled 2026-09-04 by pfsmgraph.hmm._viterbi, the first DP kernel to reach
     # ADR 0002 phase 1. This was `BACKENDS == ()` until then, and its comment
     # said it would fail when align or hmm added the first row -- which is what
@@ -39,17 +61,19 @@ def test_the_matrix_is_python_then_cython_then_cpu_parallel():
     # landed as _viterbi_cython. On 2026-09-10 it broke a third time, for phase
     # 3 -- _viterbi_cpu_parallel. Order is asserted, not just membership, because
     # format_header prints the rows in this order and ADR 0003's header is a
-    # specified string. Rows are in lifecycle order, so the next break is phase
-    # 4's _viterbi_cuda, which will be the first row to carry a real hardware
-    # absence.
+    # specified string. Rows are in lifecycle order. It broke a fourth time on
+    # 2026-09-13 for phase 4's _viterbi_cuda, the first row to carry a real
+    # hardware absence, and that completes the Viterbi lifecycle -- so the next
+    # break is a new algorithm rather than a new phase.
     assert BACKENDS == (
         Backend("python", "pfsmgraph.hmm._viterbi", None),
         Backend("cython", "pfsmgraph.hmm._viterbi_cython", None),
         Backend("cpu_parallel", "pfsmgraph.hmm._viterbi_cpu_parallel", "numba"),
+        Backend("cuda", "pfsmgraph.hmm._viterbi_cuda", "CUDA device"),
     )
 
 
-def test_only_the_cpu_parallel_row_may_be_skipped():
+def test_only_the_numba_rows_may_be_skipped():
     # optional_on is the whole claim, and it means something different on each
     # row. For `python`, nothing external is needed to run pure Python at all.
     # For `cython`, the source is committed but the extension exists only if it
@@ -65,7 +89,13 @@ def test_only_the_cpu_parallel_row_may_be_skipped():
     # that declined it is entitled to lack this backend. Pin the value, not just
     # its truthiness: making it None would silently escalate a legitimate skip
     # into a startup failure for every lean install.
-    assert [b.optional_on for b in BACKENDS] == [None, None, "numba"]
+    #
+    # `cuda` is the absence the field was first named for, and the only row whose
+    # probe can fail with every package installed: `_viterbi_cuda` raises
+    # ImportError when numba-cuda reports no device, because `@cuda.jit`
+    # decorates lazily and a plain import would otherwise succeed on a machine
+    # with no GPU.
+    assert [b.optional_on for b in BACKENDS] == [None, None, "numba", "CUDA device"]
 
 
 def test_every_registered_module_is_a_kernel_not_a_package():
@@ -76,6 +106,7 @@ def test_every_registered_module_is_a_kernel_not_a_package():
         "_viterbi",
         "_viterbi_cython",
         "_viterbi_cpu_parallel",
+        "_viterbi_cuda",
     ]
 
 
@@ -89,16 +120,24 @@ def test_the_registered_backends_actually_resolve():
     # because it is required: the extra is a promise to consumers, the dev group
     # is what makes this repository's own suite exercise the backend. A parallel
     # backend nobody runs is worse than none, which is why both halves exist.
+    #
+    # `cuda` is different in kind: it resolves only where a device exists, and
+    # asserting it unconditionally would make this repository's suite fail on
+    # every machine without a GPU, which is the one absence ADR 0003 calls
+    # legitimate. So the expected row follows the device. What stays pinned is
+    # the *shape* of an absence -- a skip with the reason, never an escalation.
     assert detect() == (
         Availability("python", True, None),
         Availability("cython", True, None),
         Availability("cpu_parallel", True, None),
+        _EXPECTED_CUDA,
     )
 
 
 def test_the_header_names_every_registered_backend():
+    cuda_cell = "cuda ✓" if _EXPECTED_CUDA.available else "cuda ✗ (no CUDA device detected)"
     assert format_header(detect()) == (
-        "backends: python ✓ · cython ✓ · cpu_parallel ✓"
+        "backends: python ✓ · cython ✓ · cpu_parallel ✓ · " + cuda_cell
     )
 
 

@@ -5,7 +5,8 @@ built artifact contains it, which is deliberate: enumerating backends is most of
 what a runtime backend-selection API needs, and ADR 0003 leaves that API's
 behaviour explicitly open. Shipping the enumeration now would prejudge it.
 
-:data:`BACKENDS` holds two rows as of 2026-09-09. It was empty until 2026-09-04, and
+:data:`BACKENDS` holds four rows as of 2026-09-13 -- one per ADR 0002 phase of the
+Viterbi decode, the last being ``_viterbi_cuda``. It was empty until 2026-09-04, and
 that emptiness was the correct steady state rather than a placeholder: ADR 0002
 scopes the lifecycle to "wherever dynamic programming appears", and ``dataseq``
 contributes no backend at any maturity -- it is a container and an encoder. The
@@ -16,7 +17,7 @@ algorithm at phase 2 -- the first compiled backend this repository has had, and
 the first row whose absence would mean a *build* is broken rather than a source
 tree.
 
-**Two rows, and the algorithm suites are still not parameterized over them.** ADR 0003 asks for one suite per algorithm run against
+**Four rows, and the algorithm suites are still not parameterized over them.** ADR 0003 asks for one suite per algorithm run against
 every available backend, with the backend as a fixture parameter and the tests
 "written against the public API only". Both halves cannot hold yet:
 ``viterbi(params, record)`` has nowhere to put a backend, and giving it one is
@@ -118,10 +119,22 @@ class Backend:
 #: install the rule guards against cannot occur here. ADR 0004 governs the other
 #: half -- acceleration is opt-in, and the decode is correct on the pure-Python
 #: backend.
+#:
+#: ``cuda`` carries the absence this field was originally named for -- a device --
+#: and it is the first row whose probe can fail on a machine where every package
+#: is installed. That is not free: ``@cuda.jit`` decorates lazily, so importing a
+#: kernel module succeeds with numba-cuda present and no GPU, and an import probe
+#: would print ``cuda ✓`` over a backend that fails on its first call.
+#: ``pfsmgraph.hmm._viterbi_cuda`` therefore raises :class:`ImportError` at import
+#: when ``cuda.is_available()`` is false, which is what lets this table stay an
+#: import probe. The reason reads "no CUDA device detected" also where numba-cuda
+#: itself is absent (it publishes no macOS wheels) -- true in effect, and kept to
+#: one string rather than widening the registry for a finer diagnosis.
 BACKENDS: Final[tuple[Backend, ...]] = (
     Backend("python", "pfsmgraph.hmm._viterbi"),
     Backend("cython", "pfsmgraph.hmm._viterbi_cython"),
     Backend("cpu_parallel", "pfsmgraph.hmm._viterbi_cpu_parallel", optional_on="numba"),
+    Backend("cuda", "pfsmgraph.hmm._viterbi_cuda", optional_on="CUDA device"),
 )
 
 

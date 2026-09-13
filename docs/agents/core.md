@@ -11,7 +11,7 @@ Shared project knowledge for any coding agent working in this repository.
 **What `hmm` now contains.** Five Python modules, one Cython kernel, and 182 tests -- the
 fourth module is `_viterbi_cpu_parallel.py`, the ADR 0002 phase-3 backend, landed
 2026-09-10, and the fifth is `_viterbi_cuda.py`, the phase-4 CUDA backend, written
-2026-09-13 on `feat/hmm-viterbi-cuda` and not yet registered in `_backends.py`. It keeps
+2026-09-13 on `feat/hmm-viterbi-cuda` and registered as the fourth backend row. It keeps
 phase 3's decomposition but takes every `-log2` on the host, because device `log2`
 (libdevice) differs from glibc's by one ulp in about a quarter of inputs, which would
 break bit-exactness with phases 1-3. `_numeric.py` is the numeric
@@ -228,11 +228,19 @@ the root one printed). `tests/test_backends.py` asserts the placement precisely 
 that failure is silent. **The matrix stopped being empty on 2026-09-04**, when
 `hmm/_viterbi.py` reached ADR 0002 phase 1; it **gained its first compiled row on
 2026-09-09** with `_viterbi_cython.pyx` at phase 2, and a third on **2026-09-10** with
-`_viterbi_cpu_parallel.py` at phase 3. `BACKENDS` holds
+`_viterbi_cpu_parallel.py` at phase 3, and a fourth on **2026-09-13** with
+`_viterbi_cuda.py` at phase 4. `BACKENDS` holds
 `Backend("python", "pfsmgraph.hmm._viterbi")`,
-`Backend("cython", "pfsmgraph.hmm._viterbi_cython")` and
-`Backend("cpu_parallel", "pfsmgraph.hmm._viterbi_cpu_parallel", optional_on="numba")`, so a
-run opens with `backends: python ✓ · cython ✓ · cpu_parallel ✓`. Each row names the *kernel module*, not the package,
+`Backend("cython", "pfsmgraph.hmm._viterbi_cython")`,
+`Backend("cpu_parallel", "pfsmgraph.hmm._viterbi_cpu_parallel", optional_on="numba")` and
+`Backend("cuda", "pfsmgraph.hmm._viterbi_cuda", optional_on="CUDA device")`, so a run opens
+with `backends: python ✓ · cython ✓ · cpu_parallel ✓ · cuda ✓` on a machine with a GPU and
+`… · cuda ✗ (no CUDA device detected)` without one. **The `cuda` probe can fail only
+because the module makes it**: `@cuda.jit` decorates lazily, so `_viterbi_cuda` raises
+`ImportError` at import when numba-cuda reports no device — otherwise the import would
+succeed on a GPU-less machine and report a backend that fails on first call.
+`tests/test_backends.py` derives that row's expectation from numba-cuda directly, never
+from the module under test. Each row names the *kernel module*, not the package,
 because `import pfsmgraph.hmm` succeeds with or without a decode in it and a probe that
 cannot fail is not a probe. The first two carry `optional_on=None`, so a failed import
 escalates rather than skipping — but **the clause means something different on the compiled row, and
