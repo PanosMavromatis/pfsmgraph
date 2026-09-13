@@ -49,6 +49,11 @@ suite, which cannot be in force until `align`.
   The `dp-compile` gate runs `[commands] build = "uv sync"`, so the first gated commit of
   `_viterbi_cuda.py` would remove its own backend. Phase 3 hit the same shape and put
   `numba` in the root `dev` group.
+  *Resolved 2026-09-13 (goal 2):* the root `dev` group now carries
+  `numba-cuda[cu13]>=0.30.4` and `numpy<2.5`, both Linux-marked. The cap is numba-cuda's
+  undeclared one — 0.30.4 dies at import on numpy 2.5 (`np.row_stack`). A `cuda.jit`
+  smoke kernel runs on the NVIDIA L4 under CUDA 13.0, and a plain `uv run pytest` is safe
+  again.
 - GPU present: driver 580.173.02, CUDA 13.0; no system `nvcc` (numba-cuda uses the
   pip-wheel toolkit). `numba.cuda.is_available()` is `True`.
 - Phase 3 measured a flat ~34 ms per call regardless of `S` — launch overhead per

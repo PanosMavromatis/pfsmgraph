@@ -46,8 +46,51 @@ than assume — the premise is what the first goal exists to check.
     > **Note:** 298 passed in 5.84 s under `--no-sync`, no backend withheld. The header
     > names three backends with a GPU present, correctly — a phase not yet reached
     > contributes no row.
-- [ ] Settle the GPU environment before the first gated commit
-  - [ ] Decide how `numba-cuda` survives `uv sync` — the gate's build command — given it is currently installed outside the lock and a plain sync uninstalls it
+- [~] Settle the GPU environment before the first gated commit
+  > **Q:** How should `numba-cuda` survive `uv sync` / `uv run`, and so the `dp-compile`
+  > gate — root `dev` group (Linux-only), `--extra gpu` in the manifest commands, or kept
+  > out of the lock under `--no-sync`?
+  > **A:** Root `dev` group, Linux-only — mirroring phase 3's `numba`. Consumers still opt
+  > in through the `gpu` extra.
+  > **Q:** Which CUDA major should the toolkit extra target — `cu13` or `cu12`?
+  > **A:** `cu13`: driver 580 supports CUDA 13.0 and torch in the lock already brings CUDA
+  > 13 runtime wheels, so one CUDA major per venv. Replaces the hand-installed `cu12` stack.
+  > **Note:** the hand-installed stack was `numba-cuda[cu12]` via `uv pip` (its `INSTALLER`
+  > reads `uv`). Bare `numba-cuda` — what the `gpu` extra declares — ships **no toolkit**:
+  > NVRTC, nvJitLink and NVVM arrive only through its `cu12`/`cu13` extras. The lock's
+  > `cuda-toolkit 13.0.3` is **torch's** (the dataseq interop test), requested without
+  > `nvvm`, so a locked `--extra gpu` sync would plausibly leave numba-cuda unable to
+  > compile a kernel — not yet measured.
+  > **Note:** `numba-cuda` publishes **no macOS wheels** (manylinux and `win_amd64` only),
+  > so an unmarked dev-group entry would break `uv sync` on a Mac; hence the
+  > `sys_platform == 'linux'` marker. It adds **no numpy ceiling** of its own — `cuda-core`
+  > requires unbounded `numpy`, and the binding cap stays numba 0.67's `<2.6`.
+  - [x] Decide how `numba-cuda` survives `uv sync` — the gate's build command — given it is currently installed outside the lock and a plain sync uninstalls it
+    > **Q:** numba-cuda 0.30.4 — the latest release — dies at import on numpy 2.5
+    > (`np.row_stack` removed) and its metadata does not say so. Where should the
+    > `numpy<2.5` cap live?
+    > **A:** In `hmm`'s `gpu` extra for consumers (subgoal below), plus a Linux-marked
+    > `numpy<2.5` in the root `dev` group so the workspace resolves where numba-cuda is
+    > installed. A uv-only constraint was declined: it reaches no published metadata.
+    > **Done:** root `dev` group gained `numba-cuda[cu13]>=0.30.4; sys_platform == 'linux'`
+    > and `numpy<2.5; sys_platform == 'linux'`, each commented. `uv lock` added
+    > `nvidia-nvvm` and `nvidia-cuda-cccl` 13.0.x and forked numpy by platform: 2.4.6 on
+    > Linux, 2.5.2 elsewhere at Python ≥ 3.12. `uv sync` replaced the hand-installed cu12
+    > stack, and `uv sync --locked --dry-run` now reports no changes — so the gate's build
+    > and a bare `uv run` keep the backend. A trivial `cuda.jit` kernel compiled and ran on
+    > an **NVIDIA L4** (compute capability 8.9, CUDA runtime 13.0) and matched the host
+    > bit-for-bit with `inf` propagated; the suite is green at 298 under plain `uv run
+    > pytest`.
+    > **Note:** **a dry-run sync looking clean was not evidence the stack worked.** The
+    > first locked sync (numpy 2.5.2) installed without complaint and the lock resolved,
+    > yet the smoke test died with `AttributeError: module 'numpy' has no attribute
+    > 'row_stack'` from `numba_cuda/numba/cuda/np/arrayobj.py:6860`, reached through the
+    > `cuda.jit` import chain. The hand-installed environment only ever worked because it
+    > happened to hold numpy 2.4.6. So resolution success says nothing about importability
+    > here — compile and run a kernel, as the smoke test does, and expect `_backends.py`'s
+    > import probe of `_viterbi_cuda` to be what catches this in the suite.
+    > **Note:** `cuda-core` resolved **down**, 1.2.0 → 1.1.1, under the `cu13` extra;
+    > harmless, recorded because a downgrade in a lock diff otherwise reads as a mistake.
   - [ ] Pin the `numba-cuda` lower bound in `pfsmgraph-hmm`'s `gpu` extra and close the `DEFERRED.md` entry; check what numpy ceiling it imposes
 - [ ] Implement `_viterbi_cuda.py` at ADR 0002 phase 4
   - [ ] Decide the phase-4 decomposition before writing the kernel: keep states-within-a-timestep, or choose a GPU-specific one (e.g. a device-side time loop, or batch — which `viterbi(params, record)` cannot express until revision 03). Tie-break and min-plus stay contract either way.
