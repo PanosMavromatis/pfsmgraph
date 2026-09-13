@@ -56,8 +56,16 @@ test:
 
 # --- credentials -----------------------------------------------------------
 #
-# Tokens live in the macOS Keychain, never in a dotfile or the repo tree.
-# `token-set` prompts without echoing, so nothing lands in zsh history.
+# Tokens live in one of two places, chosen by `uname`, and never in a tracked
+# file. On macOS, in the Keychain: `token-set` prompts without echoing, so
+# nothing lands in shell history. On Linux, in a per-package environment
+# variable exported from the repo's gitignored .envrc (direnv), e.g.
+# PYPI_TOKEN_PFSMGRAPH_HMM. Per-package so a token scoped to one member can
+# never be handed to another member's upload -- that run finds no variable and
+# stops. direnv exports it to every process started in the repo, which is why
+# only `token` reads it and `publish` hands it to `uv publish` explicitly.
+#
+# The rest of this block is about the macOS path.
 #
 # `-U` is what makes `token-set` idempotent, and it is required rather than
 # tidy: without it `security add-generic-password` REFUSES when the item
@@ -71,11 +79,11 @@ test:
 # Neither is a PyPI identity: `uv publish` supplies the literal `__token__`
 # username itself whenever it is given a token rather than a user/password.
 
-# Store a PyPI token for a package (prompts for the value).
-token-set package=default_package: (_token-prompt "pypi-" + package)
+# Store a PyPI token for a package (macOS Keychain; prompts for the value).
+token-set package=default_package: (_token-prompt ("pypi-" + package) ("PYPI_TOKEN_" + uppercase(replace(package, "-", "_"))))
 
-# Store a TestPyPI token for a package (prompts for the value).
-token-set-test package=default_package: (_token-prompt "testpypi-" + package)
+# Store a TestPyPI token for a package (macOS Keychain; prompts for the value).
+token-set-test package=default_package: (_token-prompt ("testpypi-" + package) ("TESTPYPI_TOKEN_" + uppercase(replace(package, "-", "_"))))
 
 # Prompt for a token, store it under `service`, and verify it round-trips.
 #
@@ -83,9 +91,13 @@ token-set-test package=default_package: (_token-prompt "testpypi-" + package)
 # read into this shell and reaches the argv of `security` alone, which is the
 # one exposure the Keychain CLI offers no way to avoid.
 
-_token-prompt service:
+_token-prompt service var:
     #!/usr/bin/env bash
     set -euo pipefail
+    if [[ "$(uname -s)" != Darwin ]]; then
+      echo "token-set writes the macOS Keychain; on Linux export {{ var }} in the repo's gitignored .envrc and run: direnv allow" >&2
+      exit 1
+    fi
     read -rsp "token for {{ service }} (input hidden): " tok; echo
     [[ -n "$tok" ]] || { echo "empty token -- nothing stored" >&2; exit 1; }
     [[ "$tok" == pypi-* ]] || { echo "token does not begin with 'pypi-' -- both PyPI and TestPyPI tokens do; nothing stored" >&2; exit 1; }
@@ -98,20 +110,36 @@ _token-prompt service:
     fi
     echo "stored ${#tok} characters under {{ service }}"
 
-# A missing keychain entry must fail loudly. An empty UV_PUBLISH_TOKEN is not an
-# error to `uv publish`: it falls through to trusted-publishing discovery, which
-# resolves only inside CI, so on a laptop the result is a confusing OIDC failure
+# A missing token must fail loudly. An empty UV_PUBLISH_TOKEN is not an error
+# to `uv publish`: it falls through to trusted-publishing discovery, which
+# resolves only inside CI, so outside CI the result is a confusing OIDC failure
 # rather than "no token stored".
 
 # Read a stored PyPI token to stdout.
-token package=default_package:
-    @security find-generic-password -a "$USER" -s pypi-{{ package }} -w \
-      || { echo "no keychain entry pypi-{{ package }} -- run: just token-set {{ package }}" >&2; exit 1; }
+token package=default_package: (_token-read ("pypi-" + package) ("PYPI_TOKEN_" + uppercase(replace(package, "-", "_"))) ("token-set " + package))
 
 # Read a stored TestPyPI token to stdout.
-token-test package=default_package:
-    @security find-generic-password -a "$USER" -s testpypi-{{ package }} -w \
-      || { echo "no keychain entry testpypi-{{ package }} -- run: just token-set-test {{ package }}" >&2; exit 1; }
+token-test package=default_package: (_token-read ("testpypi-" + package) ("TESTPYPI_TOKEN_" + uppercase(replace(package, "-", "_"))) ("token-set-test " + package))
+
+# Print the token from the Keychain (macOS) or from `var` (Linux), or fail.
+#
+# `${!var}` is indirect expansion: just interpolates the variable's *name*, and
+# the value never passes through just's templating. Every argument above is
+# parenthesised because just reads `package (...)` as a call to a function
+# named `package`.
+
+_token-read service var hint:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ "$(uname -s)" == Darwin ]]; then
+      security find-generic-password -a "$USER" -s '{{ service }}' -w \
+        || { echo "no keychain entry {{ service }} -- run: just {{ hint }}" >&2; exit 1; }
+    else
+      var='{{ var }}'
+      tok="${!var:-}"
+      [[ -n "$tok" ]] || { echo "{{ var }} is unset or empty -- export it in the repo's gitignored .envrc and run: direnv allow" >&2; exit 1; }
+      printf '%s\n' "$tok"
+    fi
 
 
 # --- publish ---------------------------------------------------------------
@@ -120,18 +148,24 @@ token-test package=default_package:
 # Moving a package from local-token publishing to Trusted Publishing means
 # editing the body of `publish` and nothing else. Every other recipe, and
 # every habit built on top of them, stays identical.
+#
+# The token is captured first and `&&` chains the upload. The earlier form,
+# `UV_PUBLISH_TOKEN="$(just token pkg)" uv publish`, ran `uv publish` with an
+# empty token when the read failed -- a failure inside `$(...)` does not stop
+# the command it prefixes -- and so produced exactly the OIDC confusion the
+# credentials block warns about. Measured 2026-09-13; it affected macOS too.
 
 # Upload built artifacts to PyPI.
 publish package=default_package:
-    UV_PUBLISH_TOKEN="$(just token {{ package }})" \
-      uv publish \
+    tok="$(just token {{ package }})" \
+      && UV_PUBLISH_TOKEN="$tok" uv publish \
         --check-url https://pypi.org/simple/{{ package }}/ \
         dist/{{ replace(package, "-", "_") }}-*
 
 # Upload built artifacts to TestPyPI instead.
 publish-test package=default_package:
-    UV_PUBLISH_TOKEN="$(just token-test {{ package }})" \
-      uv publish \
+    tok="$(just token-test {{ package }})" \
+      && UV_PUBLISH_TOKEN="$tok" uv publish \
         --publish-url https://test.pypi.org/legacy/ \
         dist/{{ replace(package, "-", "_") }}-*
 

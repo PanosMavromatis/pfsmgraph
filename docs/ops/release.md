@@ -162,7 +162,7 @@ just              # list all recipes
 | `just test` | The full suite |
 | `just build [pkg]` | `clean`, then `uv build --package` |
 | `just check [pkg]` | `twine check` on the built artifacts |
-| `just token-set [pkg]` | Store a PyPI token in the macOS Keychain (prompts, no echo) |
+| `just token-set [pkg]` | Store a PyPI token in the macOS Keychain (prompts, no echo); on Linux, use `.envrc` (§2) |
 | `just token [pkg]` | Read it back; fails loudly if absent |
 | `just preflight VER [pkg]` | Assert the version was built, the tree is clean, and push |
 | `just publish [pkg]` | Upload to PyPI |
@@ -229,7 +229,26 @@ had since changed.
 A project scope is available for any name already reserved under the account, which is every
 member: all five hold `0.0.0` placeholders. There is no bootstrap-token step.
 
-Store it in the Keychain, never in `.env`, `~/.zshrc`, `~/.pypirc`, or the repo tree:
+Where it is stored depends on the host, and the recipes choose by `uname`. Never put it in a
+tracked file, `~/.zshrc` or `~/.pypirc`.
+
+**On Linux, export it from the repo-root `.envrc`** (direnv), under a per-package name:
+
+```bash
+# .envrc -- gitignored (.gitignore line 152); run `direnv allow` after editing
+export PYPI_TOKEN_PFSMGRAPH_HMM='pypi-…'
+```
+
+`token` reads `PYPI_TOKEN_<PKG>` (hyphens to underscores, uppercased; `TESTPYPI_TOKEN_<PKG>`
+for TestPyPI) and fails naming the variable when it is unset or empty. `token-set` does not
+apply on Linux and says so. The file is kept out of git by the ignore rule, and out of the
+sdist because meson-python builds the sdist from `git archive`, which carries tracked files
+only. **The cost is that direnv exports the token to every process started in the repo**,
+not only to `publish`, which is why the name is per-package and only `token` reads it: a
+token scoped to one member cannot reach another member's upload, which finds no variable and
+stops. Adopted 2026-09-13 for `pfsmgraph-hmm` 0.1.0, the first release from a Linux host.
+
+**On macOS, store it in the Keychain:**
 
 ```bash
 just token-set                          # stores it for the default package
@@ -273,7 +292,16 @@ the cheapest general guard against it -- it does not care *why* the value change
 
 **Never run `just token` on its own.** It exists to be consumed by `$(...)` inside
 `publish`, and standalone it prints a live credential into your scrollback. If it happens,
-revoke the token and re-run `token-set`.
+revoke the token and re-store it.
+
+**`publish` captures the token before uploading, and the order is load-bearing.** Until
+2026-09-13 it read `UV_PUBLISH_TOKEN="$(just token pkg)" uv publish …`. A failure inside
+`$(...)` does not stop the command it prefixes, so a missing token printed its error and
+then ran `uv publish` with an empty token, which falls through to trusted-publishing
+discovery and fails as an OIDC error, exit status and all pointing away from the cause. The
+recipe now runs `tok="$(just token pkg)" && UV_PUBLISH_TOKEN="$tok" uv publish …`. The
+defect was on the macOS path too, and never showed because the Keychain entry always
+existed.
 
 The `-a`/`-s` pair the recipes pass to `security` is an arbitrary lookup key -- `$USER`
 namespaces the entry to your local login, and the service string is a name this `justfile`

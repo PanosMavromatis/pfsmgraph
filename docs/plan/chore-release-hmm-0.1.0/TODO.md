@@ -21,21 +21,35 @@
   - [x] `DEFERRED.md` entry, with a trigger at the alignment-seeded-topology version (expected 0.4.0)
   - [x] Drop the bound and its `[tool.uv.sources]` entry, relock, and correct `docs/api/hmm/README.md` and `core.md`
     > **Note:** `uv lock` rewrote exactly two lines, `hmm`'s `dependencies` and `requires-dist` entries for `pfsmgraph-align`, so the lockfile sees an edge vanish even though it never sees a bound change (measured 2026-09-01). Suite green at 318. The pyproject carries a comment naming ADR 0019 so the PRD §5.5 pattern is not restored by copying. Root `README.md` line 70 also stated the drawn release order and was corrected, and `core.md`'s "seventeen records" was already one stale and now reads nineteen.
-- [~] Commit the `justfile` default and sweep the documents that name the old one
+- [x] Commit the `justfile` default and sweep the documents that name the old one
+  > **Done:** The default and the policy-worded doc sweep landed in `5fd2795`. The release runs from this Linux host as a pure `py3-none-any` wheel, with a per-package token from `.envrc` read by an OS-branching `token`, and a latent `publish` fallthrough fixed. The pure-wheel build became a goal-4 subgoal, and the user's token setup became goal-5 subgoals.
   > **Q:** The default now moves with each release. Should the docs name `pfsmgraph-hmm`, or state the policy?
   > **A:** State the policy: `default_package` names the member under development, so an omitted argument can never reach a published package. No package name appears, so nothing goes stale at the next release.
   > **Q:** `justfile` line 7 says the bare `just build` "builds pfsmgraph-dataseq", which the edit made false. Change it?
   > **A:** Yes, to "builds the default package". Line 172's `dataseq` illustration of on-disk names stays.
   - [x] Verify the hand edit, and correct `docs/ops/release.md`, `core.md` and `README.md` where they state the default
     > **Note:** The sweep found more than the three known sites: `release.md` §2's `token-set` example and §4's tag line both described the old default, and `justfile` line 7's comment stated the bare command's result. `default_package` now carries a rationale comment. Checked against the recipe: `preflight` does not test for `.dev0` as such, but matches the requested version against the built filename, so an omitted argument on a `.dev0` member stops before `publish`; the wording says that rather than "refuses `.dev0`". `just --list` parses, the default evaluates to `pfsmgraph-hmm`, and `test_release_runbook.py` passes.
-  - [ ] Settle where the release runs: the token recipes call macOS `security`, which this Linux host lacks
+  - [x] Settle where the release runs: the token recipes call macOS `security`, which this Linux host lacks
+    > **Note:** Building the wheel showed the host question was downstream of a larger one. `uv build --wheel --package pfsmgraph-hmm` produces `pfsmgraph_hmm-0.1.0.dev0-cp312-cp312-linux_x86_64.whl`, because `_viterbi_cython.pyx` has made the package compiled since 2026-09-09. That breaks the release on any host: `preflight` tests for `…-py3-none-any.whl`, and PyPI rejects a plain `linux_x86_64` tag (it wants manylinux). The release path was written for `dataseq`'s single universal wheel and was never revisited when the first `.pyx` landed.
+    > **Q:** How should 0.1.0 be built and published: a pure wheel without the extension, cibuildwheel in CI with Trusted Publishing, the sdist plus one Mac wheel, or the sdist only?
+    > **A:** A pure `py3-none-any` wheel for 0.1.0, built without the Cython extension. No public call in 0.1.0 reaches a compiled kernel, so nothing is lost, and the existing recipes keep working. Compiled wheels wait for a version whose public API uses one.
+    > **Note:** Feasibility, measured on a scratch copy: removing the `.pyx` alone still gave `cp312-cp312-linux_x86_64`, because `meson.build` calls `find_installation(pure: false)`, which routes every file to `platlib`. With the `.pyx` removed **and** `pure: true`, the wheel is `pfsmgraph_hmm-0.1.0.dev0-py3-none-any.whl` with the six modules. So the release build needs a meson option that controls both, passed by the build recipe. That is goal 4's work.
+    > **Q:** Where does `just release 0.1.0` run?
+    > **A:** This Linux host. The user generates a PyPI token scoped to `pfsmgraph-hmm` and adds it to `.envrc`.
+    > **Q:** How do the recipes consume the `.envrc` token?
+    > **A:** `.envrc` exports a per-package `PYPI_TOKEN_PFSMGRAPH_HMM`. On Linux `token` prints `$PYPI_TOKEN_<PKG>` and fails loudly when it is empty, while macOS keeps the Keychain. `publish` is unchanged. The runbook's "never in `.env` … or the repo tree" rule is rewritten to allow a gitignored `.envrc` on Linux, with the reasons.
+    > **Note:** Implemented and verified against fake and stripped variables, never the live one. `token`/`token-test` route through `_token-read`, which uses the Keychain on macOS and `${!var}` indirect expansion of `PYPI_TOKEN_<PKG>` on Linux. An `hmm` token does not satisfy `just token pfsmgraph-align`, and `token-set` on Linux explains itself and exits. `.envrc` was already gitignored (`.gitignore:152`). **A latent `publish` defect was found while wiring this**: `UV_PUBLISH_TOKEN="$(just token pkg)" uv publish` still ran `uv publish` with an empty token when the read failed, and exited 0 in a scratch reproduction, because a failure inside `$(...)` does not stop the command it prefixes. It affected macOS too and never showed because the Keychain entry always existed. It is now `tok="$(…)" && UV_PUBLISH_TOKEN="$tok" uv publish`. `docs/ops/release.md` §2 and the recipe table are updated.
 - [ ] Settle what 0.1.0's immutable metadata says
   - [ ] Whether to ship the `gpu` / `cpu-parallel` extras when no public call reaches an accelerated kernel
   - [ ] `description` claims Baum-Welch and topology search, neither of which 0.1.0 contains
   - [ ] Honest lower bounds on every intra-family dependency naming `pfsmgraph-hmm`
 - [ ] Ship the four files and verify the first meson-built wheel
   - [ ] Member README (executed by `test_api_docs.py`), LICENSE copy, `Typing :: Typed`, `py.typed` in `install_sources`
+  - [ ] Build 0.1.0 as a pure `py3-none-any` wheel: a meson option that skips `_viterbi_cython` **and** switches `find_installation` to `pure: true`, passed by the `build` recipe for `hmm`, with the editable dev build still compiling the extension so the suite keeps its `cython` row
   - [ ] Drop `.dev0`, build, and install the wheel into a clean venv outside the workspace
   - [ ] Re-measure `docs/ops/release.md`'s hatchling-era reproducibility findings
 - [ ] Release: publish, tag, and close what the branch discharged
+  - [ ] **User:** create the project-scoped token per `docs/ops/release.md` §2 (2FA confirmed; name `pfsmgraph-hmm-release-2026-09`; scope `Project: pfsmgraph-hmm`; copied once)
+  - [ ] **User:** add `export PYPI_TOKEN_PFSMGRAPH_HMM='pypi-…'` to the repo-root `.envrc` (installing direnv first if it is absent and hooking it into the shell), then run `direnv allow`
+  - [ ] **User:** confirm the recipes see it without printing it: `just token >/dev/null && echo ok`
   - [ ] Publish (the user runs it; irreversible) and tag `pfsmgraph-hmm-v0.1.0`
