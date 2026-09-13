@@ -1,6 +1,6 @@
 # chore/release-hmm-0.1.0
 
-**Status**: active
+**Status**: merged — PR #25 — 2026-09-13
 **Created**: 2026-09-13
 **Subgoal**: Release `pfsmgraph-hmm` 0.1.0 via `just release 0.1.0 pfsmgraph-hmm` —
 `docs/plan/TODO.md`, revision 02-hmm-v0.1.0
