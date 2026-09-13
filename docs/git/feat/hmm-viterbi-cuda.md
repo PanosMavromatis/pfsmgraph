@@ -9,7 +9,8 @@
 Implement Viterbi at ADR 0002 phase 4 (Numba CUDA), the last lifecycle phase of the
 decode and the last kernel subgoal of revision `02-hmm-v0.1.0` before its `docs/api/`
 and release subgoals. The branch adds `_viterbi_cuda.py`, registers it as the fourth
-backend, and holds it bit-equivalent to phases 1–3 with explicit differential tests in
+backend, and holds it bit-equivalent to phase 1 — and to phases 2–3 up to their own
+numpy/libm `log2` split — with explicit differential tests in
 the labelled non-shared section of `test_viterbi.py` — not ADR 0003's parameterized
 suite, which cannot be in force until `align`.
 

@@ -15,17 +15,25 @@ fits in one block, and wrong above it.
 
 **The logarithms are evaluated on the host, and that is a correctness decision
 rather than a speed one.** ``-math.log2`` inside a ``cuda.jit`` kernel lowers to
-libdevice, which rounds differently from the ``log2`` phases 1-3 share: measured
-2026-09-13 on an NVIDIA L4, 1,087,159 of 4,000,008 probability-shaped inputs
-differ bitwise, each by one ulp. Phases 1-3 are bit-identical *only* because
-they call the same function. A transliteration would shift candidate costs by an
-ulp, let a near-tie flip an ``argmin``, and make the tie-break contract depend on
-which device ran it -- and the constructed uniform model would not notice,
-because identical inputs round identically on one device. So the host computes
-every arc cost with :func:`bits`, exactly as phase 1 does (multiply the two
-probabilities, then one ``-log2``), and the device performs only ``+`` and
-``<``. Those are exact IEEE-754 operations, so the kernel is bit-exact with
-phases 1-3 by construction rather than by tolerance.
+libdevice, which rounds differently from numpy's: measured 2026-09-13 on an
+NVIDIA L4, 1,087,159 of 4,000,008 probability-shaped inputs differ bitwise, each
+by one ulp. A transliteration would shift candidate costs by an ulp, let a
+near-tie flip an ``argmin``, and make the tie-break contract depend on which
+device ran it -- and the constructed uniform model would not notice, because
+identical inputs round identically on one device. So the host computes every arc
+cost with :func:`bits`, exactly as phase 1 does (multiply the two probabilities,
+then one numpy ``-log2``), and the device performs only ``+`` and ``<``. Those
+are exact IEEE-754 operations, so the kernel is bit-exact **with phase 1, the
+oracle**, by construction rather than by tolerance.
+
+*Corrected 2026-09-13, before this file was registered.* The first version of
+this paragraph said phases 1-3 "share one ``log2``" and are bit-identical only
+because of it. They do not: phase 1 takes numpy's vectorised ``log2``, phases 2
+and 3 call libm's scalar one, and on an AVX-512 host the two differ by one ulp in
+about 0.1% of inputs (3,937 of 4,000,000, numpy 2.4.6). So this kernel matches
+phase 1 bit for bit and can sit one ulp per arc from phases 2 and 3 in
+``total_bits``. Unifying the logarithm across the backends is filed in
+``docs/plan/DEFERRED.md``.
 
 **The table spans the symbols present, not the vocabulary.** ``arc_bits`` is
 ``(S, S, U)`` over ``U = np.unique(codes)``, and the record is re-indexed into
@@ -174,7 +182,7 @@ def _viterbi(init_state_p, transition_p, output_p, codes):
         last = seed
 
     # Backtrace, on the host. Strict `<` for the final argmin, matching the
-    # recurrence and phases 1-3: ties go to the smallest state index.
+    # recurrence and every other phase: ties go to the smallest state index.
     states = np.empty(n + 1, dtype=np.int64)
     best = math.inf
     best_j = 0

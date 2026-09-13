@@ -199,8 +199,53 @@ than assume — the premise is what the first goal exists to check.
     > itself available, and agree with its own test. `_device_present()` asks the same
     > question from outside. `test_only_the_cpu_parallel_row_may_be_skipped` was renamed
     > `test_only_the_numba_rows_may_be_skipped`, since two rows can now be skipped.
-- [ ] Hold it equivalent to phases 1–3
-  - [ ] Differential tests in `test_viterbi.py`'s labelled non-shared section, including the constructed uniform-model tie test
+- [~] Hold it equivalent to phases 1–3
+  - [x] Differential tests in `test_viterbi.py`'s labelled non-shared section, including the constructed uniform-model tie test
+    > **Q:** Write the phase-4 section in `test_viterbi.py` with a guarded import and a
+    > per-test `skipif`, add block-size invariance, and then mutation-check the tests?
+    > **A:** Yes, as designed. A separate test file was declined, since it would have
+    > meant moving the shared helpers.
+    > **Q:** numpy's `log2` (phase 1, and the CUDA host table) differs from libm's (phases
+    > 2–3) by one ulp in ~0.1% of inputs on this AVX-512 host. How should this branch
+    > handle that?
+    > **A:** Record it and defer the fix. CUDA stays bit-exact with phase 1, the oracle,
+    > and is compared to phases 2–3 with exact `states` and a one-ulp-per-arc bound on
+    > `total_bits`. Correct the false claims, and file the unification in `DEFERRED.md`
+    > under `revision 03 or 04 opening`.
+    > **Done:** 17 tests in a labelled `# --- phase 4` section, each `@requires_cuda`:
+    > generated models (200, `S` ≤ 9) against all three predecessors; the block boundary
+    > at `S` = 1/63/64/65/130; `N = 0`; block-size invariance at 1/7/64 threads per block;
+    > the uniform tie; numeric impossibility; frozen inputs; both oracle tests. The suite
+    > grew 298 → **315**, all green with `cuda ✓`. Mutation-checked against two broken
+    > copies of the kernel built from its own source. A **device-side `log2`** is caught by
+    > the generated-models test only. A **`<=` tie-break** is caught by the uniform tie and
+    > also by generated models. The unmutated control passes all four probed tests.
+    > **Note:** **CORRECTION — "phases 1–3 share one `log2`" was false.** It appeared in
+    > this plan's goal-3 decision notes, in `_viterbi_cuda.py`'s docstring, in `core.md`,
+    > and in the messages of `74e3a66`, `6989720` and `5793b04`, which stand uncorrected
+    > since commits are not amended here. The first run of the generated-models test
+    > failed on model 82 (`S = 7`, `N = 16`): python and cuda gave `63.37898478021349`,
+    > cython and cpu_parallel `63.378984780213486`. Phase 1 takes numpy's vectorised
+    > `log2`; phases 2–3 call libm's scalar one. On this Xeon (AVX-512, numpy 2.4.6) they
+    > differ in **3,937 of 4,000,000** inputs (numpy scalar vs vectorised: 0 of 200,000;
+    > numpy vs libm on those 200,000: 381). So the CUDA kernel is bit-exact with **phase
+    > 1**, and phases 1–3 were never bit-identical on every platform — their own exact
+    > tests pass because their seeds miss the 0.1%. The docstring and `core.md` are
+    > corrected in place with a dated correction line. `_viterbi_cython.pyx` and
+    > `_viterbi_cpu_parallel.py` still claim bit-exactness with phase 1 and were **not**
+    > edited: that would change their provenance hashes and restale the chain, so it
+    > belongs to the `DEFERRED.md` entry. The goal-3 decision still holds — libdevice's
+    > 27% is a different order of problem from numpy/libm's 0.1% — but its justification
+    > now reads "bit-exact with the oracle", not "with phases 1–3".
+    > **Note:** **a long path hides a device-side `log2`; a short one exposes it.** The
+    > `S = 65` boundary test *passed* against the device-log mutant even though ~27% of its
+    > table entries differed (4,529 of 16,900). The decoded total is ~301 bits, with an
+    > ulp of `5.68e-14`, while 50 arcs of ~5.9 bits perturb by ~`8.9e-16` each — the sum
+    > rounds away inside one ulp of the total. The generated-models test catches it because
+    > its records are short (`N` ≤ 40) and their totals small. That split of
+    > responsibilities is deliberate: the boundary tests guard indexing, generated models
+    > guard the logarithm, and the uniform tie guards the comparison. Mutation scripts were
+    > scratchpad-only.
   - [ ] Verify an absent device skips loudly and `PFSMGRAPH_REQUIRE_BACKENDS` escalates it
 - [ ] Measure and record
   - [ ] Launch overhead against phase 3's flat ~34 ms; update `core.md`, `FORMALIZATION.md` and ADR 0016 as the result warrants
