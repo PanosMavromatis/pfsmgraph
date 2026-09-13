@@ -11,9 +11,13 @@ Shared project knowledge for any coding agent working in this repository.
 
 **What `dataseq` now contains.** Six modules under `packages/pfsmgraph-dataseq/src/pfsmgraph/dataseq/` (the container landed 2026-08-31, the encoder API 2026-09-01) and 74 tests — the first tests in this repository, and 74 of the suite's 298 today; 182 are `hmm`'s and the remaining 42 are the repo-root backend-matrix, API-docs, release-runbook and meson-source tests. `_reserved.py` hard-codes the ADR 0011 block as module constants, with no class or parameter that could relocate it; `_vocabulary.py` holds the `Vocabulary` protocol and `SymbolTable`, a frozen first-appearance-ordered implementation that encodes strictly and decodes *totally*, reserved codes included; `_record.py` and `_dataset.py` are the ragged container, whose records carry true lengths and never padding; `_collate.py` is `pad_collate`, where padding is introduced and always returned with its mask. The container imports neither torch nor pandas — verified in a subprocess — and its one runtime dependency is `numpy`.
 
-**What `hmm` now contains.** Four Python modules, one Cython kernel, and 182 tests -- the
+**What `hmm` now contains.** Five Python modules, one Cython kernel, and 182 tests -- the
 fourth module is `_viterbi_cpu_parallel.py`, the ADR 0002 phase-3 backend, landed
-2026-09-10. `_numeric.py` is the numeric
+2026-09-10, and the fifth is `_viterbi_cuda.py`, the phase-4 CUDA backend, written
+2026-09-13 on `feat/hmm-viterbi-cuda` and not yet registered in `_backends.py`. It keeps
+phase 3's decomposition but takes every `-log2` on the host, because device `log2`
+(libdevice) differs from glibc's by one ulp in about a quarter of inputs, which would
+break bit-exactness with phases 1-3. `_numeric.py` is the numeric
 Utility code migrated from the Lush original, landed 2026-09-03 and complete for 0.1.0 at
 five functions; `_params.py` is `HMMParams`, the ADR 0017 frozen parameter value, landed
 the same day; `_viterbi.py` is the decode, landed 2026-09-04 and **the project's first

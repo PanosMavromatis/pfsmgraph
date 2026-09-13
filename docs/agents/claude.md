@@ -90,7 +90,8 @@ Two properties of the manifest matter when editing it:
 it.** Before a `git commit` whose *staged set* touches a kernel path, it runs `[commands]
 build` and `test` and blocks on failure. Scoping is what makes blocking tolerable: with
 this manifest it arms on exactly four paths — `_viterbi.py`, `_viterbi_cython.pyx` since
-2026-09-09, and the two still-unwritten Numba siblings — so a commit touching `docs/`, a
+2026-09-09, `_viterbi_cpu_parallel.py` since 2026-09-10 and `_viterbi_cuda.py` since
+2026-09-13 — so a commit touching `docs/`, a
 helper module such as `_numeric.py`, a *test*, or even a phase-0 `FORMALIZATION.md` passes
 silently. Phase 0 is excluded by design: a Markdown
 specification compiles to nothing and is imported by nothing, so staging it cannot break a

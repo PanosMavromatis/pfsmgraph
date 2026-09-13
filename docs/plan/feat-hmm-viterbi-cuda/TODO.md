@@ -151,7 +151,32 @@ than assume — the premise is what the first goal exists to check.
     > the logarithm is evaluated, because until now every backend evaluated it with the
     > same function. That is contract now, and it lands in `FORMALIZATION.md` with goal 5.
     > The scripts behind both notes were scratchpad-only (`cuda_probe.py`), not tracked.
-  - [ ] Implement whichever decomposition that decision names under `cuda.jit`, keeping the kernel purely numeric
+  - [x] Implement whichever decomposition that decision names under `cuda.jit`, keeping the kernel purely numeric
+    > **Q:** Write `_viterbi_cuda.py` with an `ImportError` when no device is present, an
+    > `(S, S, U)` host log table over the symbols present, and a local filter for the
+    > low-occupancy warning — and list it in `meson.build` in the same step?
+    > **A:** Yes, both. The alternative probe — a device check added to
+    > `_backends.detect()` — was declined, since raising at import leaves the registry
+    > unchanged.
+    > **Done:** phase 4 `cuda` — `packages/pfsmgraph-hmm/src/pfsmgraph/hmm/_viterbi_cuda.py`,
+    > derived-from `_viterbi_cpu_parallel.py` `sha256:5f45abb4…`, entered through
+    > `/dp-compile:next-phase viterbi` → `dp-compile:gpu-parallelization`. A host loop over
+    > `t` launches `_step` once per timestep over `j`; `arc_bits` is `(S, S, U)` built by
+    > `bits(trans[:, :, None] * out[:, :, present])` on the host, uploaded once with the
+    > re-indexed record, so the device does only `+` and `<`. `N = 0` never touches the
+    > device. Listed in `meson.build`'s `install_sources` in the same change. A scratchpad
+    > comparison on the L4, run with warnings as errors, agreed **exactly** — `states` and
+    > `total_bits` — with phases 1 and 3 on 300 random models (`S` 1–11, some arcs zeroed),
+    > multi-block `S` = 63/64/65/130, `N = 0`, `S = 1`, and the uniform tie (state 0
+    > throughout); `UNK` returned `+inf` without raising, and read-only inputs were accepted.
+    > Suite green at 298, `test_meson_sources.py` 16/16. Not yet registered.
+    > **Note:** **numba-cuda has its own `NumbaPerformanceWarning`, unrelated to numba's.**
+    > It raises `numba.cuda.core.errors.NumbaPerformanceWarning`, which is not a subclass
+    > of `numba.core.errors.NumbaPerformanceWarning`, so a filter on the latter matches
+    > nothing and fails silently — which is exactly what happened in the scratchpad launch
+    > probe, whose "Grid size 1" warnings printed straight through its filter. The warning
+    > fires once per launch *configuration*, so the kernel builds `_step[blocks, threads]`
+    > once per call, inside the filter, rather than once per timestep.
   - [ ] Register the backend in `_backends.py` with `optional_on`, and add the module to `meson.build`'s `install_sources`
 - [ ] Hold it equivalent to phases 1–3
   - [ ] Differential tests in `test_viterbi.py`'s labelled non-shared section, including the constructed uniform-model tie test

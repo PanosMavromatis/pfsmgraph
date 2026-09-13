@@ -42,6 +42,11 @@ py.install_sources(
     # characteristic ADR 0018 failure and the reason it is loud rather than
     # silent.
     'src/pfsmgraph/hmm/_viterbi_cpu_parallel.py',
+    # ADR 0002 phase 4, the CUDA backend. Pure Python for the same reason as
+    # phase 3 -- numba compiles it at runtime, meson compiles nothing -- and
+    # listed for the same reason: unlisted, it is invisible to the editable
+    # finder and absent from the wheel.
+    'src/pfsmgraph/hmm/_viterbi_cuda.py',
   ],
   subdir: 'pfsmgraph/hmm',
 )
