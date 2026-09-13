@@ -142,8 +142,11 @@ and several of these must land *as part of* the merge rather than after it.
   condition. Left in place rather than moved, because the phase-4 work is the same branch
   family and moving it would lose the association; but a reader auditing fired triggers
   should expect this one to still show an open entry.
-- **Pin the `numba-cuda` lower bound** in `align`'s (and `hmm`'s) `[gpu]` extra once the
-  wavefront backend lands; it is currently unpinned.
+- **Pin the `numba-cuda` lower bound** in `align`'s `[gpu]` extra once its wavefront
+  backend lands; it is currently unpinned. *Narrowed 2026-09-13:* `hmm`'s half was
+  discharged on `feat/hmm-viterbi-cuda` as `numba-cuda>=0.30.4` plus `numpy<2.5` — the
+  cap numba-cuda's metadata omits, which `align`'s pin will need too. `hmm`'s phase 4 is
+  not a wavefront (ADR 0016 `Resolved`), so "the wavefront backend" now names `align`'s alone.
 
 ## Trigger: CI existing
 
@@ -354,6 +357,25 @@ and several of these must land *as part of* the merge rather than after it.
   it planned the whole migration, not just the first third of it. When either 03 or 04
   opens, decide whether the plan moves, splits across the revisions it touches, or stays
   put with the scope note left as-is. Nothing is owed before then.
+- **Unify the logarithm across the Viterbi backends.** Found 2026-09-13 on
+  `feat/hmm-viterbi-cuda`, by the phase-4 differential test. Phase 1 (`_viterbi.py`) takes
+  `-log2` through numpy's vectorised `log2`; phases 2 and 3 (`_viterbi_cython.pyx`,
+  `_viterbi_cpu_parallel.py`) call libm's scalar `log2`. On an AVX-512 host with numpy
+  2.4.6 the two differ by one ulp in **3,937 of 4,000,000** inputs, so `total_bits` from
+  phase 1 and from phases 2-3 can sit an ulp apart — seen on a 7-state, 16-symbol generated
+  model — and a near-tie between two candidates could in principle resolve differently,
+  which makes the tie-break contract between those backends **depend on the CPU**. Phases
+  2-3's own exact assertions pass only because their seeds avoid the 0.1%; phase 4, which
+  takes its logs from numpy on the host, is bit-exact with phase 1 and is compared to 2-3
+  under a one-ulp-per-arc bound. The docstrings of phases 2 and 3 still claim bit-exactness
+  with phase 1 and were deliberately **not** edited on that branch, since changing either
+  file changes its provenance hash and restales everything derived from it.
+  **Why this trigger:** revision 03's forward pass is the next consumer of `bits`, and a
+  sum reduction there would inherit the split as a tolerance no one chose. **The two
+  fixes**: build each backend's arc costs from one numpy table (what phase 4 does), or
+  route phase 1 through libm; either reopens phases 2 and 3 and regenerates their headers,
+  and `FORMALIZATION.md` should then name *which* `log2` is contract, not merely where it
+  is evaluated.
 
 ## Trigger: the `align` migration
 

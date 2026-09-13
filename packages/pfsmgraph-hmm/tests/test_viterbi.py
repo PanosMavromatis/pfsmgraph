@@ -1166,3 +1166,228 @@ def test_the_cpu_parallel_kernel_inherits_the_seeding_divergence_exactly():
     )
     disagreements = np.flatnonzero(states != oracle.states)
     assert disagreements.tolist() == [0]
+
+
+# --- phase 4: the Numba CUDA backend ----------------------------------------
+#
+# Below the line for the same reason as phases 2 and 3: every test here calls
+# `_viterbi` directly on more than one backend, so none can be a parameter value.
+#
+# **This is the first section whose backend may legitimately be absent**, and
+# that changes how it is imported. Phases 2 and 3 import their kernels at module
+# level unconditionally, which is right for them -- an unbuilt extension or a
+# missing dev-group numba is a broken working copy. `_viterbi_cuda` instead
+# refuses to import without a device, so an unconditional import here would
+# turn a GPU-less machine into a *collection error for this whole file*. The
+# import is guarded, and each test carries the skip, whose reason `-ra` prints
+# per test -- loud, as ADR 0003 requires, and never a silent pass.
+#
+# **What makes this phase's equality claim non-trivial is where the logarithm
+# runs.** Device `log2` lowers to libdevice and differs from numpy's by one ulp
+# in about a quarter of inputs, so a kernel taking its logs on the device would
+# fail the generated-models test below while passing the tie test: equal inputs
+# round equally on one device. The kernel takes every log on the host, with
+# numpy -- the same function phase 1 uses -- so against phase 1 the assertions
+# are exact, and they are what hold the kernel to that.
+#
+# **Against phases 2 and 3 `total_bits` is bounded, not equal, and that is a
+# platform fact rather than an allowance for this kernel.** They call libm's
+# scalar `log2`, which differs from numpy's vectorised one by one ulp in about
+# 0.1% of inputs on an AVX-512 host (3,937 of 4,000,000, measured 2026-09-13 on
+# numpy 2.4.6). Their own exact assertions above pass because their seeds avoid
+# it; this section's seed does not. `states` stay exact across all four. The fix
+# -- one logarithm for every backend -- is filed in DEFERRED.md rather than
+# made here, because it reopens phases 2 and 3 and their provenance chain.
+#
+# The two deliberately broken variants this section was checked against are
+# recorded in the branch plan for `feat/hmm-viterbi-cuda`.
+
+try:
+    import pfsmgraph.hmm._viterbi_cuda as _cuda_module  # noqa: E402
+except ImportError as _cuda_import_error:
+    _cuda_module = None
+    _CUDA_SKIP_REASON = f"no CUDA device detected ({_cuda_import_error})"
+else:
+    _CUDA_SKIP_REASON = ""
+
+requires_cuda = pytest.mark.skipif(_cuda_module is None, reason=_CUDA_SKIP_REASON)
+
+
+def _cuda(params, codes):
+    """Decode with the CUDA kernel; the module is looked up at call time."""
+    return _cuda_module._viterbi(
+        params.init_state_p, params.transition_p, params.output_p, codes
+    )
+
+
+def _generated_models(rng, count, max_size):
+    """Seeded `(params, codes)` pairs, the same shape as phases 2 and 3 use."""
+    for _ in range(count):
+        size = int(rng.integers(1, max_size + 1))
+        n_symbols = int(rng.integers(1, 6))
+        params = _random_model(rng, size, n_symbols)
+        codes = np.asarray(
+            [code(int(i)) for i in rng.integers(0, n_symbols, int(rng.integers(0, 40)))],
+            dtype=np.int32,
+        )
+        yield params, codes
+
+
+def _within_log2_rounding(a, b, n):
+    """Equal up to one ulp per summed logarithm: the numpy/libm `log2` split.
+
+    `total_bits` sums `n + 1` logarithms, each of which may round one ulp apart
+    between numpy and libm, so the bound is `(n + 2)` relative epsilons -- one
+    spare for the final addition. Both infinite counts as equal: impossibility
+    is not a rounding question.
+    """
+    if np.isinf(a) or np.isinf(b):
+        return a == b
+    return abs(a - b) <= (n + 2) * np.finfo(np.float64).eps * max(abs(a), abs(b))
+
+
+@requires_cuda
+def test_the_cuda_kernel_agrees_with_all_three_predecessors_on_generated_models():
+    """Exact with phase 1; exact states and log2-rounding-bounded totals with 2-3.
+
+    This is the test a device-side logarithm fails. `total_bits` is a sum of
+    `N + 1` logarithms, so one-ulp differences in a quarter of them leave it
+    almost never bit-equal to phase 1 -- which is precisely the signal wanted,
+    and why that assertion is `==` rather than `approx`. The bound against
+    phases 2 and 3 is the section comment's numpy/libm split, and is tight
+    enough that it would not admit a device-side logarithm against phase 1.
+    """
+    rng = np.random.default_rng(20260913)
+    for params, codes in _generated_models(rng, 200, 9):
+        (py_s, py_t), (cy_s, cy_t), (nb_s, nb_t) = _all_three(params, codes)
+        cu_s, cu_t = _cuda(params, codes)
+        assert np.array_equal(py_s, cu_s)
+        assert py_t == cu_t
+        assert np.array_equal(cy_s, cu_s)
+        assert np.array_equal(nb_s, cu_s)
+        assert _within_log2_rounding(cy_t, cu_t, codes.size)
+        assert _within_log2_rounding(nb_t, cu_t, codes.size)
+
+
+@requires_cuda
+@pytest.mark.parametrize("size", [1, 63, 64, 65, 130])
+def test_the_cuda_kernel_agrees_across_the_block_boundary(size):
+    """`S = 1`, and state counts either side of one block of 64 threads.
+
+    A launch is rounded up to whole blocks, so past the last state there are
+    threads the bounds check must stop. 63, 64 and 65 put the last state just
+    inside, exactly at, and just past a block edge; 130 spans three blocks.
+    """
+    rng = np.random.default_rng(size)
+    params = _random_model(rng, size, 4)
+    codes = np.asarray([code(int(i)) for i in rng.integers(0, 4, 50)], dtype=np.int32)
+    py_s, py_t = _viterbi(params.init_state_p, params.transition_p, params.output_p, codes)
+    cu_s, cu_t = _cuda(params, codes)
+    assert np.array_equal(py_s, cu_s)
+    assert py_t == cu_t
+
+
+@requires_cuda
+def test_the_cuda_kernel_decodes_an_empty_record_without_the_device():
+    """`N = 0` visits one state and crosses no arc, so no launch happens."""
+    params = build(
+        np.array([0.25, 0.75]),
+        np.array([[0.5, 0.5], [0.5, 0.5]]),
+        np.full((2, 2, 2), 0.5),
+    )
+    codes = np.array([], dtype=np.int32)
+    py_s, py_t = _viterbi(params.init_state_p, params.transition_p, params.output_p, codes)
+    cu_s, cu_t = _cuda(params, codes)
+    assert cu_s.shape == (1,)
+    assert np.array_equal(py_s, cu_s) and py_t == cu_t
+
+
+@requires_cuda
+@pytest.mark.parametrize("threads_per_block", [1, 7, 64])
+def test_the_cuda_kernel_is_invariant_to_block_size(monkeypatch, threads_per_block):
+    """Phase 3's thread-count invariance, restated for a grid.
+
+    A correct kernel gives one answer however its threads are partitioned into
+    blocks. One thread per block makes every state its own block; 7 leaves a
+    ragged last block for most sizes; 64 is the default. A missing or wrong
+    bounds check, or a read that crosses into another thread's cell, shows up as
+    a disagreement between these.
+    """
+    monkeypatch.setattr(_cuda_module, "_THREADS_PER_BLOCK", threads_per_block)
+    rng = np.random.default_rng(20260913)
+    for params, codes in _generated_models(rng, 40, 12):
+        py_s, py_t = _viterbi(
+            params.init_state_p, params.transition_p, params.output_p, codes
+        )
+        cu_s, cu_t = _cuda(params, codes)
+        assert np.array_equal(py_s, cu_s)
+        assert py_t == cu_t
+
+
+@requires_cuda
+def test_the_cuda_kernel_breaks_ties_to_the_smallest_index():
+    """The constructed tie, which real data cannot produce.
+
+    This is the test a `<=` in the device reduction fails. It is **not** the
+    test a device-side logarithm fails: every candidate is computed from
+    identical inputs, and identical inputs round identically on one device, so
+    the ties survive and state 0 still wins. The generated-models test is what
+    guards the logarithm; this one guards the comparison.
+    """
+    size, n_symbols = 5, 3
+    params = build(
+        np.full(size, 1.0 / size),
+        np.full((size, size), 1.0 / size),
+        np.full((size, size, n_symbols), 1.0 / n_symbols),
+        symbols=tuple(f"s{i}" for i in range(n_symbols)),
+    )
+    codes = np.array([code(i % n_symbols) for i in range(24)], dtype=np.int32)
+    py_s, py_t = _viterbi(params.init_state_p, params.transition_p, params.output_p, codes)
+    cu_s, cu_t = _cuda(params, codes)
+    assert np.array_equal(py_s, cu_s)
+    assert py_t == cu_t
+    assert np.array_equal(cu_s, np.zeros_like(cu_s))
+
+
+@requires_cuda
+def test_the_cuda_kernel_reports_impossibility_numerically():
+    """The backend contract: `+inf`, never a raise -- which on a device is forced."""
+    params = build(
+        np.array([0.5, 0.5]),
+        np.array([[0.5, 0.5], [0.5, 0.5]]),
+        np.full((2, 2, 2), 0.5),
+    )
+    states, total = _cuda(params, np.array([code(0), UNK], dtype=np.int32))
+    assert np.isinf(total)
+    assert states.shape == (3,)
+
+
+@requires_cuda
+def test_the_cuda_kernel_reads_the_frozen_parameter_arrays():
+    """ADR 0017's read-only arrays are accepted, and the states are integers."""
+    params = build(
+        np.array([0.5, 0.5]),
+        np.array([[0.5, 0.5], [0.5, 0.5]]),
+        np.full((2, 2, 2), 0.5),
+    )
+    assert not params.transition_p.flags.writeable
+    states, total = _cuda(params, record(0, 1, 0).codes)
+    assert states.dtype == STATE_DTYPE
+    assert np.isfinite(total)
+
+
+@requires_cuda
+def test_the_cuda_kernel_reproduces_each_saved_decode(oracle):
+    """The oracle, run against the fourth backend -- the one evidence not ours."""
+    states, _ = _cuda(oracle.params, oracle.record.codes)
+    assert np.array_equal(states[1:], oracle.states[1:])
+    assert np.array_equal(states, oracle.path.states)
+
+
+@requires_cuda
+def test_the_cuda_kernel_inherits_the_seeding_divergence_exactly():
+    """Pin the divergence to position 0 alone; do not widen the assertion."""
+    oracle = Oracle("m008_0001_008.hmm")
+    states, _ = _cuda(oracle.params, oracle.record.codes)
+    disagreements = np.flatnonzero(states != oracle.states)
+    assert disagreements.tolist() == [0]

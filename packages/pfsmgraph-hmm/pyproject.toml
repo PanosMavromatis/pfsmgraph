@@ -36,8 +36,20 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# numba-cuda for the Baum-Welch core only; unrelated to dl's torch (PRD §6).
-gpu = ["numba-cuda"]
+# numba-cuda for the ADR 0002 phase-4 CUDA backends -- the Viterbi decode now,
+# the Baum-Welch core in revision 03; unrelated to dl's torch (PRD §6).
+#
+# Bare numba-cuda, deliberately without its cu12/cu13 toolkit extra: numba-cuda
+# itself leaves the toolkit to the installer, and naming a CUDA major here would
+# decide driver compatibility for every consumer. One with a system or conda
+# toolkit needs nothing more; one without adds `numba-cuda[cu13]` (or `[cu12]`).
+# The workspace's dev group picks cu13 for this repository, not for consumers.
+#
+# The floor is the one version measured, 2026-09-13. `numpy<2.5` is numba-cuda's
+# ceiling rather than ours, and its own metadata omits it: 0.30.4 calls
+# `np.row_stack` at import, which numpy 2.5 removed. Carried here so a pip user
+# of this extra gets an importable stack; drop it when numba-cuda stops.
+gpu = ["numba-cuda>=0.30.4", "numpy<2.5"]
 # ADR 0002 phase 3 -- the Numba CPU-parallel Viterbi backend. Deliberately not
 # folded into `gpu`: it needs no CUDA device, and ADR 0004 refuses to unify
 # unrelated accelerators under one extra. `gpu` satisfies it transitively

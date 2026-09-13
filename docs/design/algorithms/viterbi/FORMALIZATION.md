@@ -206,6 +206,24 @@ The two decompositions not taken:
   `psi`, and re-associates the comparisons — so it forfeits bit-exactness with phases 1-2
   and would need its own equivalence argument rather than a differential test.
 
+**The logarithm is evaluated on the host, never on a device.** Settled 2026-09-13 at phase
+4. A device `log2` (libdevice, under `cuda.jit`) rounds differently from the host's in
+about a quarter of inputs — 1,087,159 of 4,000,008, each by one ulp, measured on an NVIDIA
+L4 — so candidate costs would shift by an ulp and a near-tie could resolve differently by
+device, invisibly to the uniform-model case, since identical inputs round identically on
+one device. Phase 4 therefore uploads a host-computed `(S, S, U)` arc-cost table over the
+symbols the record uses, and the device performs only `+` and `<`, which are exact. This
+is not the emission hoist forbidden above: `arc_bits[i, j, k]` still depends on both
+endpoints and is still read inside the reduction; only the logarithm moved.
+
+**Which host `log2` is contract remains open.** Phase 1 (and phase 4's table) use numpy's
+vectorised `log2`; phases 2 and 3 call libm's scalar one; on an AVX-512 host the two
+differ by one ulp in about 0.1% of inputs (3,937 of 4,000,000, numpy 2.4.6). Phase 4 is
+therefore bit-exact with phase 1 and within one ulp per arc of phases 2-3 in `total_bits`.
+Unifying the logarithm across backends is filed in `docs/plan/DEFERRED.md` under
+revision 03 opening; until then, this section names where the function runs, not which
+function it is.
+
 **The tie-breaking rule belongs here as much as in the recurrence**: smallest index wins, at
 both the recurrence and the final `argmin`. Two backends disagreeing on ties will fail an
 equivalence suite on a difference neither got wrong.

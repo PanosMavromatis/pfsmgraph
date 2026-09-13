@@ -60,6 +60,23 @@ no-build-isolation-package = [
 #                  validate a parallel decomposition under real concurrency, and
 #                  a parallel backend nobody runs is worse than no parallel
 #                  backend.
+#   numba-cuda   - the ADR 0002 phase-4 backend's compiler, and hmm's `gpu`
+#                  extra, for the same reason as numba: a plain `uv sync` (and
+#                  every `uv run`, which syncs first) must not uninstall the
+#                  backend the dp-compile gate is about to test. The `cu13` extra
+#                  is load-bearing -- bare numba-cuda ships no NVRTC, nvJitLink or
+#                  NVVM, so without it nothing compiles -- and 13 matches the CUDA
+#                  runtime torch already brings. Linux-only because numba-cuda
+#                  publishes no macOS wheels; elsewhere the backend reports absent
+#                  rather than breaking the sync.
+#
+#                  The Linux-marked `numpy<2.5` beside it is numba-cuda's, not
+#                  ours, and its own metadata does not declare it: 0.30.4 (the
+#                  latest, measured 2026-09-13) calls `np.row_stack` at import,
+#                  which numpy 2.5 removed, so `from numba import cuda` dies with
+#                  AttributeError. Drop the cap when a numba-cuda release stops
+#                  doing that; hmm's `gpu` extra carries the same cap for
+#                  consumers.
 dev = [
     "pytest>=8",
     "meson-python",
@@ -67,6 +84,8 @@ dev = [
     "ninja",
     "numpy>=2.1",
     "numba>=0.61",
+    "numba-cuda[cu13]>=0.30.4; sys_platform == 'linux'",
+    "numpy<2.5; sys_platform == 'linux'",
 ]
 
 [tool.pytest.ini_options]
