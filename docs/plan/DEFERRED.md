@@ -474,6 +474,13 @@ and several of these must land *as part of* the merge rather than after it.
   treating them as optional. `docs/api/hmm/README.md`'s "Backends and extras" section
   returns to describing them.
 
+  **The same version ends 0.1.0's pure wheel.** Once a public call reaches a compiled
+  kernel, drop the justfile `build` recipe's `-C setup-args=-Dcompiled=false` for `pfsmgraph-hmm`,
+  restore `Programming Language :: Cython`, and plan real platform wheels. PyPI refuses a
+  plain `linux_x86_64` tag, so that means manylinux builds (cibuildwheel in CI is the usual
+  route, which would also retire the local token), and `preflight`'s `py3-none-any` check
+  has to learn platform tags.
+
 ## Trigger: a vocabulary outliving the process that built it
 
 - **Vocabulary persistence (`save`/`load`).** A `SymbolTable` is built from a corpus and

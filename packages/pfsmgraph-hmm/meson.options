@@ -1,0 +1,5 @@
+# Release builds of 0.1.0 pass -Dcompiled=false (the root justfile's `build`),
+# because no public call in 0.1.0 reaches a compiled kernel. Development builds
+# keep the default, so the suite still exercises the Cython backend.
+option('compiled', type: 'boolean', value: true,
+  description: 'Build the Cython kernels. false installs to purelib and skips them, giving a py3-none-any wheel.')

@@ -35,9 +35,19 @@ clean:
 # that glob from picking up a stale version of the same package -- it is not
 # merely tidiness, and removing it makes the glob a live hazard.
 
+# The -C setting is chosen by package name here, because uv's own
+# `--config-settings-package` is silently ignored for the package `uv build` is
+# building -- measured 2026-09-13 on uv 0.12.13, the backend was called with
+# `build_wheel(..., {}, ...)` -- and a plain `-C` for every member would hand
+# -Dcompiled to members that define no such option. pfsmgraph-hmm 0.1.0 ships a pure py3-none-any wheel because no public call
+# reaches its compiled kernel: a platform wheel would fail preflight's
+# py3-none-any check, and PyPI refuses a plain linux_x86_64 tag. Remove the flag
+# when a public call does (docs/plan/DEFERRED.md, the extras-restore entry).
+
 # Build sdist + wheel from a clean dist/.
 build package=default_package: clean
-    uv build --package {{ package }}
+    uv build --package {{ package }} \
+      {{ if package == "pfsmgraph-hmm" { "-C setup-args=-Dcompiled=false" } else { "" } }}
 
 # Validate that artifacts will render on PyPI before uploading.
 check package=default_package:

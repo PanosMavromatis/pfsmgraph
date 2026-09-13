@@ -53,8 +53,25 @@ Two of these fail silently if placed wrong, which is why
   annotation in the package. It cannot go at the `pfsmgraph/` namespace level either, for
   the same reason no `__init__.py` may: no single distribution owns that level.
 
-`pfsmgraph-dataseq` has all four as of the 0.1.0 release commit. Each remaining member owes
-them in its own release commit; see `docs/plan/DEFERRED.md`.
+`pfsmgraph-dataseq` has all four as of the 0.1.0 release commit, and `pfsmgraph-hmm` as of
+its 0.1.0 release branch. Each remaining member owes them in its own release commit; see
+`docs/plan/DEFERRED.md`.
+
+**`just build` builds the last commit, not the working tree.** meson-python makes the sdist
+with `meson dist`, which archives `HEAD` even under `--allow-dirty`, and `uv build` then
+builds the wheel from that sdist. So an uncommitted change reaches neither artifact, and a
+build run to check a change before committing it checks the previous commit instead.
+Measured 2026-09-13, when a first `just build` on `pfsmgraph-hmm` produced the pre-change
+wheel with none of the new metadata. At release this is harmless, because `preflight`
+refuses a dirty tree. To inspect uncommitted work, build the wheel directly with
+`uv build --package <pkg> --wheel --out-dir <scratch>`.
+
+**`pfsmgraph-hmm` 0.1.0 is built with `-C setup-args=-Dcompiled=false`**, which the `build`
+recipe passes for that package alone. The option (`packages/pfsmgraph-hmm/meson.options`)
+skips the Cython kernel and installs to purelib, giving a `py3-none-any` wheel, since no
+public call in 0.1.0 reaches a compiled kernel. Both halves are needed: skipping the
+extension alone still left a platform-tagged wheel. uv's `--config-settings-package` would
+be the natural spelling, but it is silently ignored for the package being built.
 
 ### Validate
 
