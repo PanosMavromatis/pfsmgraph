@@ -1,0 +1,209 @@
+## Subgoals — revision 02-hmm-v0.1.0
+
+`dataseq` is released and the family's base layer is fixed, so PRD §11 puts `hmm` next.
+This revision is the first of three, and it is deliberately the one that carries the
+project's _firsts_ rather than the most HMM content: the first dynamic-programming kernel
+in the repository, the first `.pyx`, the first non-empty ADR 0003 backend matrix, and the
+resolution of the meson-python namespace problem that [ADR 0012](../design/adr/0012-align-and-hmm-temporarily-on-hatchling.md)
+is standing down. Viterbi is the right kernel to carry them because it is the simplest
+recurrence in the library — a single min-plus pass with a backtrace — so when the compiled
+phases misbehave, the algorithm is not also in question.
+
+Settled on the planning branch and not to be relitigated here: numpy is the reference
+implementation and the only required runtime dependency; `torch` enters at revision 03 as
+an optional backend, never as a hard dependency; and the migrated Utility code lives
+private to `pfsmgraph.hmm` rather than in a new distribution.
+
+**This revision fires `DEFERRED.md`'s `## Trigger: the first .pyx`.** That trigger gates
+the ADR 0012 revert and the meson-python editable-install shadowing, and it is why
+subgoal 5 sits between the pure-Python kernel and the Cython one rather than after both.
+
+**The public-surface subgoal below also decides the class architecture, and that is worth
+separating from the encode-at-the-boundary question it's paired with.** The source splits
+the model into three classes that do not obviously survive translation: `hmm` (the
+persisted parameters — load/save, `update-entropy`), `hmm-param` (a mutable _working copy_,
+synchronized only by `copy-from-model`/`copy-to-model`), and `hmm-trainer` (Viterbi, the EM
+machinery, and topology search in revision 04). `hmm-param` exists to back an interactive
+undo — `hmm-trainer-view.lsh`'s "Keep model" / "Reset model" buttons (`HMMLIB-ACCOUNT.md`
+§5) — and this migration is not porting that GUI (see revision 04's subgoal recording that
+`hmm-trainer-view.lsh` migrates nowhere). Reproducing the split without its reason has a
+measured cost and no offsetting benefit: `update-entropy` is duplicated verbatim between
+`hmm.lsh:228-262` and `hmm-param.lsh:66-100`, 35 lines (`HMMLIB-ACCOUNT.md` §13) — exactly
+the drift hazard `core.md`'s "ADRs outrank the imported implementations" invariant exists
+to catch, and duplication a single class would not have. Nor is the decode/train coupling
+worth keeping by default: "No separation between decode and training. Viterbi is a method
+on `hmm-trainer`, so decoding a sequence requires constructing a trainer, which requires a
+corpus" (`HMMLIB-ACCOUNT.md` §14) is recorded there as an absence, not a feature. None of
+this settles what to build instead — a single mutable model, an immutable parameter object
+replaced each step, or something the optional `torch` backend pulls toward once parameters
+can be `nn.Parameter`s (revision 03) — only that inheriting the Lush shape by not deciding
+is not a neutral choice. Revision 04's topology search inherits whatever this revision
+settles, since `split-state`/`merge-states` lived in `hmm-param` and its rollback story
+(the parameter-representation subgoal) is where a wrong choice here gets expensive to
+unwind. Record the decision as an ADR once subgoal 2 below settles it — this is
+architecture on the order of
+[ADR 0010](../design/adr/0010-dataseq-composition-merging-three-implementations.md) and
+[ADR 0015](../design/adr/0015-arc-emission-mealy-formulation.md), not an implementation
+detail.
+
+**Drafted before the source was read.** The release boundaries below come from a
+structural survey of `.scratch/hmm-lush/Code/HMMlib/` — definition maps, call-site counts,
+comment headers — not from reading the 2,044 lines. Subgoal 1 is the reading, and its
+first duty is to check these boundaries. What would falsify them:
+
+- **Viterbi turning out to depend on the forward variables.** The split assumes
+  `update-viterbi-path` (`hmm-trainer.lsh:188-257`) computes δ independently of the α that
+  `update-data-p` (`126-188`) builds. If it reads α, the 02/03 boundary moves and Viterbi
+  drags the forward pass into this release with it. **Checked, does not hold**:
+  `update-viterbi-path` reads no forward variable — `alpha*` is a local of `update-data-p`
+  alone, and the two methods are scheduled together by `update-data` only for readability,
+  not a data dependency (`HMMLIB-ACCOUNT.md` §7). The boundary stands.
+- **The stationary-distribution solve being something else.** `hmm-param.lsh:82` and
+  `hmm.lsh:244` build a matrix from `int-delta` and call `LU-solve`; that reads as
+  `(I - Pᵀ)π = 0`, but it was inferred from two lines of context. **Checked, does not
+  hold**: the solve is `(Pᵀ - I)π = 0` with the first row replaced by `Σπ = 1`
+  (`HMMLIB-ACCOUNT.md` §4); the guessed sign is flipped, but `(Pᵀ - I)` and `(I - Pᵀ)`
+  share the same null space, so the port is unaffected.
+- **`hmm-trainer.lsh:21-126` not being separable.** The scaffolding is assumed shareable
+  across 02 and 03. If the constructor demands the training apparatus, 02 gets no trainer
+  at all and Viterbi becomes a free function over a model — which may be the better design
+  regardless. **Checked, holds**: neither constructor branch is free of the training
+  apparatus, and both require a corpus unconditionally; "a decode-only use of this library
+  is not expressible in its own terms" (`HMMLIB-ACCOUNT.md` §15). `21-126` is not
+  shareable scaffolding. Subgoal 2's premise below — Viterbi as a method with no trainer
+  object in this release — is now evidence-backed rather than assumed.
+
+- [x] Read `Code/HMMlib/` in its own terms and write `.scratch/hmm-lush/HMMLIB-ACCOUNT.md`, following `ACCOUNT.md`'s conventions — measurements against the two tracked specimen corpora, and **provenance unknown** for behaviours the code admits but may never have exercised. Check the three falsifiers above and revise this plan if any holds.
+  > **Branch:** docs/hmmlib-account
+  > **Done:** `HMMLIB-ACCOUNT.md` written (600 lines, 15 sections, an appendix); the three
+  > falsifiers checked and recorded above (two do not hold, one holds); subgoals 2 and 3
+  > below amended with the account's consequences; and, independently, a design handoff
+  > surfaced from a local scratch directory promoted to
+  > [ADR 0015](../design/adr/0015-arc-emission-mealy-formulation.md) — PR #13.
+- [x] Settle the public surface of `pfsmgraph.hmm` 0.1.0 and where it meets `dataseq`: what a caller constructs, what Viterbi is a method _on_ given there is no trainer object in this release, and which of `SymbolTable`, the record container and `pad_collate` it consumes. Apply _encode at the boundary_ ([ADR 0001](../design/adr/0001-encode-at-the-boundary.md)) by naming the exact entry and exit points where strings are still permitted. Decide the class architecture explicitly as part of this — see the paragraph above — rather than defaulting to Lush's `hmm`/`hmm-param`/`hmm-trainer` split by not deciding. The account gives this two more concrete constraints. First, Lush's model does not take an alphabet as an argument — its constructor reads `_alphabet_size`/`_alphabet` directly out of the corpus's `.sds` directory (`HMMLIB-ACCOUNT.md` §4), which is exactly the file-coupled seam `ACCOUNT.md` §1 already found on the container side; do not reproduce it — take a `SymbolTable` explicitly. Second, Lush's Viterbi always decodes one sequence — batching belongs to the trainer, and the trainer does not exist in this release — so `pad_collate`'s masked-batch path is plausibly not this subgoal's concern at all: settle whether Viterbi 0.1.0 consumes a single `dataseq` record directly, leaving `pad_collate` for revision 03's batched training.
+  > **Branch:** feat/hmm-public-surface
+  > **Done:** The class architecture is a **frozen parameter value**
+  > ([ADR 0017](../design/adr/0017-frozen-parameter-object-for-hmm.md)), not Lush's mutable
+  > `hmm`/`hmm-param` split — whose own surgery methods never exercised the mutability,
+  > since `split-state` reallocates and rebinds every slot (`hmm-param.lsh:153-158`,
+  > `210-215`) because a shape change cannot be done in place. Viterbi is a **free function
+  > over parameters and one `SequenceRecord`**, returning a result rather than writing back
+  > into the sequence object; §7's "reads no forward variable" is what licensed removing it
+  > from the trainer. The `Vocabulary` is taken as `dataseq`'s Protocol and **retained**, so
+  > a mismatch between identically-shaped tensors is detectable; `pad_collate` is deferred
+  > to revision 03 structurally, a record never holding padding. The package sits entirely
+  > **below** the [ADR 0001](../design/adr/0001-encode-at-the-boundary.md) boundary — two
+  > string entry points, two exits, no symbol among them — and the public/kernel split
+  > enforces what that ADR calls unenforceable. Revision 04's accept/reject ratio was
+  > checked and **does not exist**: §11 records that the original's search was driven by
+  > hand, so it is a forward assumption rather than a translated fact. Left to the kernel
+  > subgoal: whether `A` is `vocab.size` or only the user symbols — PR #15.
+- [x] Migrate the Utility code this release needs, private to the package: `_numeric.py` for `safe-/` (15 call sites), **`safe-add--log2` and `safe->--log`** — the log₂-domain accumulator and comparator Viterbi's inner loop actually calls, home of the `-1` log-zero sentinel (`HMMLIB-ACCOUNT.md` §3) — and `int-delta`; plus the stationary-distribution solve (`LU-solve` → `numpy.linalg.solve`), `rand-p-vector` for parameter initialisation, and `calculate-entropy`. The solve needs its row-replacement trick reproduced, not just its result: `(Pᵀ - I)π = 0` is singular by construction, so a port that hands the homogeneous system as stated to a dense solver fails outright — row 0 must be overwritten with the normalization `Σπ = 1` before calling `numpy.linalg.solve` (§4). Record which Numerical-Recipes transcriptions were replaced by a library call rather than translated, and that `minimize`/`mc.lsh` had **zero** call sites from `HMMlib` and so migrate nowhere.
+  > **Branch:** feat/hmm-numeric-utils
+  > **Done:** `_numeric.py` and 66 tests — the first code in `packages/pfsmgraph-hmm/`,
+  > suite 94 → 160. **Six functions named, five written**: `int-delta` dissolves into
+  > `np.eye` and `safe->--log` into plain `>`, both consequences of replacing the `-1`
+  > log-zero sentinel with `+inf` — declined as *uncheckable*, since there is no Lush
+  > runtime here and the sentinel reaches no persisted artifact. `bits(p)` is unary where
+  > `safe-add--log2` was binary, the accumulator argument having existed only to test that
+  > sentinel. The stationary solve reproduces the row replacement and adds what the
+  > original could not detect: a **reducible** chain has nullity 2 and stays singular after
+  > one replaced row, so it raises `ValueError` naming the cause where
+  > `LU-decomposition` substituted `TINY = 1e-20` and returned a perturbed answer. That is
+  > not exotic — revision 04's merge/split search can produce a disconnected component.
+  >
+  > **Two of this subgoal's own claims were wrong and are corrected rather than carried.**
+  > `minimize-int` does **not** have zero call sites: `hmm-trainer.lsh:441` (`suggest-d`)
+  > minimizes `total-dl` over `d`, so it migrates at **revision 04**, the same MDL boundary
+  > as `int-code-length`. And `mc.lsh` *is* libloaded (`load-hmm.lsh:6`); what supports
+  > "migrates nowhere" is that none of its four names is ever called. The text above records
+  > what was believed at planning time and is left as written.
+  >
+  > Also settled: `safe_divide` has **no consumer in 0.1.0** (all fifteen sites are revisions
+  > 03–04), `entropy` deliberately does not reuse `bits` (`bits(0) = +inf` is right for a
+  > description length and wrong for an entropy term), `rand_p_vector` takes a **required**
+  > `Generator`, and `numpy>=2.1` was reviewed and kept — justified by the compiled future,
+  > not today's API. Three `.hmm` model directories are now tracked as differential
+  > fixtures; their four-decimal print format is a documented trap for revision 03 — PR #16.
+- [x] Implement Viterbi at ADR 0002 phase 1 (pure Python/numpy) with the ADR 0003 test suite, and register it as the first backend. The session header stops reading `backends: none registered` for the first time since the hook landed. Two defects the account marks **provenance unknown** must be a decision, not a silent reproduction: `update-viterbi-path` seeds δ with raw `init-state-p` into the bit-domain accumulator, inverting the start-state preference and turning an exactly-zero initial probability into the _best_ possible δ rather than the impossible sentinel (`HMMLIB-ACCOUNT.md` §7); and `psi` round-trips state indices through a float matrix, harmless below 2²⁴ states and not worth reproducing. Decide and record whether the seeding bug is fixed or faithfully reproduced — the ADR 0003 test suite should encode whichever is chosen, not accidentally validate a bug against itself.
+  > **Branch:** feat/hmm-viterbi-python
+  > **Done:** `HMMParams` and the decode landed; the header reads `backends: python ✓`.
+  > Suite 160 → 264. **Both §7 defects were decided rather than reproduced**, and the
+  > seeding one was settled by measurement rather than argument: `save-viterbi-path` had
+  > written a `.vpath.xls` beside each saved model, so the port has a decode oracle and the
+  > correction is worth exactly one position in 3807. `psi` is `np.int64`, confirmed
+  > harmless below 2²⁴ rather than assumed — PR #17.
+  >
+  > **Two things the next subgoals need.** *For phase 2:* the ADR 0003 suite is **not**
+  > parameterized and cannot be until `align`. That ADR requires the backend be a fixture
+  > parameter *and* that tests be written against the public API only; `viterbi(params,
+  > record)` has nowhere to put a backend, and adding one is the selection API its own Open
+  > section defers. So the line below — which then read "backend equivalence against phase 1
+  > is enforced by the parameterized suite, not asserted" — has a prerequisite that is not
+  > scheduled anywhere, and phase 2 is where that bites. *(Both halves acted on 2026-09-09
+  > from `feat/hmm-viterbi-cython`: the phase-2 and phase-4 lines now name the mechanism
+  > actually in force, and the prerequisite is filed in `DEFERRED.md` under `align`
+  > acquiring a backend-selection API. The quotation is left as it stood, so this finding
+  > stays a true record of what the line said when it was made.)*
+  >
+  > *For phase 2 and 3 both:* **a tie-breaking rule is contract**, per ADR 0003's Negative
+  > section, because two correct backends would otherwise legitimately disagree. Ours is first-wins, matching the original, and it is
+  > exercised by no fixture — 0 exact ties in 3804 positions — so it is pinned by a
+  > constructed uniform model that a wavefront kernel must also satisfy.
+- [x] Resolve the meson-python namespace shadowing and move `hmm` off hatchling, reverting [ADR 0012](../design/adr/0012-align-and-hmm-temporarily-on-hatchling.md) by whichever of its three recorded candidates survives contact: non-editable install of the compiled members, one combined compiled distribution, or an upstream fix. Re-add `meson-python`, `cython` and `ninja` to the root `dev` group.
+  > **Branch:** exp/meson-python-namespace
+  > **Done:** Resolved by **none of the three candidates** — by a fourth this subgoal could
+  > not have named, because it is only visible once ADR 0012's candidate 2 is refuted. That
+  > candidate assumed two meson-python finders conflict; they *chain*, so one finder is not
+  > the problem and any finder is. The fix is therefore to give **every** member a finder:
+  > all five are on meson-python, three of which compile nothing and never will. `hmm` moved
+  > off hatchling as asked, and so did the other four. The `dev` group regained
+  > `meson-python`, `cython` and `ninja` **plus `numpy`**, a build requirement of
+  > `align`/`hmm` that `build-system.requires` cannot supply once
+  > `[tool.uv] no-build-isolation-package` turns isolation off — which every member needs,
+  > since the editable loader bakes an absolute `ninja` path rather than consulting `PATH`.
+  > Recorded as [ADR 0018](../design/adr/0018-family-wide-meson-python-build-backend.md);
+  > 0012 and 0008 are now `Superseded`, the first in that directory. Suite 271 → 280, all
+  > from `test_meson_sources.py` parameterising over the three new `meson.build` files.
+  > **Note for revision 02:** this subgoal was scheduled expecting the first `.pyx` to force
+  > the choice. It did not — the finder comes from the editable install, not from
+  > compilation — so phase 2 inherits a settled backend rather than this question. PR #18
+- [x] **Revise the two development plugins so they fit this family.** `tokalign-dev` was built for the `tokalign` proof-of-concept under ADR 0002's three-phase lifecycle: unaware of ADR 0016's amendment, coupled to a repository layout this family does not share, and carrying assumptions that were *wrong* here rather than merely narrow. Recorded here retroactively — the branch called itself standalone because no subgoal existed for it in advance, which is not the same as being unfileable, and without a backlink `/file-plans` can never place its plan.
+  > **Branch:** chore/revise-plugins
+  > **Done:** renamed and generalised to `dp-compile`, its hardcoded layout replaced by a per-repository `dp-compile.toml` with no defaults; ADR 0016's five-stage chain implemented end to end; a legacy-code entrance added and dry-run against `_viterbi.py`; and the two plugins verified to interoperate, both severities exercised live. Landed here: the manifest, the `docs/agents/claude.md` section reconciling the plugin's five stages with `core.md`'s four phases, and the plan itself. Auditing `workflow-claude` en route exposed nine sites hardcoding one repository's commit convention, fixed there as PR #21 — PR #19.
+  > **Note:** the plan ran from `tmp/TODO.md`, outside `docs/plan/`, so every `/hitl-step` had to pass the path; it is archived at `chore-revise-plugins/_TODO.md`. A plan parked outside the tree needs a decided route back in, and this one did not have one until merge.
+- [x] **Land the hand-back from the plugin revision.** Seven small pfsmgraph edits collected while `chore/revise-plugins` revised the `dp-compile` and `workflow-claude` plugins in clones under the gitignored `tmp/`. That branch's plan forbade itself from editing pfsmgraph, so the edits were recorded there as a manifest and cut into a branch plan at its merge. They are independent of each other and none blocks phase 2 — but two of them correct claims that phase 3 would otherwise be planned against, so this is scheduled ahead of it rather than alongside the release.
+  > **Branch:** chore/plugin-handback
+  > **Done:** all seven landed, and one of them inverted en route: the marketplace subgoal was drafted to *record* that no marketplace existed and became the release itself — both plugins public and MIT-licensed, imported with full history into `PanosMavromatis/claude-plugins` as the `mavromatis-ai-labs` marketplace, consumed here through a tracked `.claude/settings.json` in place of a `--plugin-dir` flag and a symlink, and the two source repositories archived rather than deleted. The two corrections landed as corrections: ADR 0016's phase-3 Open section closed with its void citation replaced, and `(max, +)` fixed in two places here. Also landed: the recovered Viterbi `FORMALIZATION.md`, TC-19 and TC-20 (suite at 282), and a `DEFERRED.md` trigger for a convention-detection defect the subtree import exposed — PR #20.
+  > **Note:** the goals, with their measurements and reasoning, are in the branch plan — `/hitl-step` finds it by name, no path argument. Two are corrections rather than additions, and are the reason this is not merely tidying: [ADR 0016](../design/adr/0016-numba-cpu-parallel-phase.md)'s phase-3 naming deferral rests on a `_cuda.py` in `.scratch/align-poc/tokalign` that **does not exist**, so its stated reason is void rather than unmet; and the anti-diagonal subgoal below has an answer already — the Viterbi recurrence is 1-D over time with dense S×S coupling, so it has **no anti-diagonals at all**, making "undetermined" the honest finding rather than a deferral.
+- [x] Implement Viterbi at ADR 0002 phase 2 (Cython), the first `.pyx` in a distribution. Backend equivalence against phase 1 is enforced by explicit differential tests in the suite's labelled non-shared section — **not** by ADR 0003's parameterized suite, which cannot be in force until `align`. Corrected 2026-09-09; see the phase-1 note above and `DEFERRED.md` under `align` acquiring a backend-selection API.
+  > **Branch:** feat/hmm-viterbi-cython
+  > **Done:** `_viterbi_cython.pyx` landed, bit-exact with phase 1 rather than merely close — matched operation order and a strict `<` tie-break. Every memoryview is `const`, because ADR 0017 freezes the parameter arrays and Cython 3 binds no mutable view to a read-only buffer; the `(S, S, A)` emission precompute was refused here as it was in phase 1. `_backends.py` holds two rows, so a run opens `backends: python ✓ · cython ✓`, and `hardware=None` does real work for the first time — an unbuilt extension errors at startup rather than skipping. Suite 282 → 291, six of them differential tests calling both kernels in the labelled non-shared section, both tie-breaks mutation-tested. One footgun recorded for revision 03: `uv sync` alone does not build a newly added `.pyx`, since meson's `fs.exists()` is evaluated at configure time — PR #21.
+  > **Note:** phases 2, 3 and 4 all run under the `dp-compile` plugin, so the first real use of the revised plugin is on the kernel it was revised for. Their phase-0 specification already exists — [`docs/design/algorithms/viterbi/FORMALIZATION.md`](../design/algorithms/viterbi/FORMALIZATION.md), recovered from `_viterbi.py` on 2026-09-09 — and each phase is written against **it** rather than against the phase-1 source. Two things there are contract rather than description: the tie-break (smallest index, at both the recurrence and the final `argmin`) and the **min-plus** objective. The manifest names the module paths, settled as `_viterbi_cython.pyx`, `_viterbi_cpu_parallel.py` and `_viterbi_cuda.py` — algorithm first, phase second, because these packages are flat.
+- [x] Implement Viterbi at ADR 0002 phase 3 (Numba CPU-parallel, `prange`) — [ADR 0016](../design/adr/0016-numba-cpu-parallel-phase.md) inserted this phase 2026-09-03, one step before what used to sit here; it is now the earliest point real concurrent execution is attempted.
+  > **Branch:** feat/hmm-viterbi-cpu-parallel
+  > **Done:** phase 3 landed as `_viterbi_cpu_parallel.py`, derived-from `_viterbi_cython.pyx` `sha256:79da7c8d…`. The anti-diagonal question is settled, and it is **not** a wording fix: [ADR 0016](../design/adr/0016-numba-cpu-parallel-phase.md)'s `Resolved` section withdraws ADR 0002's claim that the wavefront is "the same transformation for every DP kernel in the family", ADR 0002 carries a Status pointer to it, and its record text is untouched — a *generality claim* withdrawn rather than a decision reversed, so no new ADR number. The decomposition is **states within one timestep**: `prange` over `j`, with the reduction over `i` left serial and ascending, which is what preserves the first-wins tie-break. `prange` over `i` fails **silently** — the oracles hold 0 exact ties in 3804 positions, so only the constructed uniform-model test catches it. `numba` became the optional extra `cpu-parallel` rather than a hard dependency, since it caps numpy at 2.2.6 and that ceiling would otherwise bind every consumer of this member; `_backends.py`'s `hardware` field is renamed `optional_on` to say why that absence is legitimate without being a *device*. Suite 291 → 298 — PR #22.
+  > **Note:** the `:53` in the first subgoal below was already false when it was written — the claim sat at `:55` — and this branch's own Status edit to ADR 0002 moved it again to `:59`. Both records now cite that ADR **by section**. The citation is left standing here rather than corrected, because this subgoal is a record of what was planned; the correction belongs to the records it points at, and this note is what makes the pointer safe to follow.
+  > **Note:** phase 3 is 853× slower than phase 2 at `S = 5`, and the cost is **flat at ~34 ms regardless of `S`** — which is the diagnosis rather than the ratio. `t` is strictly sequential, so a parallel region opens and closes once per timestep around only `O(S²)` of work, putting the crossover near `S = 250` against a ceiling around 50 here. **Phase 4 inherits this**: launch overhead is worse on a GPU than a CPU fork/join, so a CUDA transliteration hits the same wall harder, and the decomposition with the good speed story is the batch — which `viterbi(params, record)` cannot express until revision 03 introduces batching.
+  - [x] **Settle the anti-diagonal question first — this is the point at which it is strictly needed.** [ADR 0002](../design/adr/0002-three-phase-algorithm-lifecycle.md):53 states the wavefront transformation is "the same transformation for every DP kernel in the family". A structural survey on the planning branch suggested it is not — an HMM recurrence is 1-D over time with dense N×N state coupling, so it has no anti-diagonals, and its parallel decompositions are batch, states-within-a-timestep, and possibly an associative scan over time in the (min, +) semiring. **The finding was deliberately left undecided on the planning branch** because phases 1 and 2 do not depend on it: a Cython kernel is single-threaded, so nothing before this subgoal can falsify or need it. Decide it here, against a kernel that exists, and settle whether it is a wording fix scoped to alignment-family kernels or a reversal warranting its own ADR number.
+    > **Corrected 2026-09-09 in two places: this subgoal said "(max, +)" and the revision-02 preamble called Viterbi "a single max-plus pass with a backtrace". The semiring is (min, +).** Recorded rather than fixed silently, because a silent fix is indistinguishable from the error never having been there — and this is the one inversion the whole project guards against. The accumulated quantity is a description length in bits, which *grows* as probability falls, so the decode is a min-sum; `core.md`, `_viterbi.py`'s docstring and the formalization all say so. The general Viterbi literature is max-plus, working in log-probabilities and maximising, which is almost certainly where the phrase came from. It mattered here more than anywhere: an associative scan is the one candidate that would be *built* from this sentence, and building it in max-plus inverts every comparison.
+    > **A third instance was found and deliberately left alone.** `planned/03-hmm-v0.2.0.md` asks whether "the max-plus/logsumexp associative scan over time" is worth implementing — but that is the **forward** recurrence, not the decode, and the pairing names two semirings rather than one. Whether it should read min-plus depends on whether revision 03 keeps the bit domain, which is that revision's decision and has not been made. Flagged here rather than corrected: confidence about the decode does not transfer to an unimplemented forward pass, and silently "fixing" a draft about undesigned work would manufacture a decision.
+    > **Corroborated 2026-09-09, still to be decided here.** A read-only pass over the landed `_viterbi.py` reached the survey's conclusion independently: the recurrence has **no anti-diagonals at all**, so the decomposition is absent rather than unchosen. [`FORMALIZATION.md`](../design/algorithms/viterbi/FORMALIZATION.md)'s `Parallel decomposition` section records that, with states-within-a-timestep as the one candidate carrying an argument behind it. This is evidence, not the decision — the deferral to "a kernel that exists" is deliberate, and this subgoal still owns the call.
+  - [x] Implement whichever decomposition that decision names, under `@njit(parallel=True)`/`prange`.
+- [x] Implement Viterbi at ADR 0002 phase 4 (Numba CUDA), renumbered from phase 3 by [ADR 0016](../design/adr/0016-numba-cpu-parallel-phase.md). Reuses the decomposition phase 3 already validated; what remains here is hardware-kernel-specific — memory coalescing, warp occupancy, `cuda.jit` semantics — not algorithmic. Backend equivalence against phases 1-3 is enforced the same way phase 2's is — explicit differential tests in the labelled non-shared section. `align` follows `hmm` in implementation order, so **no phase in this revision can use ADR 0003's parameterized suite**; that is structural rather than a matter of sequencing. Corrected 2026-09-09.
+  > **Branch:** feat/hmm-viterbi-cuda
+  > **Done:** phase 4 landed as `_viterbi_cuda.py`, derived-from `_viterbi_cpu_parallel.py` `sha256:5f45abb4…`, and registered as the fourth backend (`optional_on="CUDA device"`; the module raises `ImportError` without a device so the import probe can fail). It keeps phase 3's decomposition, but **every `-log2` runs on the host**: device `log2` (libdevice) differs from numpy's by one ulp in ~27% of inputs, so the device only adds and compares, and the kernel is bit-exact with phase 1. `numba-cuda[cu13]` and a Linux-marked `numpy<2.5` joined the root `dev` group, and `hmm`'s `gpu` extra is pinned `numba-cuda>=0.30.4` plus `numpy<2.5` — 0.30.4 dies at import on numpy 2.5 without declaring it. Suite 298 → 315, with 17 phase-4 tests that skip loudly without a device and escalate under `PFSMGRAPH_REQUIRE_BACKENDS=cuda` — PR #23.
+  > **Note:** **phases 1–3 were never bit-identical everywhere.** Phase 1 takes numpy's `log2`, phases 2–3 libm's, and on AVX-512 they differ in 3,937 of 4,000,000 inputs — found by the phase-4 differential test, filed in `DEFERRED.md` under revision 03 opening. On a 4-vCPU Xeon with an L4 at `N = 400`, CUDA is ~1.5 ms plus ~54 µs per timestep flat to `S = 160`: slower than Cython below `S ≈ 64`, 9× faster at 160. Phase 3's "flat ~34 ms" was its host's fork/join cost.
+- [x] Write the `/docs/api/` documents that pertain to this release.
+  > **Branch:** docs/hmm-api
+  > **Done:** `docs/api/hmm/` landed as `README.md`, `params.md` and `viterbi.md` (57 executed examples, `test_api_docs.py` 5 → 8 cases, suite 318), and `docs/api/README.md` lists `hmm` as documented. Reconciling the pages against the source corrected five `_viterbi.py` docstrings (hash re-stamped in the `.pyx` header and `FORMALIZATION.md`, justified by an AST comparison with docstrings stripped) and found that `hmm` declares an unsatisfiable, unimported `pfsmgraph-align>=0.1`, now a blocker noted on the release item below — PR #24.
+- [x] Release `pfsmgraph-hmm` 0.1.0 via `just release 0.1.0 pfsmgraph-hmm`, shipping the four files the version bump does not imply, and set honest lower bounds on any intra-family dependency naming it. **This is the first meson-built wheel this project will publish** -- every release so far went out from hatchling -- so two things do not carry over from `dataseq`'s release. `py.typed` must be named explicitly in `packages/pfsmgraph-hmm/meson.build`'s `install_sources`, because meson does not glob; `tests/test_meson_sources.py` catches it if it is not, which is the one part of this that fails loudly. And [`docs/ops/release.md`](../ops/release.md)'s reproducibility findings -- the byte-identical wheel, the sdist carrying the repo-root `.gitignore` -- were measured against hatchling's builder and are neither known false nor known to still hold, so re-measure rather than assume. Verify all four files by installing the built wheel into a clean venv outside the workspace ([ADR 0018](../design/adr/0018-family-wide-meson-python-build-backend.md)).
+  > **Branch:** chore/release-hmm-0.1.0
+  > **Done:** `pfsmgraph-hmm` 0.1.0 is on PyPI, tagged `pfsmgraph-hmm-v0.1.0`: the first meson-python release, a pure `py3-none-any` wheel whose bytes match the pre-release verification. The unimported `align` dependency went under ADR 0019; the extras were withheld; the release tooling gained a Linux `.envrc` token path, a `publish` empty-token fix and a reproducible build — PR #25
+  > **Note:** Blocker found on docs/hmm-api (2026-09-13): `pfsmgraph-hmm` declares
+  > `pfsmgraph-align>=0.1`, which no module imports and nothing on PyPI satisfies
+  > (`align` has only `0.0.0`), so a published 0.1.0 would not install. Remove the bound,
+  > or release `align` first, and update `docs/api/hmm/README.md`'s dependency sentence to
+  > match. Also open here: whether 0.1.0 should ship the `gpu` / `cpu-parallel` extras at
+  > all, since the public `viterbi` reaches no accelerated kernel in 0.1.0.
+  > **Resolved** on chore/release-hmm-0.1.0 (2026-09-13): the bound is removed under ADR 0019 and returns under DEFERRED's "`align` able to produce a multiple alignment" trigger. The extras question is goal 3 of that branch.
