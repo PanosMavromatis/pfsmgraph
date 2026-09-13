@@ -43,10 +43,16 @@ clean:
 # reaches its compiled kernel: a platform wheel would fail preflight's
 # py3-none-any check, and PyPI refuses a plain linux_x86_64 tag. Remove the flag
 # when a public call does (docs/plan/DEFERRED.md, the extras-restore entry).
+#
+# SOURCE_DATE_EPOCH is the commit time, so the wheel is reproducible: without it
+# meson-python stamps build-time entry timestamps and two builds of one commit
+# differ (contents identical, measured 2026-09-13), which would make the wheel
+# `release` rebuilds and uploads a different file from the one you verified. The
+# sdist needs nothing -- meson dist archives HEAD and carries commit times.
 
 # Build sdist + wheel from a clean dist/.
 build package=default_package: clean
-    uv build --package {{ package }} \
+    SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)" uv build --package {{ package }} \
       {{ if package == "pfsmgraph-hmm" { "-C setup-args=-Dcompiled=false" } else { "" } }}
 
 # Validate that artifacts will render on PyPI before uploading.

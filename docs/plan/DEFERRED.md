@@ -279,6 +279,11 @@ and several of these must land *as part of* the merge rather than after it.
   `[tool.hatch.build.targets.sdist]` leaves the file in place, tried and measured the same
   day -- so this needs a real look at hatchling's sdist file selection rather than a
   one-line patch. Revisit at the next member release, where the same behaviour will repeat.
+  **Closed 2026-09-13 by the build backend rather than by a fix.** Every member is on
+  meson-python since ADR 0018, whose sdist is `meson dist`'s `git archive` of `HEAD`, and
+  the first meson build of a member (`pfsmgraph-hmm` 0.1.0.dev0) ships no `.gitignore` at
+  all. See `docs/ops/release.md`, "Rebuilding does not invalidate that verification".
+
 - **Drop the `.dev0` suffix and tag the release, per package.** All five members declare
   `0.1.0.dev0`; the release commit for a package changes only that package's version to
   `0.1.0` and is tagged `pfsmgraph-<pkg>-v<version>` — `pfsmgraph-dataseq-v0.1.0`. Hyphen,

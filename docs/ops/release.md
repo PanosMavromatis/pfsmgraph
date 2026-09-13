@@ -108,42 +108,29 @@ import from it. That is the acceptance test; the listing is a sanity check.
 
 `just release` runs `clean` first, so it rebuilds rather than uploading whatever is already
 in `dist/`. That would be a problem if the verified artifact and the rebuilt one could
-differ in substance. Measured 2026-09-02 on `pfsmgraph-dataseq` 0.1.0, from an unchanged
-package tree:
+differ. Measured 2026-09-13 on `pfsmgraph-hmm` 0.1.0.dev0, the first meson-python build of
+a member:
 
-- **The wheel is byte-identical** -- same SHA-256 across builds. Hatchling normalises
-  member timestamps (every entry reads `02-02-2020 00:00`), so the wheel is reproducible
-  and a rebuild is a no-op you can trust. This is the artifact essentially every consumer
-  installs.
-- **The sdist is not**, and the reason is worth knowing rather than dismissing as
-  timestamps: hatchling finds no `.gitignore` in the member directory, walks up to the VCS
-  root, and ships **the repo-root `.gitignore`** inside the sdist. So an edit to root
-  housekeeping -- a rule about a scratch directory, with nothing to do with this
-  distribution -- changes the sdist. That is exactly how the two builds diverged.
+- **The sdist is byte-identical across builds.** meson-python makes it with `meson dist`,
+  a `git archive` of `HEAD`, so it carries commit times and tracked files only. That is
+  also why it no longer ships the repo-root `.gitignore`, which hatchling used to add, and
+  why it cannot see uncommitted work (above). It does ship the member's `tests/`, which
+  read fixtures from the repository's `.scratch/` and so do not run from an unpacked
+  sdist. That is inert for consumers, and noted here so a failing sdist test run is not
+  mistaken for a broken package.
+- **The wheel is byte-identical only with `SOURCE_DATE_EPOCH` set.** Without it,
+  meson-python stamps build-time entry timestamps, and two builds of one commit differ in
+  those alone: the unpacked contents are identical. The `build` recipe therefore exports
+  `SOURCE_DATE_EPOCH` as the commit time, and two `just build` runs then give the same
+  SHA-256 for both artifacts.
 
-The practical consequence is small: the shipped `.gitignore` is inert noise, not a leak,
-and the sdist is otherwise a pure function of the member. But it means **the sdist is not a
-function of the member alone**, which is worth remembering before concluding that two
-differing sdists indicate a real change. `exclude = ["/.gitignore"]` under
-`[tool.hatch.build.targets.sdist]` does *not* remove it -- tried and measured, the file
-still ships -- so this is filed in `docs/plan/DEFERRED.md` rather than fixed in passing.
-
-**All of the above was measured against a hatchling build, and no member is on hatchling
-any more** (2026-09-04: all five moved to meson-python, for the namespace reason recorded
-in [ADR 0018](../design/adr/0018-family-wide-meson-python-build-backend.md), which lists
-this re-measurement among its costs). Nothing here is known to be false, and nothing here is known to
-still hold -- both findings are properties of hatchling's builder, not of this project.
-`pfsmgraph-dataseq` 0.1.0 shipped from hatchling and is the only real release so far, so
-**no wheel published from this repository has been built by meson-python yet**. The first
-one will be whichever member releases next, and the master plan schedules that as
-`pfsmgraph-hmm` 0.1.0 -- `dataseq` has no next release scheduled, so do not wait for it.
-The whole of this section has to be re-measured against that first meson build rather than
-assumed forward: whether the wheel is still
-byte-identical across builds, and what meson-python puts in an sdist. Re-verify the
-four-file invariant (`README.md`, the `LICENSE` copy, `Typing :: Typed`, and `py.typed`
-*inside* the package) against an actual built wheel in a clean venv at the same time --
-`py.typed` is the one most exposed by the switch, because meson does not glob and
-`install_sources` must name it explicitly.
+The hatchling-era findings this replaces (2026-09-02, `pfsmgraph-dataseq` 0.1.0) were the
+mirror image: a reproducible wheel, because hatchling normalises timestamps, and a
+non-reproducible sdist, because it walked up to the VCS root and shipped the root
+`.gitignore`. Both were properties of the builder rather than of this project, which is why
+[ADR 0018](../design/adr/0018-family-wide-meson-python-build-backend.md) listed the
+re-measurement among its costs. The four-file invariant was re-verified against a built
+wheel installed in a clean venv outside the workspace at the same time.
 
 **So prefer `just release` over hand-publishing the artifacts already in `dist/`.** The
 alternative -- `just check && just publish` plus a manual tag -- preserves bytes that are
