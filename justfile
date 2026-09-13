@@ -4,7 +4,7 @@
 # Every recipe takes an optional package name, defaulting to the one below,
 # so the same recipes serve all five members:
 #
-#   just build                          # builds pfsmgraph-dataseq
+#   just build                          # builds the default package
 #   just build pfsmgraph-align          # builds something else
 #   just release 0.1.0                  # full release of the default package
 #   just release 0.1.0 pfsmgraph-align  # full release of another
@@ -13,7 +13,11 @@
 # line above a recipe as its description, so any explanatory prose is separated
 # from the recipe by a blank line and only the one-line summary sits adjacent.
 
-default_package := "pfsmgraph-dataseq"
+# The member under development, never an already-published one: a release that
+# omits the package argument then builds a .dev0 version that cannot match the
+# requested one, so preflight stops it before publish, instead of acting on a
+# member that is already on PyPI. Move it to the next member at each release.
+default_package := "pfsmgraph-hmm"
 
 # Show available recipes.
 default:

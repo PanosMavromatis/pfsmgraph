@@ -69,7 +69,7 @@ Because `uv sync` installs every member **editable**, imports resolve to `packag
 
 Release order follows declared dependencies ([ADR 0019](docs/design/adr/0019-declared-dependencies-follow-imports.md)): a package cannot publish before the family members it imports exist on PyPI, so `dataseq` goes first and `hmm`, which imports only `dataseq`, can follow it directly. `pfsmgraph-dataseq` is released at 0.1.0; the other five names — the four remaining packages plus the bare `pfsmgraph` umbrella — are still dependency-free `0.0.0` placeholders. See PRD §4 and §11.
 
-Releases run through the repo-root `justfile`, which requires [just](https://just.systems) (`brew install just`): `just release <version> [package]` runs test → build → `twine check` → preflight → upload → tag, defaulting to `pfsmgraph-dataseq`. `just` alone lists every recipe, and [`docs/ops/release.md`](docs/ops/release.md) is the runbook.
+Releases run through the repo-root `justfile`, which requires [just](https://just.systems) (`brew install just`): `just release <version> [package]` runs test → build → `twine check` → preflight → upload → tag, defaulting to `default_package`, the member under development, so an omitted argument can never reach a published package. `just` alone lists every recipe, and [`docs/ops/release.md`](docs/ops/release.md) is the runbook.
 
 ## License
 

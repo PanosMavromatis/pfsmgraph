@@ -170,7 +170,10 @@ just              # list all recipes
 | `just release VER [pkg]` | test -> build -> check -> preflight -> publish -> tag |
 | `*-test` variants | Same, against TestPyPI |
 
-Every recipe takes an optional package name defaulting to `pfsmgraph-dataseq`, so one file
+Every recipe takes an optional package name defaulting to `default_package`, which names
+the member under development rather than a published one. An omitted argument therefore
+builds a `.dev0` version that cannot match the requested one, so `preflight` stops the
+release before `publish`, instead of acting on a member already on PyPI. One file
 serves all five members: `just release 0.1.0 pfsmgraph-align`.
 
 ### Four design points worth knowing before you edit it
@@ -229,14 +232,13 @@ member: all five hold `0.0.0` placeholders. There is no bootstrap-token step.
 Store it in the Keychain, never in `.env`, `~/.zshrc`, `~/.pypirc`, or the repo tree:
 
 ```bash
-just token-set                          # stores it for pfsmgraph-dataseq, the default
+just token-set                          # stores it for the default package
 just token-set pfsmgraph-align          # any other member, by name
 ```
 
 Both forms are shown because every recipe here takes the package as an optional argument
 defaulting to `default_package` at the top of the `justfile`. Naming the default explicitly
-(`just token-set pfsmgraph-dataseq`) is therefore identical to the bare form, not a
-different operation.
+is therefore identical to the bare form, not a different operation.
 
 That prompts without echoing, so nothing lands in zsh history. `uv` does not read
 `.pypirc` at all -- verified against the binary -- so a token placed there would appear to
@@ -306,7 +308,7 @@ just release 0.1.0
 ```
 
 Which is: test -> clean -> build -> `twine check` -> preflight -> upload -> tag
-`pfsmgraph-dataseq-v0.1.0` -> push.
+`pfsmgraph-<pkg>-v0.1.0` for the default package -> push.
 
 Two mechanics inside `publish` worth understanding:
 

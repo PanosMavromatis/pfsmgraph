@@ -366,7 +366,8 @@ Toolchain: **uv** (workspace) + **pytest**. Requires `uv` and Python ≥ 3.10.
 - `uv lock` — refresh `uv.lock` (committed; one lockfile for the whole family).
 
 The repo-root `justfile` wraps the release path — `just release <version> [package]` runs
-test → build → `twine check` → preflight → upload → tag, defaulting to `pfsmgraph-dataseq`
+test → build → `twine check` → preflight → upload → tag, defaulting to `default_package`,
+the member under development, so an omitted argument can never reach a published package,
 and taking any member as its second argument. It requires `just` (`brew install just`) and
 is the only place per-package release tags are formed. `just` alone lists every recipe;
 [`docs/ops/release.md`](../ops/release.md) is the runbook. Two properties of it are

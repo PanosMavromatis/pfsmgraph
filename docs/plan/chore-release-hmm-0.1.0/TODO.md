@@ -21,8 +21,13 @@
   - [x] `DEFERRED.md` entry, with a trigger at the alignment-seeded-topology version (expected 0.4.0)
   - [x] Drop the bound and its `[tool.uv.sources]` entry, relock, and correct `docs/api/hmm/README.md` and `core.md`
     > **Note:** `uv lock` rewrote exactly two lines, `hmm`'s `dependencies` and `requires-dist` entries for `pfsmgraph-align`, so the lockfile sees an edge vanish even though it never sees a bound change (measured 2026-09-01). Suite green at 318. The pyproject carries a comment naming ADR 0019 so the PRD §5.5 pattern is not restored by copying. Root `README.md` line 70 also stated the drawn release order and was corrected, and `core.md`'s "seventeen records" was already one stale and now reads nineteen.
-- [ ] Commit the `justfile` default and sweep the documents that name the old one
-  - [ ] Verify the hand edit, and correct `docs/ops/release.md`, `core.md` and `README.md` where they state the default
+- [~] Commit the `justfile` default and sweep the documents that name the old one
+  > **Q:** The default now moves with each release. Should the docs name `pfsmgraph-hmm`, or state the policy?
+  > **A:** State the policy: `default_package` names the member under development, so an omitted argument can never reach a published package. No package name appears, so nothing goes stale at the next release.
+  > **Q:** `justfile` line 7 says the bare `just build` "builds pfsmgraph-dataseq", which the edit made false. Change it?
+  > **A:** Yes, to "builds the default package". Line 172's `dataseq` illustration of on-disk names stays.
+  - [x] Verify the hand edit, and correct `docs/ops/release.md`, `core.md` and `README.md` where they state the default
+    > **Note:** The sweep found more than the three known sites: `release.md` §2's `token-set` example and §4's tag line both described the old default, and `justfile` line 7's comment stated the bare command's result. `default_package` now carries a rationale comment. Checked against the recipe: `preflight` does not test for `.dev0` as such, but matches the requested version against the built filename, so an omitted argument on a `.dev0` member stops before `publish`; the wording says that rather than "refuses `.dev0`". `just --list` parses, the default evaluates to `pfsmgraph-hmm`, and `test_release_runbook.py` passes.
   - [ ] Settle where the release runs: the token recipes call macOS `security`, which this Linux host lacks
 - [ ] Settle what 0.1.0's immutable metadata says
   - [ ] Whether to ship the `gpu` / `cpu-parallel` extras when no public call reaches an accelerated kernel
