@@ -8,7 +8,8 @@ topology search are later revisions.
 - **Decode** — [`viterbi.md`](viterbi.md): `viterbi`, `ViterbiPath`,
   `ImpossibleSequenceError`.
 
-It depends on `pfsmgraph-dataseq` for its vocabulary and its records, and on `numpy`.
+It imports `pfsmgraph-dataseq`, for its vocabulary and its records, and `numpy`. Its
+metadata also declares a dependency on `pfsmgraph-align`, which no module imports.
 
 ## The one example worth reading first
 

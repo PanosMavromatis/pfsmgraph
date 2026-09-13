@@ -223,6 +223,12 @@ first duty is to check these boundaries. What would falsify them:
 - [ ] Write the `/docs/api/` documents that pertain to this release.
   > **Branch:** docs/hmm-api
 - [ ] Release `pfsmgraph-hmm` 0.1.0 via `just release 0.1.0 pfsmgraph-hmm`, shipping the four files the version bump does not imply, and set honest lower bounds on any intra-family dependency naming it. **This is the first meson-built wheel this project will publish** -- every release so far went out from hatchling -- so two things do not carry over from `dataseq`'s release. `py.typed` must be named explicitly in `packages/pfsmgraph-hmm/meson.build`'s `install_sources`, because meson does not glob; `tests/test_meson_sources.py` catches it if it is not, which is the one part of this that fails loudly. And [`docs/ops/release.md`](../ops/release.md)'s reproducibility findings -- the byte-identical wheel, the sdist carrying the repo-root `.gitignore` -- were measured against hatchling's builder and are neither known false nor known to still hold, so re-measure rather than assume. Verify all four files by installing the built wheel into a clean venv outside the workspace ([ADR 0018](../design/adr/0018-family-wide-meson-python-build-backend.md)).
+  > **Note:** Blocker found on docs/hmm-api (2026-09-13): `pfsmgraph-hmm` declares
+  > `pfsmgraph-align>=0.1`, which no module imports and nothing on PyPI satisfies
+  > (`align` has only `0.0.0`), so a published 0.1.0 would not install. Remove the bound,
+  > or release `align` first, and update `docs/api/hmm/README.md`'s dependency sentence to
+  > match. Also open here: whether 0.1.0 should ship the `gpu` / `cpu-parallel` extras at
+  > all, since the public `viterbi` reaches no accelerated kernel in 0.1.0.
 
 ## Planned revisions
 

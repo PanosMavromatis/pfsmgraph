@@ -1,4 +1,4 @@
-# dp-compile: derived-from packages/pfsmgraph-hmm/src/pfsmgraph/hmm/_viterbi.py sha256:48666ca8a3126ba141ec1a0ddba8ed1823e502f93d72483181906afd24135742
+# dp-compile: derived-from packages/pfsmgraph-hmm/src/pfsmgraph/hmm/_viterbi.py sha256:6b26469bd36030a2cc2fcce8c9106deab18cf2851cf934551763d5238db2438a
 """The Viterbi decode, ADR 0002 phase 2: compiled, single-threaded Cython.
 
 A **mechanical** translation of ``_viterbi.py``. Every line here traces back to a

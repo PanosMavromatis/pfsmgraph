@@ -60,6 +60,57 @@
     > Changing a pasted return value (`viterbi.md:164`, `path.states`) and a pasted
     > error message (`params.md:109`) each produced exactly one reported mismatch, so the
     > new pages are genuinely under check rather than merely collected.
-- [ ] Update the index and reconcile with the source
-  - [ ] `docs/api/README.md`'s table lists `pfsmgraph-hmm` as documented
-  - [ ] Each page checked against the docstrings of the names it documents; disagreements fixed on whichever side is wrong
+- [x] Update the index and reconcile with the source
+  > **Done:** The index lists `pfsmgraph-hmm` as documented. All six disagreements were
+  > resolved: five docstrings in `_viterbi.py` corrected and two page statements
+  > corrected, `hmm/README.md`'s dependency sentence and `viterbi.md`'s `total_bits`
+  > row. The unsatisfiable `pfsmgraph-align>=0.1` is recorded as a blocker under the
+  > master plan's release subgoal, together with goal 1's extras question. Suite green at
+  > 318.
+  - [x] `docs/api/README.md`'s table lists `pfsmgraph-hmm` as documented
+    > **Note:** The intro sentence needed changing too: "Four of the five members have no
+    > code yet" became "Three". The index says so in two places, and updating only the
+    > table would have left the page contradicting itself.
+  - [x] Each page checked against the docstrings of the names it documents; disagreements fixed on whichever side is wrong
+    > **Note:** Six disagreements came up. (1) `hmm/README.md` said the package depends on
+    > `dataseq` and `numpy`, but its metadata also declares `pfsmgraph-align>=0.1`. Nothing
+    > in `pfsmgraph.hmm` imports it, and nothing on PyPI satisfies it, since `align` has
+    > only `0.0.0`. This is the workspace footgun in a live form: a published 0.1.0 would
+    > not install. (2) The `ImpossibleSequenceError` docstring said impossibility
+    > "happens whenever the record crosses an arc of probability zero", when it takes
+    > *every* path crossing one. (3) `ViterbiPath.total_bits` was documented "Always
+    > finite", but `ViterbiPath(states=[0], total_bits=inf)` constructs without error
+    > (measured), and the page repeated the claim. (4) `viterbi` said "Only its three arrays
+    > and `n_symbols` are read", but it also reads `n_states`. (5) `viterbi`'s docstring omits
+    > that its code check is range-only. (6) It also referred to "goal 1's
+    > `A == vocab.size` decision", a branch-plan reference inside a docstring that ships
+    > in the wheel.
+    > **Q:** `hmm` declares an unimported, currently unsatisfiable `pfsmgraph-align>=0.1`.
+    > What happens on this branch?
+    > **A:** Fix the page and defer the metadata. Correct the README's dependency sentence to
+    > match the metadata as it stands, and record under the release subgoal in the
+    > master plan, as a blocker, that the bound must go (or `align` must release) before
+    > `hmm` 0.1.0 can install. No `pyproject.toml` change here.
+    > **Q:** Findings 2-6 are in `_viterbi.py`, and fixing them stales the Cython header and
+    > the `FORMALIZATION.md` hash. How are they handled?
+    > **A:** Fix all five, qualifying #3 as "finite in any path `viterbi` returns", and fix
+    > the page's table for #3. Prove with an AST comparison that strips docstrings that no
+    > executable line changed. Re-stamp the `.pyx` header and the `Derived from` hash, and
+    > record the proof here. The dp-compile gate then runs the suite on commit.
+    > **Note:** The proof. I parsed the pre-edit and post-edit `_viterbi.py`, removed the
+    > leading docstring of the module, each class and each function (7 in both), and
+    > compared `ast.dump`: identical. As a control, the unstripped ASTs differ, so the
+    > comparison had something to detect. `_viterbi.py` has no provenance header, so its
+    > hash is the raw file's: `48666ca8…` became `6b26469b…`. The new value is re-stamped in
+    > `_viterbi_cython.pyx` line 1 and `FORMALIZATION.md`'s `Derived from` row. Hashes
+    > exclude the header line, so the `.pyx`'s own hash is unchanged (`79da7c8d…`), and
+    > `_viterbi_cpu_parallel.py` and `_viterbi_cuda.py` stay fresh, which I checked by
+    > recomputation. The merged phase-2 plan still records `48666ca8…`, correctly, as the
+    > hash at the time.
+    > **Note:** `FORMALIZATION.md` says a hash mismatch means it "must be re-derived rather
+    > than patched". Re-stamping instead is justified because the document contains none of
+    > the corrected claims. TC-14, "an unseen bigram is impossible", is a specific
+    > extracted case rather than the overbroad general wording that was fixed, and TC-15,
+    > "no infinite total ever reaches a caller", already matches the qualified
+    > `total_bits` wording. No statement in the document moved. Had one of them repeated
+    > a corrected claim, re-derivation would have been required.

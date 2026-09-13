@@ -157,7 +157,7 @@ A frozen dataclass.
 | Field | Meaning |
 |---|---|
 | `states` | `(N + 1,)` `int64`, read-only. `states[t]` is the state occupied before symbol `t` is emitted |
-| `total_bits` | the description length of this path. Always finite |
+| `total_bits` | the description length of this path. Finite in every path `viterbi` returns; the constructor does not check it |
 | `label` | the record's `label`, carried through unchanged |
 | `n_symbols` | property, `N`. One fewer than `len(states)` |
 
