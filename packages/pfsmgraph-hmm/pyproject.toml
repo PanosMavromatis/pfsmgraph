@@ -5,7 +5,7 @@
 
 [project]
 name = "pfsmgraph-hmm"
-version = "0.1.0.dev0"
+version = "0.1.0"
 description = "Arc-emission hidden Markov models for the pfsmgraph family: frozen parameters and Viterbi decoding; Baum-Welch training and topology search forthcoming."
 readme = "README.md"
 requires-python = ">=3.10"

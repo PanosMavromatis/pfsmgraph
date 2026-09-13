@@ -65,9 +65,14 @@
     > **Deferred:** The `.dev0` drop moves to goal 5's final release commit, per the Q&A above, so an accidental publish from the branch can only burn a dev version. The build and clean-venv verification are already done at `0.1.0.dev0` (subgoal 2's note), and goal 5 repeats them on the bumped 0.1.0 wheel.
   - [x] Re-measure `docs/ops/release.md`'s hatchling-era reproducibility findings
     > **Note:** Inverted from hatchling. The **sdist** is byte-identical across builds (`meson dist` is a `git archive` of `HEAD` with commit times) and no longer ships the repo-root `.gitignore`, which closes that `DEFERRED.md` entry by backend rather than by fix. It does ship the member's `tests/`, which read `.scratch/` fixtures and so cannot run from an unpacked sdist; that is inert and recorded in the runbook. The **wheel** differed across builds by entry timestamps only (unpacked contents identical under `diff -r`). With `SOURCE_DATE_EPOCH` set to the commit time it is byte-identical, so `build` now exports it, and two `just build` runs give the same SHA-256 for both artifacts (wheel `4cfb86f0…`, sdist `8d362e85…` at `0e0c984`). `dataseq` still builds unchanged. Runbook section rewritten.
-- [ ] Release: publish, tag, and close what the branch discharged
-  - [ ] **User:** create the project-scoped token per `docs/ops/release.md` §2 (2FA confirmed; name `pfsmgraph-hmm-release-2026-09`; scope `Project: pfsmgraph-hmm`; copied once)
-  - [ ] **User:** add `export PYPI_TOKEN_PFSMGRAPH_HMM='pypi-…'` to the repo-root `.envrc` (installing direnv first if it is absent and hooking it into the shell), then run `direnv allow`
-  - [ ] **User:** confirm the recipes see it without printing it: `just token >/dev/null && echo ok`
+- [~] Release: publish, tag, and close what the branch discharged
+  > **Q:** One release commit carrying every doc, or declare first (the version bump and its wording) and record "released" only after PyPI accepts the upload?
+  > **A:** Declare first, record after. The release commit bumps `version` and the `.dev0` wording in `core.md`; the "released" statements follow in a record commit once the upload succeeds, so a failed publish leaves nothing untrue committed.
+  > **Q:** Fix the root README's stale `hmm` row (depends on `align`) and its ‡ footnote ("the only member with an implementation")?
+  > **A:** Yes, in the record commit.
+  - [x] **User:** create the project-scoped token per `docs/ops/release.md` §2 (2FA confirmed; name `pfsmgraph-hmm-release-2026-09`; scope `Project: pfsmgraph-hmm`; copied once)
+  - [x] **User:** add `export PYPI_TOKEN_PFSMGRAPH_HMM='pypi-…'` to the repo-root `.envrc` (installing direnv first if it is absent and hooking it into the shell), then run `direnv allow`
+  - [x] **User:** confirm the recipes see it without printing it: `just token >/dev/null && echo ok`
+    > **Note:** Confirmed 2026-09-13 without printing the value: `direnv exec . just token >/dev/null` succeeds. A plain `just token` from a shell with no direnv hook (such as Claude Code's tool shell) reports the variable unset, which is the recipe's loud failure working as designed. So `just release` runs from the user's direnv-hooked shell, or as `direnv exec . just release 0.1.0`.
   - [ ] Release commit: bump `version` to `0.1.0`, then `just build` and re-verify the 0.1.0 wheel in a clean venv outside the workspace (shape, `py.typed`, no `.so`, the README example)
   - [ ] Publish (the user runs it; irreversible) and tag `pfsmgraph-hmm-v0.1.0`
