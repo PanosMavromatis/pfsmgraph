@@ -199,7 +199,7 @@ than assume — the premise is what the first goal exists to check.
     > itself available, and agree with its own test. `_device_present()` asks the same
     > question from outside. `test_only_the_cpu_parallel_row_may_be_skipped` was renamed
     > `test_only_the_numba_rows_may_be_skipped`, since two rows can now be skipped.
-- [~] Hold it equivalent to phases 1–3
+- [x] Hold it equivalent to phases 1–3
   - [x] Differential tests in `test_viterbi.py`'s labelled non-shared section, including the constructed uniform-model tie test
     > **Q:** Write the phase-4 section in `test_viterbi.py` with a guarded import and a
     > per-test `skipif`, add block-size invariance, and then mutation-check the tests?
@@ -246,6 +246,24 @@ than assume — the premise is what the first goal exists to check.
     > responsibilities is deliberate: the boundary tests guard indexing, generated models
     > guard the logarithm, and the uniform tie guards the comparison. Mutation scripts were
     > scratchpad-only.
-  - [ ] Verify an absent device skips loudly and `PFSMGRAPH_REQUIRE_BACKENDS` escalates it
+  - [x] Verify an absent device skips loudly and `PFSMGRAPH_REQUIRE_BACKENDS` escalates it
+    > **Done:** all three states measured 2026-09-13, hiding the L4 with `NUMBA_DISABLE_CUDA=1`.
+    > **(1) No device, no escalation:** the header reads `backends: python ✓ · cython ✓ ·
+    > cpu_parallel ✓ · cuda ✗ (no CUDA device detected)`, and the run gives **298 passed,
+    > 17 skipped**, with `-ra` printing a `SKIPPED` line and reason for every phase-4 test
+    > (parameterized ones grouped as `[3]`/`[5]`). No collection error, so the guarded
+    > import does its job. **(2) No device, `PFSMGRAPH_REQUIRE_BACKENDS=cuda`:** the
+    > session aborts before collection with `ERROR: PFSMGRAPH_REQUIRE_BACKENDS requires
+    > ['cuda'], which this run would have skipped: cuda: no CUDA device detected`, exit
+    > code **4** (pytest's usage error). **(3) Device present, same variable:** 315 passed.
+    > This is the escalation's first real exercise — `DEFERRED.md`'s `CI existing` entry
+    > noted "no code path currently exercises it" — though still by hand, not by CI.
+    > **Note:** this was verified **after** `ea5ce9a` had already added a `core.md`
+    > sentence claiming the escalation works. The claim held, but it was written ahead of
+    > the check that entitled it; recorded so the order is not misremembered.
+    > **Note:** the per-test skip reason repeats itself — `no CUDA device detected (no CUDA
+    > device detected: pfsmgraph.hmm._viterbi_cuda needs …)` — because the test wraps the
+    > module's `ImportError` message, which already begins with the same words. It is
+    > cosmetic and left as found; tidying it is a one-line change to `_CUDA_SKIP_REASON`.
 - [ ] Measure and record
   - [ ] Launch overhead against phase 3's flat ~34 ms; update `core.md`, `FORMALIZATION.md` and ADR 0016 as the result warrants
