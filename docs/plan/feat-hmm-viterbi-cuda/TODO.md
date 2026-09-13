@@ -1,6 +1,6 @@
 # feat/hmm-viterbi-cuda
 
-**Status**: active
+**Status**: merged — PR #23 — 2026-09-13
 **Created**: 2026-09-13
 **Subgoal**: Implement Viterbi at ADR 0002 phase 4 (Numba CUDA) —
 `docs/plan/TODO.md`, revision 02-hmm-v0.1.0
