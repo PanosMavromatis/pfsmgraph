@@ -10,7 +10,7 @@ about *consistent* counts, where the emission counts summed over symbols are the
 transition counts, and a synthetic array would not have that property unless the
 test reimplemented the E-step to give it one.
 
-Four sections:
+Five sections:
 
 - **The oracle**: each division redone in exact rational arithmetic over the very
   floats the M-step read, so the only disagreement allowed is the float64
@@ -21,6 +21,9 @@ Four sections:
 - **Constructed zero counts** the fixtures never exhibit: a state reachable only
   by the final symbol, and a record with no counts at all.
 - **ADR 0020's order**, pinned bit for bit against literal ascending loops.
+- **The EM loop**: the description length never rises, a fixed point stays
+  fixed bit for bit, the stopping rule is `run-converge`'s read back from the
+  trace, and a degenerate state tracks the original's zero-row likelihood.
 """
 
 from __future__ import annotations
@@ -30,10 +33,14 @@ from fractions import Fraction
 import numpy as np
 import pytest
 
-from pfsmgraph.dataseq import USER_BASE, SymbolTable
-from pfsmgraph.hmm import HMMParams
-from pfsmgraph.hmm._baum_welch import _m_step
-from pfsmgraph.hmm._forward_backward import _expected_counts, _forward_backward
+from pfsmgraph.dataseq import USER_BASE, SequenceRecord, SymbolTable
+from pfsmgraph.hmm import HMMParams, ImpossibleSequenceError
+from pfsmgraph.hmm._baum_welch import BATCH_CYCLES, CHANGE_BITS, PATIENCE, _em, _m_step
+from pfsmgraph.hmm._forward_backward import (
+    _description_length,
+    _expected_counts,
+    _forward_backward,
+)
 
 from _lush_fixtures import FIXTURES, load_corpus_record, load_params
 
@@ -264,3 +271,225 @@ def test_both_reductions_are_the_literal_ascending_loops_bit_for_bit(stepped):
 
     assert out_counts.tolist() == want_out
     assert init_state_p.tolist() == [c / init_total for c in init_counts]
+
+
+# === the EM loop ================================================================
+#
+# Over records rather than raw arrays, since the loop is where records, the
+# vocabulary and HMMParams validation meet. The properties are Baum's: the
+# description length never rises between cycles, and a fixed point stays fixed.
+
+#: Baum's inequality is exact in the mathematics, and a cycle's description
+#: length is a float64 sum over records and positions. Measured over 20 random
+#: multi-record corpora and 60 cycles each, the largest rise was exactly 0; this
+#: allows a few ulps per summed term at the sizes used here and would still
+#: expose a mis-normalised M-step, which rises by whole bits.
+RISE_RTOL = 1e-12
+
+
+def _random_params(rng, size, n_user):
+    output = np.zeros((size, size, USER_BASE + n_user))
+    output[:, :, USER_BASE:] = rng.dirichlet(np.ones(n_user), size=(size, size))
+    return HMMParams(
+        rng.dirichlet(np.ones(size)),
+        rng.dirichlet(np.ones(size), size=size),
+        output,
+        _vocabulary(USER_BASE + n_user),
+    )
+
+
+def _random_corpus(rng, n_user, lengths):
+    return [
+        SequenceRecord(rng.integers(USER_BASE, USER_BASE + n_user, length))
+        for length in lengths
+    ]
+
+
+@pytest.mark.parametrize(
+    "size, n_user, lengths",
+    [(1, 3, (20,)), (3, 4, (15, 0, 40)), (5, 5, (60, 7, 33, 1)), (8, 6, (200,))],
+    ids=["S1", "S3-with-empty", "S5-four-records", "S8"],
+)
+def test_the_description_length_never_rises_between_cycles(size, n_user, lengths):
+    rng = np.random.default_rng(SEED + size)
+    params = _random_params(rng, size, n_user)
+    result = _em(params, _random_corpus(rng, n_user, lengths), max_cycles=40)
+
+    history = np.array(result.description_lengths)
+    assert len(history) == result.cycles + 1 == 41
+    assert (np.diff(history) <= RISE_RTOL * history[0]).all()
+    assert history[-1] < history[0]
+
+
+def test_a_model_at_a_fixed_point_stays_there_bit_for_bit():
+    # Two symmetric states whose every fibre is the corpus's symbol frequency,
+    # 1/2 each, and whose transitions and seed are uniform. Every count is then
+    # the same for both states, so re-estimation reproduces each parameter, and
+    # every value involved is a power of two, so it does so exactly.
+    output = np.zeros((2, 2, USER_BASE + 2))
+    output[:, :, USER_BASE:] = 0.5
+    params = HMMParams(
+        np.full(2, 0.5), np.full((2, 2), 0.5), output, _vocabulary(USER_BASE + 2)
+    )
+    a, b = USER_BASE, USER_BASE + 1
+    records = [SequenceRecord(np.array([a, b, b, a])), SequenceRecord(np.array([b, a]))]
+
+    result = _em(params, records)
+
+    assert np.array_equal(result.params.init_state_p, params.init_state_p)
+    assert np.array_equal(result.params.transition_p, params.transition_p)
+    assert np.array_equal(result.params.output_p, params.output_p)
+    assert set(result.description_lengths) == {6.0}
+    # No batch changes at all, so the first PATIENCE batches are the whole run.
+    assert result.converged and result.cycles == PATIENCE * BATCH_CYCLES
+
+
+def test_the_stopping_rule_is_run_converge():
+    # A small threshold so the run takes several batches. Read back from the
+    # returned trace: the last PATIENCE batch changes are below it, the one
+    # before them (if any) is not, and no earlier run of PATIENCE exists.
+    rng = np.random.default_rng(SEED + 99)
+    params = _random_params(rng, 4, 4)
+    batch, threshold, patience = 5, 1e-3, 3
+    result = _em(
+        params,
+        _random_corpus(rng, 4, (80, 50)),
+        batch_cycles=batch,
+        change_bits=threshold,
+        patience=patience,
+    )
+
+    assert result.converged and result.cycles % batch == 0
+    ends = np.array(result.description_lengths[::batch])
+    unchanged = np.abs(np.diff(ends)) < threshold
+    assert unchanged[-patience:].all()
+    run = 0
+    for flag in unchanged[:-1]:
+        run = run + 1 if flag else 0
+        assert run < patience
+    assert len(unchanged) == patience or not unchanged[-patience - 1]
+
+
+def _near_saddle(eps):
+    """Two states a perturbation `eps` away from exact symmetry, over `abab...`.
+
+    The symmetric model is a fixed point of EM, a saddle, and the corpus is
+    deterministic, so the optimum is 0 bits. The smaller `eps`, the longer the
+    loop crawls near the saddle before it escapes.
+    """
+    a, b = USER_BASE, USER_BASE + 1
+    transition = np.array([[0.5 + eps, 0.5 - eps], [0.5 - eps, 0.5 + eps]])
+    output = np.zeros((2, 2, USER_BASE + 2))
+    output[:, :, USER_BASE:] = 0.5
+    output[0, :, a] += eps
+    output[0, :, b] -= eps
+    params = HMMParams(np.full(2, 0.5), transition, output, _vocabulary(USER_BASE + 2))
+    return params, [SequenceRecord(np.array([a, b] * 200))]
+
+
+def test_a_changed_batch_resets_the_unchanged_count():
+    # Measured batch flags (1 = moved less than the threshold): 11, then seven
+    # 0s while EM escapes the saddle, then 111. Without the reset the two early
+    # 1s would carry over and the run would stop four cycles early, mid-escape.
+    params, records = _near_saddle(1e-4)
+    result = _em(params, records, batch_cycles=2, change_bits=1e-3, patience=3)
+
+    ends = np.array(result.description_lengths[::2])
+    flags = "".join("1" if f else "0" for f in np.abs(np.diff(ends)) < 1e-3)
+    assert flags == "110000000111"
+    assert result.cycles == 24 and result.description_lengths[-1] == 0.0
+
+
+def test_run_converge_can_stop_on_the_saddle_itself():
+    # Not a defect of the port but of the rule, and pinned so it is not mistaken
+    # for one: close enough to symmetry, PATIENCE early batches all move by less
+    # than the threshold and the loop stops about 400 bits above the optimum.
+    # An exactly uniform start, which rand_p_vector(noise_width=0) returns, is
+    # this case with eps = 0.
+    params, records = _near_saddle(1e-5)
+    result = _em(params, records, batch_cycles=2, change_bits=1e-3, patience=4)
+
+    assert result.converged and result.cycles == 8
+    assert result.description_lengths[-1] > 399
+
+
+def test_the_lush_trained_fixture_is_already_near_its_fixed_point():
+    # m008_0001_008 is the original's converged output, trained on this very
+    # stream, so the loop should leave it almost where it is. Passing the whole
+    # corpus as one record is the original's flat stream.
+    params = load_params(FIXTURES / "m008_0001_008.hmm")
+    result = _em(params, [load_corpus_record()])
+
+    first, last = result.description_lengths[0], result.description_lengths[-1]
+    assert result.converged and result.cycles == PATIENCE * BATCH_CYCLES
+    assert 0 <= first - last < CHANGE_BITS
+    assert result.degenerate_states == ()
+
+
+def test_one_cycle_over_several_records_is_the_m_step_of_their_summed_counts():
+    rng = np.random.default_rng(SEED + 7)
+    params = _random_params(rng, 3, 4)
+    records = _random_corpus(rng, 4, (25, 9, 31))
+
+    result = _em(params, records, max_cycles=1)
+
+    summed = [np.zeros(3), np.zeros((3, 3)), np.zeros((3, 3, USER_BASE + 4))]
+    for record in records:
+        for total, part in zip(
+            summed,
+            _e_step(params.init_state_p, params.transition_p, params.output_p, record.codes),
+        ):
+            total += part
+    want = _m_step(*summed)
+    assert np.array_equal(result.params.init_state_p, want[0])
+    assert np.array_equal(result.params.transition_p, want[1])
+    assert np.array_equal(result.params.output_p, want[2])
+
+
+def test_a_degenerate_state_keeps_its_row_and_tracks_the_zero_row_likelihood():
+    # Goal 1's measured claim, pinned: restoring the old row and fibres leaves the
+    # description length bit-identical to letting the row go to zero.
+    init, transition, output = _sink_at_the_end_model()
+    params = HMMParams(init, transition, output, _vocabulary(9))
+    codes = np.array([A, A, B, A, B])
+
+    result = _em(params, [SequenceRecord(codes)], max_cycles=5)
+
+    assert result.degenerate_states == (2,)
+    assert np.array_equal(result.params.transition_p[2], transition[2])
+    assert np.array_equal(result.params.output_p[2], output[2])
+
+    zero_row = []
+    arrays = (init, transition, output)
+    for _ in range(6):
+        alpha, beta, scale = _forward_backward(*arrays, codes)
+        zero_row.append(_description_length(scale))
+        arrays = _m_step(*_expected_counts(alpha, beta, *arrays[1:], codes))[:3]
+    assert list(result.description_lengths) == zero_row
+
+
+def test_an_impossible_record_raises_before_training():
+    init, transition, output = _sink_at_the_end_model()
+    params = HMMParams(init, transition, output, _vocabulary(9))
+    records = [SequenceRecord(np.array([A, B])), SequenceRecord(np.array([C, C]))]
+    with pytest.raises(ImpossibleSequenceError, match="record 1"):
+        _em(params, records)
+
+
+@pytest.mark.parametrize(
+    "records, kwargs, message",
+    [
+        ([np.array([USER_BASE, 99])], {}, "outside the model's symbol axis"),
+        ([np.array([], dtype=np.int64)], {}, "no symbols"),
+        ([], {}, "no symbols"),
+        ([np.array([USER_BASE])], {"change_bits": 0.0}, "must be positive"),
+        ([np.array([USER_BASE])], {"batch_cycles": 0}, "at least 1"),
+        ([np.array([USER_BASE])], {"max_cycles": -1}, "non-negative"),
+    ],
+    ids=["code-out-of-range", "only-empty", "no-records", "zero-threshold", "zero-batch", "negative-budget"],
+)
+def test_the_loop_rejects_what_it_cannot_train_on(records, kwargs, message):
+    rng = np.random.default_rng(SEED)
+    params = _random_params(rng, 2, 3)
+    with pytest.raises(ValueError, match=message):
+        _em(params, [SequenceRecord(codes) for codes in records], **kwargs)
