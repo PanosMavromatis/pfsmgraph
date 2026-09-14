@@ -1,6 +1,6 @@
 # feat/hmm-em-loop
 
-**Status**: active
+**Status**: merged — PR #31 — 2026-09-14
 **Created**: 2026-09-14
 **Subgoal**: Implement the M-step and the EM loop — `docs/plan/TODO.md`, revision 03-hmm-v0.2.0
 
