@@ -117,6 +117,15 @@ imported or its device found — and lets code that already guards an optional i
 it. It is a distinct type for the same reason `ImpossibleSequenceError` is: the case is an
 ordinary outcome for a program that probes backends, not a malformed call.
 
+*(Amended 2026-09-14 on `feat/hmm-batched-training`: `baum_welch` also takes a keyword-only
+`device`, a torch device name or `None` for the CPU, under the same rule. Nothing
+environmental chooses a device, and nothing falls back from one. A backend other than
+`"torch"` refuses any device but `"cpu"` with `ValueError`, since that is a mistake in the
+call on every machine; `"torch"` parses the name, raising `ValueError` when it cannot, and
+probes it by allocating an empty float64 tensor, raising `BackendUnavailableError` with
+torch's message when that fails. A non-string is a `TypeError`. The device is validated with
+the backend, before any work.)*
+
 **Resolution is lazy.** `import pfsmgraph.hmm` imports no backend module. A kernel module
 is imported on the first call that names it, so an install without numba never touches
 numba, and a program that only decodes on `"python"` never pays for a CUDA probe. The one
@@ -177,7 +186,11 @@ reached is absent, as it is from the test matrix.
   its own name when it becomes public, whatever kernels it runs, and an unknown name raises
   `ValueError` listing the known ones. *(Amended 2026-09-14: `baum_welch`, whose rows are
   per-record E-steps rather than forward-backward kernels, since the torch E-step builds no β
-  and so cannot share `_forward_backward`'s signature.)*
+  and so cannot share `_forward_backward`'s signature. Amended again the same day on
+  `feat/hmm-batched-training`: the rows are batched E-steps, `_e_step_batch`, over
+  `pad_collate`'s padded records, and each returns counts **per record**. Summing inside the
+  kernel would regroup a float sum by batch and move the last bits, so the loop adds them in
+  record order and a result does not depend on `batch_size`.)*
 - **It probes, once per process.** Checking `cuda` imports numba-cuda and asks for a device,
   which is the cost the lazy rule in §2 avoids on ordinary calls. The result is cached, so a
   later `backend=` call that names an unavailable backend raises from the cache without
@@ -267,9 +280,16 @@ explicitly should be able to see the choices, with reasons, without writing a
 
 ## Open
 
-- **Batching and device placement.** Phase 4's speed case is a batch, and neither a batch
-  call nor a device index exists yet. Scheduled in `docs/plan/TODO.md`, revision
-  03-hmm-v0.2.0's "Batch the trainer over sequences" subgoal, which decides what a batch call
-  takes beyond `backend` and whether `viterbi` gains a batched form there too; the phases 2-4
-  subgoal for the forward recurrence consumes the answer. This record fixes the keyword, not
-  what a batch adds to it.
+- **A batched `viterbi`.** Phase 4's speed case is a batch, and the decode still takes one
+  record. Deferred on `feat/hmm-batched-training` to revision 03-hmm-v0.2.0's "Batch the
+  decode across all four ADR 0016 phases" subgoal in `docs/plan/TODO.md`. Min-sum performs
+  only `+` and `<`, so a batched decode can stay bit-exact across phases.
+
+## Resolved
+
+- **Batching and device placement for training.** Settled 2026-09-14 on
+  `feat/hmm-batched-training`, the "Batch the trainer over sequences" subgoal this section
+  used to name. A batch call takes `batch_size` beyond `backend`, a memory bound that changes
+  no result, and `device`, which only `"torch"` accepts (§2's amendment). The `baum_welch`
+  rows became batched kernels returning per-record counts (§4's amendment). Whether
+  `viterbi` batches too was deferred, as Open says.

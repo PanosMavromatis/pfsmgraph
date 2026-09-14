@@ -35,4 +35,5 @@
   > **Q:** Does `viterbi` get a batched form on this branch?
   > **A:** No. A new revision-03 subgoal in the master plan, "Batch the decode across all four ADR 0016 phases", takes it, and this branch stays trainer-only.
   > **Deferred:** to that master-plan subgoal, registered beside this branch's own.
-- [ ] Document the batched call and amend ADRs where the decisions land
+- [x] Document the batched call and amend ADRs where the decisions land
+  > **Done:** `docs/api/hmm/baum_welch.md` gains "It batches, and the result does not depend on how", with an executed `batch_size=1` example that is bit-identical, and executed refusals of `batch_size=0`, `device="cuda"` on `python` and `device=0`. Torch's own allocation failure is described in prose, since its text differs by machine and build. ADR 0021 gains a §2 amendment for `device=` and a §4 amendment for batched rows returning per-record counts; its Open item moves to a new Resolved section for training, leaving "A batched `viterbi`" open against the new decode subgoal. ADR 0020's float64 tolerance entry is extended with the batched and L4 measurements.
