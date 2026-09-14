@@ -52,6 +52,17 @@
 /translation/*
 !/translation/*.py
 
+# Measurement scripts behind a decision record, tracked 2026-09-14 so the evidence
+# in ADR 0020 (forward-backward in the scaled probability domain) can be re-run
+# rather than only read. Source only, by the same `/dir/*` then `!/dir/*.py`
+# pattern as `translation/` and for the same reason. They are ours, not imported,
+# and they import nothing from `packages/`; each opens with how to run it. They sit
+# under `.scratch/` rather than `tests/` because they measure alternatives the
+# record rejected, which no test of the shipped code should carry.
+!/measurements/
+/measurements/*
+!/measurements/*.py
+
 # --- Code: source only, and only the live source -----------------------------
 # `*.lsh` and nothing else. This is what keeps out, without naming them:
 #   C/**/*.o          compiled objects for two dead architectures,

@@ -13,6 +13,9 @@ invariants = [
   "docs/design/adr/0015-arc-emission-mealy-formulation.md",
   "docs/design/adr/0016-numba-cpu-parallel-phase.md",
   "docs/design/adr/0017-frozen-parameter-object-for-hmm.md",
+  # Forward-backward's numeric contract: scaled domain, fixed summation order, no
+  # fused multiply-add. Irrelevant to Viterbi's phases, and cheap to read there.
+  "docs/design/adr/0020-scaled-probability-domain-forward-backward.md",
 ]
 encoder = [
   "docs/api/dataseq/encoder.md",
@@ -66,3 +69,16 @@ oracles = [
   ".scratch/hmm-lush/Training/set02a/set02a_200/m001_0005_005.vpath.xls",
   ".scratch/hmm-lush/Training/set02a/set02a_200/m008_0001_008.vpath.xls",
 ]
+
+# Registered 2026-09-14 with phase 1 alone, and deliberately before any
+# FORMALIZATION.md: every later backend, the M-step and the torch comparison are
+# checked against this reference, so it is gated from its first commit. The
+# formalization arrives with revision 03's phases 2-4 subgoal. Its numeric
+# contract, including the evaluation order a sum reduction makes load-bearing,
+# is already stated in ADR 0020, which a phase skill must read.
+#
+# No `oracles` key yet. The tracked models' `_total_dl` values are candidates,
+# but they were scored with quantized parameters, so they are not a direct check
+# of this kernel (docs/plan: feat-hmm-forward-backward, goal 2).
+[algorithms.forward_backward]
+package = "hmm"
