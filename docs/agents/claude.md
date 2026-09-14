@@ -89,9 +89,12 @@ Two properties of the manifest matter when editing it:
 **The plugin ships a blocking `PreToolUse` hook on `Bash`, and the manifest is what arms
 it.** Before a `git commit` whose *staged set* touches a kernel path, it runs `[commands]
 build` and `test` and blocks on failure. Scoping is what makes blocking tolerable: with
-this manifest it arms on exactly four paths — `_viterbi.py`, `_viterbi_cython.pyx` since
-2026-09-09, `_viterbi_cpu_parallel.py` since 2026-09-10 and `_viterbi_cuda.py` since
-2026-09-13 — so a commit touching `docs/`, a
+this manifest it arms on exactly eight paths, four per registered algorithm — `_viterbi.py`,
+`_viterbi_cython.pyx`, `_viterbi_cpu_parallel.py` and `_viterbi_cuda.py`, all four written
+between 2026-09-04 and 2026-09-13, and the same four templates for `forward_backward`,
+registered 2026-09-14 with only `_forward_backward.py` on disk. The paths come from the
+`[phases]` templates, not from the filesystem, so a phase is gated from the commit that
+creates it; measured by calling the hook's own `kernel_paths` on the manifest. So a commit touching `docs/`, a
 helper module such as `_numeric.py`, a *test*, or even a phase-0 `FORMALIZATION.md` passes
 silently. Phase 0 is excluded by design: a Markdown
 specification compiles to nothing and is imported by nothing, so staging it cannot break a

@@ -11,7 +11,14 @@ Shared project knowledge for any coding agent working in this repository.
 
 **What `dataseq` now contains.** Six modules under `packages/pfsmgraph-dataseq/src/pfsmgraph/dataseq/` (the container landed 2026-08-31, the encoder API 2026-09-01) and 74 tests — the first tests in this repository, and 74 of the suite's 323 today; 203 are `hmm`'s and the remaining 46 are the repo-root backend-matrix, API-docs, release-runbook and meson-source tests. `_reserved.py` hard-codes the ADR 0011 block as module constants, with no class or parameter that could relocate it; `_vocabulary.py` holds the `Vocabulary` protocol and `SymbolTable`, a frozen first-appearance-ordered implementation that encodes strictly and decodes *totally*, reserved codes included; `_record.py` and `_dataset.py` are the ragged container, whose records carry true lengths and never padding; `_collate.py` is `pad_collate`, where padding is introduced and always returned with its mask. The container imports neither torch nor pandas — verified in a subprocess — and its one runtime dependency is `numpy`.
 
-**What `hmm` now contains.** Five Python modules, one Cython kernel, and 203 tests -- the
+**What `hmm` now contains.** Six Python modules, one Cython kernel, and 203 tests. The sixth
+is `_forward_backward.py`, the project's second dynamic-programming kernel, written 2026-09-14 on
+`feat/hmm-forward-backward`: the private `_forward_backward(init_state_p, transition_p,
+output_p, codes) -> (alpha, beta, scale)` in the scaled probability domain, under
+[ADR 0020](../design/adr/0020-scaled-probability-domain-forward-backward.md), untested so
+far and not exported. Its reductions are `np.add.accumulate(...)[-1]`, which is
+bit-identical to an explicit ascending loop because it returns every partial sum; do not
+"simplify" them to `np.sum` or `@`, whose order is theirs to choose. Of the others, the
 fourth module is `_viterbi_cpu_parallel.py`, the ADR 0002 phase-3 backend, landed
 2026-09-10, and the fifth is `_viterbi_cuda.py`, the phase-4 CUDA backend, written
 2026-09-13 on `feat/hmm-viterbi-cuda` and registered as the fourth backend row. It keeps

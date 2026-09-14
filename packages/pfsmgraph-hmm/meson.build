@@ -36,6 +36,10 @@ fs = import('fs')
 py.install_sources(
   [
     'src/pfsmgraph/hmm/__init__.py',
+    # Forward-backward for revision 03, ADR 0002 phase 1, in the scaled
+    # probability domain (ADR 0020). No apostrophes in these comments: the
+    # source test reads entries as single-quoted strings.
+    'src/pfsmgraph/hmm/_forward_backward.py',
     'src/pfsmgraph/hmm/_numeric.py',
     'src/pfsmgraph/hmm/_params.py',
     'src/pfsmgraph/hmm/_viterbi.py',
