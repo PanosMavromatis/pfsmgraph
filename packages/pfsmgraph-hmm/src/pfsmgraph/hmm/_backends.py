@@ -102,6 +102,12 @@ _TABLE: Final[dict[str, tuple[_Row, ...]]] = {
         ),
         _Row("cuda", "pfsmgraph.hmm._viterbi_cuda", "_viterbi", needs="CUDA device", extra="gpu"),
     ),
+    # Its own key, not a second function on the viterbi rows: a phase can have a
+    # per-record kernel before it has a batched one, and backends() reports per
+    # public call. Each lifecycle phase adds its row as it batches.
+    "viterbi_batch": (
+        _Row("python", "pfsmgraph.hmm._viterbi", "_viterbi_batch"),
+    ),
     # Phase 1 only. Private, so it is here for the session header and absent
     # from _PUBLIC; baum_welch reaches it through its python row's E-step.
     "forward_backward": (
@@ -117,7 +123,7 @@ _TABLE: Final[dict[str, tuple[_Row, ...]]] = {
 }
 
 #: The names :func:`backends` accepts: public calls, never private kernels.
-_PUBLIC: Final = frozenset({"viterbi", "baum_welch"})
+_PUBLIC: Final = frozenset({"viterbi", "viterbi_batch", "baum_welch"})
 
 _lock = threading.Lock()
 _cache: dict[tuple[str, str], tuple[Callable | None, str | None]] = {}

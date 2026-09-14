@@ -8,10 +8,11 @@ never ``B[state, symbol]``. A path over ``N`` symbols therefore visits ``N + 1``
 states. Every textbook, and every other library, is the state-emission
 formulation. See ``docs/design/adr/0015-arc-emission-mealy-formulation.md``.
 
-The package exposes the parameter value, the Viterbi decode over it, and
-:func:`baum_welch`, which trains a model's parameters on a fixed topology.
+The package exposes the parameter value, the Viterbi decode over it -- one record
+at a time with :func:`viterbi`, or padded together with :func:`viterbi_batch` --
+and :func:`baum_welch`, which trains a model's parameters on a fixed topology.
 
-Both take a keyword-only ``backend=``, defaulting to the pure-Python reference,
+All three take a keyword-only ``backend=``, defaulting to the pure-Python reference,
 and :func:`backends` reports which backends can run here
 (``docs/design/adr/0021-runtime-backend-selection.md``).
 """
@@ -19,7 +20,7 @@ and :func:`backends` reports which backends can run here
 from ._backends import BackendStatus, BackendUnavailableError, backends
 from ._baum_welch import BaumWelchResult, baum_welch
 from ._params import HMMParams
-from ._viterbi import ImpossibleSequenceError, ViterbiPath, viterbi
+from ._viterbi import ImpossibleSequenceError, ViterbiPath, viterbi, viterbi_batch
 
 __all__ = [
     "BackendStatus",
@@ -31,4 +32,5 @@ __all__ = [
     "backends",
     "baum_welch",
     "viterbi",
+    "viterbi_batch",
 ]
