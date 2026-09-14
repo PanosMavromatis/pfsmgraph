@@ -22,9 +22,15 @@
     > **Note:** a dedicated start state closes the transition gap exactly. With S+1 states, `init = e_S`, row S set to `startprob_`, and column S zero, state S is occupied only at s_0. Its re-estimated row is γ₁, which is hmmlearn's `startprob_`, and rows `:S` count only the crossings hmmlearn counts. Emission is tied by summing counts over the source. Measured over 5 cycles on three records (30, 1, 17): start 1.1e-16, transitions 2.8e-16, emission 1.4e-16, and the log-likelihood history 2.2e-16 relative against `monitor_.history`.
   - [x] Settle the symbol axis: `hmmlearn` codes from 0 against our user symbols from `USER_BASE`
     > **Note:** no decision needed: hmmlearn code `k` is our `USER_BASE + k`, with the reserved fibres zero as `HMMParams` requires. A sequence goes to `fit` as `(codes - USER_BASE).reshape(-1, 1)`.
-- [ ] Check the forward-backward against `hmmlearn`
-  - [ ] Log-likelihood against `_description_length` (bits) over random reduced models
-  - [ ] State posteriors against `_state_posteriors`
+- [x] Check the forward-backward against `hmmlearn`
+  > **Q:** Where should the oracle tests live, and what happens when `hmmlearn` is not importable?
+  > **A:** A new `packages/pfsmgraph-hmm/tests/test_hmmlearn_oracle.py`, shared with goal 4, with a plain import. `hmmlearn` is in the dev group, so a missing import is a broken environment and should fail collection rather than skip.
+  > **Q:** Which `hmmlearn` implementation should the comparison run against?
+  > **A:** `scaling` only, at `1e-12`. It is the same arithmetic as our scaled-probability kernel (ADR 0020); worst measured 3.2e-15. `log` reached 9.5e-13 on posteriors at S=32 and would need a tolerance chosen for hmmlearn's rounding rather than ours.
+  - [x] Log-likelihood against `_description_length` (bits) over random reduced models
+    > **Note:** seven cases in `test_hmmlearn_oracle.py`, from S=1 to S=32 at N=3000 with up to 70% dead arcs, one of them four records through `lengths`. Worst measured 3.2e-15 relative against `ORACLE_TOL = 1e-12`. Of six kernel mutants, the likelihood test kills the forward-side ones (transposed forward table, `init_state_p` ignored) and none of the backward-side ones, since the likelihood is the forward pass alone.
+  - [x] State posteriors against `_state_posteriors`
+    > **Note:** hmmlearn's posteriors are our `gamma[1:]`; `gamma[0]` has no counterpart. Worst measured 1.4e-15. This test kills the other four mutants (transposed backward table, backward symbol off by one, `beta` divided by the next scale factor, wrong posterior rescale). `test_the_comparison_can_fail` pins that an unmapped `startprob_` or a one-position shift misses by more than 1e6 × `ORACLE_TOL`. Suite 524 passed.
 - [ ] Check the EM loop against `hmmlearn`'s `fit`
   - [ ] Augmented start state and tied emission (test-only harness over `_expected_counts` and `_m_step`), `k` cycles against `fit(n_iter=k)`: start row, transitions, emission and the log-likelihood history compared elementwise
   - [ ] Multi-record corpora through `hmmlearn`'s `lengths`
