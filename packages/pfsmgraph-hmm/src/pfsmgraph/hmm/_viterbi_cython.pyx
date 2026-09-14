@@ -12,21 +12,34 @@ falls, and the decode minimizes. A port that reaches for ``max`` inverts every
 comparison; that is the single most likely defect in this file and the reason the
 formalization states the objective as contract rather than description.
 
-**Emission is on the arc** [ADR 0015]: the factor is ``out_p[i, j, code]``, read
-inside the ``i`` loop because it depends on *both* endpoints. Phase 1 forms a
-whole ``(S, S)`` array of arc costs per position and says in as many words that
-this is not a hoist and must not be refactored into one. Here the same quantity
-is computed scalar-wise at the point of use -- which is the fusion phase 1's
-comment anticipates ("Phase 2 fuses this into the inner loop"), not a hoist: the
-value still depends on ``i`` and ``j`` and is never lifted out of either loop.
+**Every logarithm is taken on the host, by** :func:`bits` **-- the function phase 1
+uses -- and the compiled kernel performs only ``+`` and ``<``.** That is the
+contract, not an optimisation. The wrapper computes ``seed = bits(init_p)`` and
+the arc costs ``arc_bits = bits(trans_p[:, :, None] * out_p[:, :, present])`` in
+phase 1's operation order (one float64 multiply, then one numpy ``-log2``), and
+``_decode`` reads them. Addition and strict comparison are exact IEEE-754
+operations, so the candidate values are phase 1's bit patterns by construction.
+The tie-break is identical too: ``cand < best`` is strict, so an equal candidate
+never displaces an earlier ``i``, which is exactly what ``np.argmin`` does when it
+returns the first minimal index. The formalization makes "ties to the SMALLEST i"
+contract, because two correct backends would otherwise legitimately disagree.
 
-**Bit-exactness with phase 1 is intended, not approximate.** The same two
-float64 operations happen in the same order -- multiply, then ``-log2``, then add
--- so the candidate values are identical bit patterns, and the tie-break is
-identical too: ``cand < best`` is strict, so an equal candidate never displaces an
-earlier ``i``, which is exactly what ``np.argmin`` does when it returns the first
-minimal index. The formalization makes "ties to the SMALLEST i" contract, because
-two correct backends would otherwise legitimately disagree.
+*Corrected 2026-09-14.* This file used to fuse ``-log2`` into the inner loop
+through libc's scalar ``log2``, and claimed the result was bit-identical to phase
+1 because the operation order matched. It was not: numpy's vectorised ``log2``
+and libm's round one ulp apart in roughly 0.07-0.19% of probability-shaped inputs
+on an AVX-512 host, concentrated on high-probability arcs, so ``total_bits``
+could differ by an ulp and a near-tie could resolve differently. Matching the
+operation order is not enough when the two sides call different functions. The
+measurement is in the branch plan for ``fix/hmm-viterbi-log2``.
+
+**Emission is on the arc** [ADR 0015]: the cost is ``arc_bits[i, j, k]``, read
+inside the ``i`` loop because it depends on *both* endpoints. The table spans the
+symbols present in the record, ``(S, S, U)`` with ``U = np.unique(codes)``, and
+the record is re-indexed into it as ``sym``. That is not the ``(S, S, A)``
+precompute phase 1 refuses: ``U <= min(N, A)`` bounds it by both the record and
+the vocabulary, and the emission factor is still per arc and still read inside
+both loops. What moved is only where the logarithm runs.
 
 **An all-``+inf`` row decodes to state 0, matching numpy.** ``best`` starts at
 ``INFINITY`` and the comparison is strict, so when every candidate is ``+inf``
@@ -45,18 +58,19 @@ as ``total_bits == inf``; ``viterbi()`` in ``_viterbi.py`` turns it into
 
 cimport cython
 cimport numpy as cnp
-from libc.math cimport INFINITY, log2
+from libc.math cimport INFINITY
 
 import numpy as np
+
+from ._numeric import bits
 
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
 cdef void _decode(
-    const double[::1] init_p,
-    const double[:, ::1] trans_p,
-    const double[:, :, ::1] out_p,
-    const int[::1] codes,
+    const double[::1] seed,
+    const double[:, :, ::1] arc_bits,
+    const cnp.int64_t[::1] sym,
     double[:, ::1] delta,
     cnp.int64_t[:, ::1] psi,
     cnp.int64_t[::1] states,
@@ -75,33 +89,33 @@ cdef void _decode(
     turning them on first would hide an off-by-one as a wrong answer instead of an
     IndexError.
     """
-    cdef Py_ssize_t n = codes.shape[0]
-    cdef Py_ssize_t size = trans_p.shape[0]
-    cdef Py_ssize_t t, i, j, best_i
-    cdef int code
+    cdef Py_ssize_t n = sym.shape[0]
+    cdef Py_ssize_t size = seed.shape[0]
+    cdef Py_ssize_t t, i, j, k, best_i
     cdef double best, cand
 
     # Base case. delta[0, j] = bits(init_p[j]) -- the bit domain, which is
     # deviation 1 of the formalization and the whole of the seeding fix. The
     # original seeds a raw probability into a bit accumulator, inverting the
     # preference among start states; bits(0) is +inf here and absorbs, so an
-    # impossible start stays impossible instead of becoming the best value.
+    # impossible start stays impossible instead of becoming the best value. The
+    # caller took the logarithm; this only copies it.
     for j in range(size):
-        delta[0, j] = -log2(init_p[j])
+        delta[0, j] = seed[j]
 
     # psi's row 0 is never read: the backtrace stops at psi[1]. It is zeroed by
     # the caller rather than left undefined, matching phase 1.
 
     for t in range(1, n + 1):
-        code = codes[t - 1]
+        k = sym[t - 1]
         for j in range(size):
             best = INFINITY
             best_i = 0
             for i in range(size):
-                # The arc cost, fused: multiply the two probabilities, then take
-                # one logarithm. Phase 1 does exactly this, vectorized -- so the
-                # rounding is identical rather than merely equivalent.
-                cand = delta[t - 1, i] + -log2(trans_p[i, j] * out_p[i, j, code])
+                # Only + and < here: the arc cost was taken on the host, by the
+                # same bits() phase 1 uses, so the candidate is phase 1's bit
+                # pattern rather than a scalar-libm neighbour of it.
+                cand = delta[t - 1, i] + arc_bits[i, j, k]
                 if cand < best:
                     best = cand
                     best_i = i
@@ -131,29 +145,35 @@ def _viterbi(init_state_p, transition_p, output_p, codes):
     path over ``N`` symbols visits ``N + 1`` states, since a symbol is emitted
     while *crossing* an arc.
 
-    This wrapper does the three things the compiled kernel cannot: it coerces the
-    inputs to the layout a typed memoryview requires, it allocates the working
-    buffers, and it converts the result back to Python. It does **not** validate,
-    and it does not raise -- that is ``viterbi()``'s job, once, for all backends.
+    This wrapper does the four things the compiled kernel cannot: it takes every
+    logarithm, with :func:`bits`; it coerces the results to the layout a typed
+    memoryview requires; it allocates the working buffers; and it converts the
+    result back to Python. It does **not** validate, and it does not raise --
+    that is ``viterbi()``'s job, once, for all backends.
     """
-    # ascontiguousarray is a no-op on what HMMParams actually holds -- float64
-    # and C-contiguous already -- so the common path copies nothing. It is here
-    # for the caller who hands in a transposed view, where a `::1` memoryview
-    # would otherwise raise instead of working.
-    #
-    # These stay READ-ONLY: ADR 0017 freezes the parameter arrays, so the
-    # memoryviews above must be `const`. Dropping `const` compiles and then fails
-    # at every call with "buffer source array is read-only" -- a runtime error
-    # from a compile-time-looking mistake.
     init_c = np.ascontiguousarray(init_state_p, dtype=np.float64)
     trans_c = np.ascontiguousarray(transition_p, dtype=np.float64)
     out_c = np.ascontiguousarray(output_p, dtype=np.float64)
-    # int32 because that is dataseq's CODE_DTYPE. Coercing here rather than in
-    # the caller keeps the boundary in one place.
-    codes_c = np.ascontiguousarray(codes, dtype=np.int32)
+    codes_c = np.ascontiguousarray(codes, dtype=np.int64)
 
-    cdef Py_ssize_t n = codes_c.shape[0]
-    cdef Py_ssize_t size = trans_c.shape[0]
+    # The logarithms, on the host, in phase 1's operation order: one float64
+    # multiply, then one numpy -log2. This is the contract every backend shares.
+    # np.unique on an empty record yields an empty `present`, so the table is
+    # (S, S, 0) and the kernel's time loop simply does not run.
+    #
+    # The memoryviews above are `const` because these arrays need not be
+    # writable -- ADR 0017 freezes the parameters, and a table derived from them
+    # is read-only in spirit. Dropping `const` compiles and then fails at every
+    # call with "buffer source array is read-only" for a frozen input.
+    seed = np.ascontiguousarray(bits(init_c))
+    present, sym = np.unique(codes_c, return_inverse=True)
+    arc_bits = np.ascontiguousarray(bits(trans_c[:, :, None] * out_c[:, :, present]))
+    # int64, because np.unique's inverse is intp and the memoryview is typed; a
+    # mismatch raises at call time rather than at compile time.
+    sym_c = np.ascontiguousarray(sym, dtype=np.int64)
+
+    cdef Py_ssize_t n = sym_c.shape[0]
+    cdef Py_ssize_t size = seed.shape[0]
 
     # int64 for the state arrays, matching _viterbi.py's STATE_DTYPE. The
     # original used a float matrix for psi and round-tripped state indices
@@ -162,6 +182,6 @@ def _viterbi(init_state_p, transition_p, output_p, codes):
     psi_np = np.zeros((n + 1, size), dtype=np.int64)
     states_np = np.empty(n + 1, dtype=np.int64)
 
-    _decode(init_c, trans_c, out_c, codes_c, delta_np, psi_np, states_np)
+    _decode(seed, arc_bits, sym_c, delta_np, psi_np, states_np)
 
     return states_np, float(delta_np[n, states_np[n]])

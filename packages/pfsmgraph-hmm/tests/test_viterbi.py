@@ -31,6 +31,7 @@ that ADR 0003's own Open section defers to `align`. See that section's comment.
 from __future__ import annotations
 
 import itertools
+import math
 
 import numpy as np
 import pytest
@@ -833,10 +834,12 @@ def test_the_cython_kernel_agrees_with_python_on_generated_models():
     """The property test phase 2 owes: many shapes, not the fixtures' one.
 
     Equality is exact rather than approximate, and that is a claim about the
-    translation rather than a hope. Both kernels do the same two float64
-    operations in the same order -- multiply the two probabilities, take one
-    `-log2`, add -- so the candidate values are identical bit patterns and the
-    minima are too. An `abs=` tolerance here would hide precisely the class of
+    translation rather than a hope. Both kernels take their logarithms through
+    the same `bits` on the host, in the same operation order -- multiply the two
+    probabilities, then one numpy `-log2` -- and then only add and compare, so
+    the candidate values are identical bit patterns and the minima are too.
+    Seeded models almost never reach the numpy/libm rounding split this used to
+    hide (1 in 200 did); the constructed tie at the foot of this file does. An `abs=` tolerance here would hide precisely the class of
     defect this test exists to find: a reassociated expression that is close
     everywhere and wrong at a tie.
 
@@ -1190,14 +1193,14 @@ def test_the_cpu_parallel_kernel_inherits_the_seeding_divergence_exactly():
 # numpy -- the same function phase 1 uses -- so against phase 1 the assertions
 # are exact, and they are what hold the kernel to that.
 #
-# **Against phases 2 and 3 `total_bits` is bounded, not equal, and that is a
-# platform fact rather than an allowance for this kernel.** They call libm's
-# scalar `log2`, which differs from numpy's vectorised one by one ulp in about
-# 0.1% of inputs on an AVX-512 host (3,937 of 4,000,000, measured 2026-09-13 on
-# numpy 2.4.6). Their own exact assertions above pass because their seeds avoid
-# it; this section's seed does not. `states` stay exact across all four. The fix
-# -- one logarithm for every backend -- is filed in DEFERRED.md rather than
-# made here, because it reopens phases 2 and 3 and their provenance chain.
+# **Against phases 2 and 3 the assertions are exact too, as of 2026-09-14.**
+# Until then they were bounded by one ulp per summed logarithm, because phases 2
+# and 3 called libm's scalar `log2`, which rounds one ulp away from numpy's in
+# roughly 0.07-0.19% of probability-shaped inputs on an AVX-512 host. This
+# section's seed reached that split in 1 model of 200. `fix/hmm-viterbi-log2`
+# moved their logarithms onto the host through `bits`, so all four backends now
+# share one logarithm and the bound is gone. The section at the foot of this
+# file constructs the case that split could break.
 #
 # The two deliberately broken variants this section was checked against are
 # recorded in the branch plan for `feat/hmm-viterbi-cuda`.
@@ -1233,40 +1236,25 @@ def _generated_models(rng, count, max_size):
         yield params, codes
 
 
-def _within_log2_rounding(a, b, n):
-    """Equal up to one ulp per summed logarithm: the numpy/libm `log2` split.
-
-    `total_bits` sums `n + 1` logarithms, each of which may round one ulp apart
-    between numpy and libm, so the bound is `(n + 2)` relative epsilons -- one
-    spare for the final addition. Both infinite counts as equal: impossibility
-    is not a rounding question.
-    """
-    if np.isinf(a) or np.isinf(b):
-        return a == b
-    return abs(a - b) <= (n + 2) * np.finfo(np.float64).eps * max(abs(a), abs(b))
-
-
 @requires_cuda
 def test_the_cuda_kernel_agrees_with_all_three_predecessors_on_generated_models():
-    """Exact with phase 1; exact states and log2-rounding-bounded totals with 2-3.
+    """Exact states and exact totals, against all three predecessors.
 
     This is the test a device-side logarithm fails. `total_bits` is a sum of
     `N + 1` logarithms, so one-ulp differences in a quarter of them leave it
     almost never bit-equal to phase 1 -- which is precisely the signal wanted,
-    and why that assertion is `==` rather than `approx`. The bound against
-    phases 2 and 3 is the section comment's numpy/libm split, and is tight
-    enough that it would not admit a device-side logarithm against phase 1.
+    and why every assertion is `==` rather than `approx`. Against phases 2 and 3
+    the totals were bounded by one ulp per logarithm until all four backends
+    shared `bits`; model 82 of this seed is the one that needed the bound.
     """
     rng = np.random.default_rng(20260913)
     for params, codes in _generated_models(rng, 200, 9):
         (py_s, py_t), (cy_s, cy_t), (nb_s, nb_t) = _all_three(params, codes)
         cu_s, cu_t = _cuda(params, codes)
         assert np.array_equal(py_s, cu_s)
-        assert py_t == cu_t
         assert np.array_equal(cy_s, cu_s)
         assert np.array_equal(nb_s, cu_s)
-        assert _within_log2_rounding(cy_t, cu_t, codes.size)
-        assert _within_log2_rounding(nb_t, cu_t, codes.size)
+        assert py_t == cy_t == nb_t == cu_t
 
 
 @requires_cuda
@@ -1331,8 +1319,9 @@ def test_the_cuda_kernel_breaks_ties_to_the_smallest_index():
     This is the test a `<=` in the device reduction fails. It is **not** the
     test a device-side logarithm fails: every candidate is computed from
     identical inputs, and identical inputs round identically on one device, so
-    the ties survive and state 0 still wins. The generated-models test is what
-    guards the logarithm; this one guards the comparison.
+    the ties survive and state 0 still wins. The logarithm is guarded by the
+    generated-models test above and by the tie in bits at the foot of this
+    file; this one guards the comparison.
     """
     size, n_symbols = 5, 3
     params = build(
@@ -1391,3 +1380,144 @@ def test_the_cuda_kernel_inherits_the_seeding_divergence_exactly():
     states, _ = _cuda(oracle.params, oracle.record.codes)
     disagreements = np.flatnonzero(states != oracle.states)
     assert disagreements.tolist() == [0]
+
+
+# --- one logarithm for every backend -----------------------------------------
+#
+# Below the line because every test here calls more than one backend's kernel.
+#
+# **The contract is numpy's `log2`, taken on the host through `bits`, for every
+# arc cost and the seed; a kernel performs only `+` and `<`.** Until 2026-09-14
+# phases 2 and 3 called libm's scalar `log2` instead, one ulp away from numpy's
+# in roughly 0.07-0.19% of probability-shaped inputs on an AVX-512 host. Every
+# test above passed against those kernels, because a one-ulp difference in an
+# arc cost is usually absorbed when it is added to `delta`: 1 seeded model in
+# 200 reached it, and only in `total_bits`.
+#
+# **What it can break is a path, not a score, and only at a tie.** `1 + bits(p)`
+# rounds to steps of 2.2e-16 while `bits(p)` near zero moves in steps of about
+# 1.4e-17, so two adjacent probabilities can produce *exactly* equal candidates
+# in the sum. The first-wins rule then picks state 0. A kernel whose logarithm
+# rounds one of them up by an ulp sees no tie and picks state 1, with the same
+# `total_bits` -- which is why no bound on the total could have caught it.
+#
+# The pair is found at test time rather than written down, because it is a fact
+# about this host's numpy. Finding an exact tie in bits is asserted: the
+# addition makes one exist under any IEEE-754 double. Whether libm breaks it is
+# not guaranteed, so the test that shows the fixture discriminates skips, and
+# says so, on a host where the two logarithms agree on every tied candidate.
+#
+# Checked 2026-09-14 against the pre-fix phase-3 kernel from `10c442e`, which
+# decoded the tie model to `[1, 0]` where every current backend decodes `[0, 0]`.
+
+
+def _adjacent_tie_in_bits(rng, draws=20_000):
+    """Two adjacent probabilities whose candidates `1 + bits(p)` tie exactly.
+
+    Returns `(p_first, p_second, libm_breaks)`. When some drawn tie is one that
+    libm's `log2` does not reproduce, that pair is returned with `libm_breaks`
+    true, ordered so that libm's candidate for `p_first` is the larger -- which
+    is the order in which a libm-logarithm kernel abandons state 0. Otherwise
+    the first tie found is returned with `libm_breaks` false. `None` means no
+    tie at all, which the addition's rounding should make impossible.
+    """
+    first = 0.9 + 0.1 * rng.random(draws)
+    second = np.nextafter(first, 1.0)
+    tied = (1.0 + bits(first)) == (1.0 + bits(second))
+    fallback = None
+    for a, b in zip(first[tied].tolist(), second[tied].tolist()):
+        libm_a, libm_b = 1.0 + -math.log2(a), 1.0 + -math.log2(b)
+        if libm_a != libm_b:
+            return (a, b, True) if libm_a > libm_b else (b, a, True)
+        if fallback is None:
+            fallback = (a, b, False)
+    return fallback
+
+
+def _tie_model(p_first, p_second):
+    """Two states, one symbol, one step; the candidates for state 0 are the tie.
+
+    A uniform start makes both seeds exactly `bits(0.5) = 1.0`, under either
+    logarithm. Arriving in state 0 then costs `1 + bits(p_first)` from state 0
+    and `1 + bits(p_second)` from state 1. Arriving in state 1 costs more than
+    4 bits either way, so the decode always ends in state 0, and the tie decides
+    only where it starts.
+    """
+    params = build(
+        [0.5, 0.5],
+        [[p_first, 1.0 - p_first], [p_second, 1.0 - p_second]],
+        np.ones((2, 2, 1)),
+        symbols=("a",),
+    )
+    return params, np.array([code(0)], dtype=np.int32)
+
+
+def _libm_decode(params, codes):
+    """The pre-2026-09-14 arithmetic of phases 2 and 3, in plain Python.
+
+    A decode whose every logarithm is libm's scalar `log2` (`math.log2`, the
+    libc function the old Cython kernel called and numba lowered to), taken
+    inside the recurrence. It exists only to show that the tie model tells the
+    two logarithms apart, and is not a backend.
+    """
+    init, trans, out = params.init_state_p, params.transition_p, params.output_p
+    size = trans.shape[0]
+    delta = [-math.log2(float(p)) if p > 0 else math.inf for p in init]
+    psi = []
+    for symbol in codes.tolist():
+        row_delta, row_psi = [], []
+        for j in range(size):
+            best, best_i = math.inf, 0
+            for i in range(size):
+                p = float(trans[i, j] * out[i, j, symbol])
+                cand = delta[i] + (-math.log2(p) if p > 0 else math.inf)
+                if cand < best:
+                    best, best_i = cand, i
+            row_delta.append(best)
+            row_psi.append(best_i)
+        delta, psi = row_delta, psi + [row_psi]
+    states = [min(range(size), key=lambda j: (delta[j], j))]
+    for row in reversed(psi):
+        states.append(row[states[-1]])
+    return states[::-1]
+
+
+def test_the_tie_model_really_is_an_exact_tie_in_bits():
+    p_first, p_second, _ = _adjacent_tie_in_bits(np.random.default_rng(20260914))
+    assert p_first != p_second
+    assert 1.0 + bits(p_first) == 1.0 + bits(p_second)
+
+
+def test_every_cpu_backend_breaks_an_exact_tie_in_bits_to_state_zero():
+    """The case a backend with its own logarithm gets wrong, on phases 1-3."""
+    p_first, p_second, _ = _adjacent_tie_in_bits(np.random.default_rng(20260914))
+    params, codes = _tie_model(p_first, p_second)
+    for states, total in _all_three(params, codes):
+        assert states.tolist() == [0, 0]
+        assert total == 1.0 + bits(p_first)
+
+
+@requires_cuda
+def test_the_cuda_kernel_breaks_an_exact_tie_in_bits_to_state_zero():
+    p_first, p_second, _ = _adjacent_tie_in_bits(np.random.default_rng(20260914))
+    params, codes = _tie_model(p_first, p_second)
+    states, total = _cuda(params, codes)
+    assert states.tolist() == [0, 0]
+    assert total == 1.0 + bits(p_first)
+
+
+def test_the_tie_would_catch_a_backend_taking_its_logarithms_from_libm():
+    """Without this, a green tie test could mean only that the model is easy."""
+    p_first, p_second, libm_breaks = _adjacent_tie_in_bits(
+        np.random.default_rng(20260914)
+    )
+    if not libm_breaks:
+        pytest.skip(
+            "numpy's and libm's log2 agree on every tied candidate drawn on this "
+            f"host (numpy {np.__version__}), so there is no split for the tie to catch"
+        )
+    params, codes = _tie_model(p_first, p_second)
+    assert _libm_decode(params, codes) == [1, 0]
+    assert _viterbi(params.init_state_p, params.transition_p, params.output_p, codes)[
+        0
+    ].tolist() == [0, 0]
