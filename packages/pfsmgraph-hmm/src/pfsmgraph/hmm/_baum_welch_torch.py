@@ -110,3 +110,20 @@ def _e_step(init_state_p, transition_p, output_p, codes):
     emission_counts[:, :, present] = per_symbol
     transition_counts = np.add.accumulate(per_symbol, axis=2)[:, :, -1]
     return (init_counts, transition_counts, emission_counts), total
+
+
+def _e_step_batch(init_state_p, transition_p, output_p, codes, lengths, device=None):
+    """The shared batched signature, one record at a time.
+
+    Per-record counts stacked on a leading batch axis, as the reference's
+    ``_e_step_batch`` returns them. A stand-in until the pass is vectorised over
+    the batch and placed on ``device``.
+    """
+    codes = np.asarray(codes)
+    lengths = np.asarray(lengths, dtype=np.int64)
+    steps = [
+        _e_step(init_state_p, transition_p, output_p, codes[b, : lengths[b]])
+        for b in range(codes.shape[0])
+    ]
+    counts = tuple(np.stack([step[0][k] for step in steps]) for k in range(3))
+    return counts, np.array([step[1] for step in steps], dtype=np.float64)

@@ -35,7 +35,7 @@ from fractions import Fraction
 import numpy as np
 import pytest
 
-from pfsmgraph.dataseq import USER_BASE, SequenceRecord, SymbolTable
+from pfsmgraph.dataseq import PAD, UNK, USER_BASE, SequenceRecord, SymbolTable, pad_collate
 from pfsmgraph.hmm import HMMParams, ImpossibleSequenceError, baum_welch
 from pfsmgraph.hmm._baum_welch import (
     BATCH_CYCLES,
@@ -48,9 +48,11 @@ from pfsmgraph.hmm._baum_welch import (
 )
 from pfsmgraph.hmm._forward_backward import (
     _description_length,
+    _e_step_batch,
     _expected_counts,
     _forward_backward,
 )
+from pfsmgraph.hmm._forward_backward import _e_step as _record_step
 
 from _lush_fixtures import FIXTURES, load_corpus_record, load_params
 
@@ -495,14 +497,104 @@ def test_an_impossible_record_raises_before_training():
         ([np.array([USER_BASE])], {"change_bits": 0.0}, "must be positive"),
         ([np.array([USER_BASE])], {"batch_cycles": 0}, "at least 1"),
         ([np.array([USER_BASE])], {"max_cycles": -1}, "non-negative"),
+        ([np.array([USER_BASE])], {"batch_size": 0}, "batch_size must be at least 1"),
     ],
-    ids=["code-out-of-range", "only-empty", "no-records", "zero-threshold", "zero-batch", "negative-budget"],
+    ids=[
+        "code-out-of-range",
+        "only-empty",
+        "no-records",
+        "zero-threshold",
+        "zero-batch",
+        "negative-budget",
+        "zero-batch-size",
+    ],
 )
 def test_the_loop_rejects_what_it_cannot_train_on(records, kwargs, message):
     rng = np.random.default_rng(SEED)
     params = _random_params(rng, 2, 3)
     with pytest.raises(ValueError, match=message):
         baum_welch(params, [SequenceRecord(codes) for codes in records], **kwargs)
+
+
+# === batching =====================================================================
+#
+# `batch_size` is a memory knob and must be nothing else. The kernel returns each
+# record's counts bit for bit as that record alone would produce them, and the loop
+# sums them in record order, so training is bit-identical at every batch size. A
+# mask that lets a padded step touch α, β or ξ breaks the first test at once, and
+# only when records of different lengths share a batch, which is why every case
+# below has padding in it and the test asserts that it does.
+
+
+def _ragged_cases():
+    rng = np.random.default_rng(SEED + 100)
+    cases = []
+    for size, n_user, lengths, dead in [
+        (3, 4, (15, 0, 40, 1), 0.0),
+        (5, 3, (200, 1, 1, 1), 0.3),  # almost all padding
+        (1, 5, (7, 30), 0.0),
+        (6, 6, (0, 0, 9), 0.4),
+    ]:
+        init, transition, output = _random_model(rng, size, n_user, dead)
+        full = np.zeros((size, size, USER_BASE + n_user))
+        full[:, :, USER_BASE:] = output
+        records = _random_corpus(rng, n_user, lengths)
+        cases.append((init, transition, full, records))
+    # One record made impossible by UNK, whose fibres are zero in every model.
+    init, transition, full, records = cases[0]
+    impossible = SequenceRecord(np.array([USER_BASE, UNK, USER_BASE]))
+    cases.append((init, transition, full, [records[2], impossible, records[3]]))
+    # PAD's fibre is zero in every valid model, so padding already weighs 0 and ξ
+    # there is 0 without the kernel's mask: dropping the mask is an equivalent
+    # mutant on any HMMParams. Raw arrays with PAD emittable make the mask the only
+    # thing standing between padding and the counts. The per-record step never
+    # reads PAD on real codes, so the comparison is still exact.
+    init, transition, full, records = cases[1]
+    leaky = full.copy()
+    leaky[:, :, PAD] = 0.5
+    leaky /= leaky.sum(axis=2, keepdims=True)
+    cases.append((init, transition, leaky, records))
+    return cases
+
+
+@pytest.mark.parametrize(
+    "case",
+    _ragged_cases(),
+    ids=["mixed", "mostly-padding", "S1", "empties", "impossible", "pad-emittable"],
+)
+def test_every_row_of_a_batch_is_the_per_record_step_bit_for_bit(case):
+    init, transition, output, records = case
+    batch = pad_collate(records)
+    assert not batch["mask"].all(), "no padding in the batch, so the test checks nothing"
+
+    counts, bits_per_record = _e_step_batch(init, transition, output, batch["codes"], batch["lengths"])
+    for b, record in enumerate(records):
+        (init_c, transition_c, emission_c), bits = _record_step(init, transition, output, record.codes)
+        np.testing.assert_array_equal(counts[0][b], init_c)
+        np.testing.assert_array_equal(counts[1][b], transition_c)
+        np.testing.assert_array_equal(counts[2][b], emission_c)
+        assert bits_per_record[b] == bits or (np.isinf(bits) and np.isinf(bits_per_record[b]))
+
+
+@pytest.mark.parametrize(
+    "size, n_user, lengths",
+    [(3, 4, (15, 0, 40, 1, 22)), (5, 5, (60, 7, 33, 1, 2, 90, 14))],
+    ids=["S3-five-records", "S5-seven-records"],
+)
+def test_training_is_bit_identical_at_every_batch_size(size, n_user, lengths):
+    rng = np.random.default_rng(SEED + 200 + size)
+    params = _random_params(rng, size, n_user)
+    records = _random_corpus(rng, n_user, lengths)
+
+    runs = [baum_welch(params, records, batch_size=b, max_cycles=25) for b in (1, 2, 3, None)]
+    first = runs[0]
+    for run in runs[1:]:
+        assert run.cycles == first.cycles
+        assert run.description_lengths == first.description_lengths
+        assert run.degenerate_states == first.degenerate_states
+        np.testing.assert_array_equal(run.params.init_state_p, first.params.init_state_p)
+        np.testing.assert_array_equal(run.params.transition_p, first.params.transition_p)
+        np.testing.assert_array_equal(run.params.output_p, first.params.output_p)
 
 
 # === the data description length at precision d ================================

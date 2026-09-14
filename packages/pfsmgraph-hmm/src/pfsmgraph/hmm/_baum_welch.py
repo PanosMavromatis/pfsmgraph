@@ -1,7 +1,8 @@
 """Baum-Welch re-estimation over :mod:`._forward_backward`'s expected counts.
 
-The E-step is a backend's ``_e_step`` -- the reference composes
-:func:`~._forward_backward._expected_counts`, and ``torch`` takes gradients -- and
+The E-step is a backend's ``_e_step_batch`` over padded batches of records -- the
+reference composes :func:`~._forward_backward._expected_counts` with a leading
+batch axis, and ``torch`` takes gradients -- and
 this module turns its
 three count arrays into new parameters, and :func:`baum_welch` alternates the two until
 ``run-converge``'s stopping rule fires. It is kept out of ``_forward_backward.py``
@@ -59,10 +60,12 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from pfsmgraph.dataseq import pad_collate
+
 from ._backends import BackendName, _resolve
 from ._forward_backward import (
     _description_length,
-    _e_step,
+    _e_step_batch,
     _forward_backward,
 )
 from ._numeric import safe_divide
@@ -140,25 +143,35 @@ def _check_codes(params, records):
                 )
 
 
-def _corpus_step(params, records, e_step=_e_step):
+def _corpus_step(params, records, e_step=_e_step_batch, batch_size=None):
     """One E-step over every record: summed counts and summed description length.
 
-    ``e_step`` is a ``baum_welch`` backend's kernel, the reference by default.
-    Records are visited in order and their counts added elementwise, so the sum
-    over records has the same fixed ascending order as the sums inside one.
+    ``e_step`` is a ``baum_welch`` backend's batched kernel, the reference by
+    default. Records go to it ``batch_size`` at a time through ``pad_collate``,
+    all at once when ``None``. The kernel returns counts per record, and they are
+    added here elementwise in record order, so the sum over records has the same
+    fixed ascending order as the sums inside one whatever the batch size.
     """
     size, n_symbols = params.n_states, params.n_symbols
     init_counts = np.zeros(size, dtype=np.float64)
     transition_counts = np.zeros((size, size), dtype=np.float64)
     emission_counts = np.zeros((size, size, n_symbols), dtype=np.float64)
     bits_per_record = np.zeros(len(records), dtype=np.float64)
-    for index, record in enumerate(records):
-        counts, bits_per_record[index] = e_step(
-            params.init_state_p, params.transition_p, params.output_p, record.codes
+    width = max(len(records), 1) if batch_size is None else batch_size
+    for start in range(0, len(records), width):
+        batch = pad_collate(records[start : start + width])
+        counts, bits = e_step(
+            params.init_state_p,
+            params.transition_p,
+            params.output_p,
+            batch["codes"],
+            batch["lengths"],
         )
-        init_counts += counts[0]
-        transition_counts += counts[1]
-        emission_counts += counts[2]
+        bits_per_record[start : start + len(bits)] = bits
+        for b in range(len(bits)):
+            init_counts += counts[0][b]
+            transition_counts += counts[1][b]
+            emission_counts += counts[2][b]
     total = float(np.add.accumulate(bits_per_record)[-1]) if len(records) else 0.0
     return (init_counts, transition_counts, emission_counts), bits_per_record, total
 
@@ -230,6 +243,7 @@ def baum_welch(
     records,
     *,
     backend: BackendName = "python",
+    batch_size: int | None = None,
     batch_cycles: int = BATCH_CYCLES,
     change_bits: float = CHANGE_BITS,
     patience: int = PATIENCE,
@@ -262,6 +276,11 @@ def baum_welch(
         which derives them as gradients, float64 on CPU, within ADR 0020's
         tolerance of the reference. Validated before any work (ADR 0021); see
         :func:`~pfsmgraph.hmm.backends`.
+    :param batch_size: how many records each E-step kernel call receives, padded
+        together; ``None`` passes the whole corpus at once. It bounds memory, which
+        grows as ``batch_size · S² · A``, and changes nothing else: counts come back
+        per record and are summed in record order, so the result is bit-identical
+        at every batch size on ``"python"``.
     :raises ValueError: if ``backend`` is not a backend name, or names one
         ``baum_welch`` does not have.
     :raises BackendUnavailableError: if ``backend`` cannot run in this
@@ -281,6 +300,8 @@ def baum_welch(
         )
     if max_cycles is not None and max_cycles < 0:
         raise ValueError(f"max_cycles must be non-negative, got {max_cycles}")
+    if batch_size is not None and batch_size < 1:
+        raise ValueError(f"batch_size must be at least 1 or None, got {batch_size}")
     _check_codes(params, records)
     if not any(record.length for record in records):
         raise ValueError("the corpus holds no symbols, so there is nothing to count")
@@ -294,7 +315,9 @@ def baum_welch(
         for _ in range(batch_cycles):
             if max_cycles is not None and cycles >= max_cycles:
                 return _finish(params, history, records, cycles, False, degenerate)
-            counts, bits_per_record, total = _corpus_step(params, records, e_step)
+            counts, bits_per_record, total = _corpus_step(
+                params, records, e_step, batch_size
+            )
             if cycles == 0:
                 _raise_if_impossible(params, records, bits_per_record)
                 old_bits = total

@@ -33,7 +33,7 @@ result = baum_welch(params, ds)
 ## `baum_welch`
 
 ```python
-baum_welch(params: HMMParams, records, *, backend: BackendName = "python", batch_cycles: int = 10, change_bits: float = 0.1, patience: int = 3, max_cycles: int | None = None) -> BaumWelchResult
+baum_welch(params: HMMParams, records, *, backend: BackendName = "python", batch_size: int | None = None, batch_cycles: int = 10, change_bits: float = 0.1, patience: int = 3, max_cycles: int | None = None) -> BaumWelchResult
 ```
 
 Alternates an E-step, the expected counts of every start, arc crossing and emission under

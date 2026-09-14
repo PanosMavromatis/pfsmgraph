@@ -176,14 +176,30 @@ def test_every_backend_refuses_an_impossible_record_before_training(backend):
 # the reference included, since every kernel owes the contract.
 
 
+def _one_record(batched):
+    """A batched kernel on a batch of one record, unwrapped: the `B = 1` case.
+
+    Every count assertion below takes one unpadded record, so it goes through
+    this; `.batched` is the kernel itself, for `_corpus_step`.
+    """
+
+    def step(init, transition, output, codes):
+        codes = np.asarray(codes)
+        counts, bits = batched(init, transition, output, codes[np.newaxis], np.array([codes.size]))
+        return tuple(array[0] for array in counts), float(bits[0])
+
+    step.batched = batched
+    return step
+
+
 @pytest.fixture(scope="module")
 def kernel(backend):
-    return _resolve("baum_welch", backend)
+    return _one_record(_resolve("baum_welch", backend))
 
 
 @pytest.fixture(scope="module")
 def reference():
-    return _resolve("baum_welch", "python")
+    return _one_record(_resolve("baum_welch", "python"))
 
 
 def _assert_counts_match(kernel, reference, arrays, codes):
@@ -241,7 +257,7 @@ def test_every_kernels_counts_re_estimate_to_a_valid_model_along_em_trajectories
     for _ in range(30):
         for record in records:
             _assert_counts_match(kernel, reference, _arrays(params), record.codes)
-        counts, _, _ = _corpus_step(params, records, kernel)
+        counts, _, _ = _corpus_step(params, records, kernel.batched)
         _re_estimate(params, counts)
         params = baum_welch(params, records, max_cycles=1).params
 
@@ -272,7 +288,7 @@ def test_every_kernels_counts_re_estimate_to_a_valid_model_on_a_subnormal_arc(in
 
     for record in records:
         _assert_counts_match(kernel, reference, _arrays(params), record.codes)
-    counts, _, _ = _corpus_step(params, records, kernel)
+    counts, _, _ = _corpus_step(params, records, kernel.batched)
     _re_estimate(params, counts)
 
 
