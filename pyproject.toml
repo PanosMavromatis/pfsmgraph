@@ -77,6 +77,15 @@ no-build-isolation-package = [
 #                  AttributeError. Drop the cap when a numba-cuda release stops
 #                  doing that; restore the same cap in hmm's `gpu` extra
 #                  when that returns (docs/plan/DEFERRED.md).
+#   hmmlearn     - the external oracle for revision 03's forward-backward and
+#                  EM (docs/plan/TODO.md). Test-only: no member declares or
+#                  imports it, and it is not an ADR 0003 backend -- it is a
+#                  state-emission model that coincides with ours only when
+#                  emission depends on the destination state alone (ADR 0015),
+#                  and it shares no code or derivation with ours, which is the
+#                  point. It brings scipy and scikit-learn along. 0.3.3
+#                  (2024-10-31) is the latest release and has no cp314 wheels,
+#                  so a 3.14 environment builds it from source.
 dev = [
     "pytest>=8",
     "meson-python",
@@ -86,6 +95,7 @@ dev = [
     "numba>=0.61",
     "numba-cuda[cu13]>=0.30.4; sys_platform == 'linux'",
     "numpy<2.5; sys_platform == 'linux'",
+    "hmmlearn>=0.3.3",
 ]
 
 [tool.pytest.ini_options]
