@@ -36,14 +36,13 @@ import numpy as np
 import pytest
 
 from pfsmgraph.dataseq import USER_BASE, SequenceRecord, SymbolTable
-from pfsmgraph.hmm import HMMParams, ImpossibleSequenceError
+from pfsmgraph.hmm import HMMParams, ImpossibleSequenceError, baum_welch
 from pfsmgraph.hmm._baum_welch import (
     BATCH_CYCLES,
     CHANGE_BITS,
     PATIENCE,
     _corpus_description_length,
     _data_description_length,
-    _em,
     _m_step,
     _quantize,
 )
@@ -324,7 +323,7 @@ def _random_corpus(rng, n_user, lengths):
 def test_the_description_length_never_rises_between_cycles(size, n_user, lengths):
     rng = np.random.default_rng(SEED + size)
     params = _random_params(rng, size, n_user)
-    result = _em(params, _random_corpus(rng, n_user, lengths), max_cycles=40)
+    result = baum_welch(params, _random_corpus(rng, n_user, lengths), max_cycles=40)
 
     history = np.array(result.description_lengths)
     assert len(history) == result.cycles + 1 == 41
@@ -345,7 +344,7 @@ def test_a_model_at_a_fixed_point_stays_there_bit_for_bit():
     a, b = USER_BASE, USER_BASE + 1
     records = [SequenceRecord(np.array([a, b, b, a])), SequenceRecord(np.array([b, a]))]
 
-    result = _em(params, records)
+    result = baum_welch(params, records)
 
     assert np.array_equal(result.params.init_state_p, params.init_state_p)
     assert np.array_equal(result.params.transition_p, params.transition_p)
@@ -362,7 +361,7 @@ def test_the_stopping_rule_is_run_converge():
     rng = np.random.default_rng(SEED + 99)
     params = _random_params(rng, 4, 4)
     batch, threshold, patience = 5, 1e-3, 3
-    result = _em(
+    result = baum_welch(
         params,
         _random_corpus(rng, 4, (80, 50)),
         batch_cycles=batch,
@@ -403,7 +402,7 @@ def test_a_changed_batch_resets_the_unchanged_count():
     # 0s while EM escapes the saddle, then 111. Without the reset the two early
     # 1s would carry over and the run would stop four cycles early, mid-escape.
     params, records = _near_saddle(1e-4)
-    result = _em(params, records, batch_cycles=2, change_bits=1e-3, patience=3)
+    result = baum_welch(params, records, batch_cycles=2, change_bits=1e-3, patience=3)
 
     ends = np.array(result.description_lengths[::2])
     flags = "".join("1" if f else "0" for f in np.abs(np.diff(ends)) < 1e-3)
@@ -418,7 +417,7 @@ def test_run_converge_can_stop_on_the_saddle_itself():
     # An exactly uniform start, which rand_p_vector(noise_width=0) returns, is
     # this case with eps = 0.
     params, records = _near_saddle(1e-5)
-    result = _em(params, records, batch_cycles=2, change_bits=1e-3, patience=4)
+    result = baum_welch(params, records, batch_cycles=2, change_bits=1e-3, patience=4)
 
     assert result.converged and result.cycles == 8
     assert result.description_lengths[-1] > 399
@@ -429,7 +428,7 @@ def test_the_lush_trained_fixture_is_already_near_its_fixed_point():
     # stream, so the loop should leave it almost where it is. Passing the whole
     # corpus as one record is the original's flat stream.
     params = load_params(FIXTURES / "m008_0001_008.hmm")
-    result = _em(params, [load_corpus_record()])
+    result = baum_welch(params, [load_corpus_record()])
 
     first, last = result.description_lengths[0], result.description_lengths[-1]
     assert result.converged and result.cycles == PATIENCE * BATCH_CYCLES
@@ -442,7 +441,7 @@ def test_one_cycle_over_several_records_is_the_m_step_of_their_summed_counts():
     params = _random_params(rng, 3, 4)
     records = _random_corpus(rng, 4, (25, 9, 31))
 
-    result = _em(params, records, max_cycles=1)
+    result = baum_welch(params, records, max_cycles=1)
 
     summed = [np.zeros(3), np.zeros((3, 3)), np.zeros((3, 3, USER_BASE + 4))]
     for record in records:
@@ -464,7 +463,7 @@ def test_a_degenerate_state_keeps_its_row_and_tracks_the_zero_row_likelihood():
     params = HMMParams(init, transition, output, _vocabulary(9))
     codes = np.array([A, A, B, A, B])
 
-    result = _em(params, [SequenceRecord(codes)], max_cycles=5)
+    result = baum_welch(params, [SequenceRecord(codes)], max_cycles=5)
 
     assert result.degenerate_states == (2,)
     assert np.array_equal(result.params.transition_p[2], transition[2])
@@ -484,7 +483,7 @@ def test_an_impossible_record_raises_before_training():
     params = HMMParams(init, transition, output, _vocabulary(9))
     records = [SequenceRecord(np.array([A, B])), SequenceRecord(np.array([C, C]))]
     with pytest.raises(ImpossibleSequenceError, match="record 1"):
-        _em(params, records)
+        baum_welch(params, records)
 
 
 @pytest.mark.parametrize(
@@ -503,7 +502,7 @@ def test_the_loop_rejects_what_it_cannot_train_on(records, kwargs, message):
     rng = np.random.default_rng(SEED)
     params = _random_params(rng, 2, 3)
     with pytest.raises(ValueError, match=message):
-        _em(params, [SequenceRecord(codes) for codes in records], **kwargs)
+        baum_welch(params, [SequenceRecord(codes) for codes in records], **kwargs)
 
 
 # === the data description length at precision d ================================

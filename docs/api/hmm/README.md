@@ -1,12 +1,13 @@
 # `pfsmgraph.hmm`
 
 Hidden Markov models in the arc-emission formulation, translated from a Lush original.
-Version 0.1.0 carries the model's parameters and its decode; training (Baum-Welch) and
-topology search are later revisions.
+Version 0.1.0 carried the model's parameters and its decode; Baum-Welch training over a
+fixed topology is on `main` for 0.2.0, and topology search is a later revision.
 
 - **Parameters** — [`params.md`](params.md): `HMMParams`.
 - **Decode** — [`viterbi.md`](viterbi.md): `viterbi`, `ViterbiPath`,
   `ImpossibleSequenceError`.
+- **Training** — [`baum_welch.md`](baum_welch.md): `baum_welch`, `BaumWelchResult`.
 - **Backends** — [`backends.md`](backends.md): `backend=`, `backends`, `BackendStatus`,
   `BackendUnavailableError`.
 
@@ -94,14 +95,14 @@ These hold for every caller and are not configurable.
 
 ## The public surface
 
-`pfsmgraph.hmm.__all__` is exactly seven names. Anything underscore-prefixed — the
-`_params`, `_viterbi`, `_backends` and `_numeric` modules, the backend kernels, and every
+`pfsmgraph.hmm.__all__` is exactly nine names. Anything underscore-prefixed — the
+`_params`, `_viterbi`, `_baum_welch`, `_forward_backward`, `_backends` and `_numeric` modules, the backend kernels, and every
 attribute beginning with `_` — is private, out of contract, and may change without notice.
 
 ```python
 >>> import pfsmgraph.hmm
 >>> pfsmgraph.hmm.__all__
-['BackendStatus', 'BackendUnavailableError', 'HMMParams', 'ImpossibleSequenceError', 'ViterbiPath', 'backends', 'viterbi']
+['BackendStatus', 'BackendUnavailableError', 'BaumWelchResult', 'HMMParams', 'ImpossibleSequenceError', 'ViterbiPath', 'backends', 'baum_welch', 'viterbi']
 ```
 
 | Name | Kind | Documented in |
@@ -110,6 +111,8 @@ attribute beginning with `_` — is private, out of contract, and may change wit
 | `viterbi` | function | [viterbi.md](viterbi.md) |
 | `ViterbiPath` | frozen dataclass | [viterbi.md](viterbi.md) |
 | `ImpossibleSequenceError` | exception | [viterbi.md](viterbi.md) |
+| `baum_welch` | function | [baum_welch.md](baum_welch.md) |
+| `BaumWelchResult` | frozen dataclass | [baum_welch.md](baum_welch.md) |
 | `backends` | function | [backends.md](backends.md) |
 | `BackendStatus` | frozen dataclass | [backends.md](backends.md) |
 | `BackendUnavailableError` | exception | [backends.md](backends.md) |
@@ -118,15 +121,17 @@ attribute beginning with `_` — is private, out of contract, and may change wit
 
 **`viterbi` has four implementations, and `backend=` chooses among them**: `"python"`,
 `"cython"`, `"cpu_parallel"` and `"cuda"`, one per lifecycle phase, each tested against the
-others for exact equality on the same inputs. **The default is `"python"`**, and nothing in
+others for exact equality on the same inputs. **`baum_welch` has two**, `"python"` and
+`"torch"`, which compute the E-step by different derivations and agree within a measured
+tolerance rather than exactly. **The default is `"python"`**, and nothing in
 the environment changes it. **A backend that cannot run here raises
-`BackendUnavailableError`** naming what is missing; nothing falls back. `backends("viterbi")`
+`BackendUnavailableError`** naming what is missing; nothing falls back. `backends(name)`
 reports which can run, and why the others cannot.
 ([ADR 0021](../../design/adr/0021-runtime-backend-selection.md))
 
-**The compiled backends' dependencies are optional extras**, `cpu-parallel` for numba and
-`gpu` for numba-cuda, so the base install stays lean. GPU here means `numba-cuda`,
-unrelated to the `torch` stack `pfsmgraph-dl` uses.
+**Every backend's dependencies beyond numpy are optional extras**, `cpu-parallel` for numba,
+`gpu` for numba-cuda and `torch` for torch, so the base install stays lean. GPU here means
+`numba-cuda`; the `torch` extra needs no device and is unrelated to `gpu`.
 ([ADR 0004](../../design/adr/0004-gpu-backends-and-optional-dependency-strategy.md))
 [backends.md](backends.md) has the detail.
 
@@ -141,5 +146,7 @@ unrelated to the `torch` stack `pfsmgraph-dl` uses.
   lifecycle the backends follow.
 - [ADR 0021](../../design/adr/0021-runtime-backend-selection.md) — choosing a backend at
   run time, and why nothing falls back.
+- [ADR 0020](../../design/adr/0020-scaled-probability-domain-forward-backward.md) — the
+  forward-backward's numeric contract, and the tolerance `torch` is held to.
 - [`FORMALIZATION.md`](../../design/algorithms/viterbi/FORMALIZATION.md) — the
   recurrence, base cases and tie-breaking rule, independent of any language.

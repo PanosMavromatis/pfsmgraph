@@ -67,7 +67,12 @@ viterbi(params, record, backend="cython")
 Names are strings, typed as a `Literal`: `"python"`, `"cython"`, `"cpu_parallel"`,
 `"cuda"`. They are the names the session header and `PFSMGRAPH_REQUIRE_BACKENDS` already
 use, so one vocabulary covers the API, the header and CI. A new backend is a new value —
-`"torch"` will be the fifth.
+`"torch"` will be the fifth. *(Amended 2026-09-14 on `feat/hmm-torch-backend`: it is, as a
+backend of `baum_welch` only. It is not a lifecycle phase, so `BACKEND_NAMES` lists it after
+the four phases. Its results agree with the reference within
+[ADR 0020](0020-scaled-probability-domain-forward-backward.md)'s tolerance rather than
+exactly, and `BackendStatus` does not carry that tolerance;
+`docs/api/hmm/baum_welch.md` states it.)*
 
 There is **no module-level default, setter or context manager.** The backend a result came
 from is visible at the call that produced it. That follows two positions this family has
@@ -144,6 +149,7 @@ The row's "absence attributable to" field is what lets one table serve two polic
 | the compiled extension (`cython`) | `BackendUnavailableError` | hard failure — missing or stale build |
 | numba (`cpu_parallel`) | `BackendUnavailableError` | reported skip |
 | a CUDA device (`cuda`) | `BackendUnavailableError` | reported skip; `PFSMGRAPH_REQUIRE_BACKENDS` escalates |
+| torch (`torch`) | `BackendUnavailableError` | reported skip; `PFSMGRAPH_REQUIRE_BACKENDS` escalates |
 
 The second row is the one that differs, and it differs correctly: an install may be a pure
 wheel, a checkout may not.
@@ -169,7 +175,9 @@ reached is absent, as it is from the test matrix.
 - **The key is the public call's name**, `"viterbi"` — not the kernel's. Kernel modules are
   private and revision 04 is free to rename or split them. A training entry point is keyed by
   its own name when it becomes public, whatever kernels it runs, and an unknown name raises
-  `ValueError` listing the known ones.
+  `ValueError` listing the known ones. *(Amended 2026-09-14: `baum_welch`, whose rows are
+  per-record E-steps rather than forward-backward kernels, since the torch E-step builds no β
+  and so cannot share `_forward_backward`'s signature.)*
 - **It probes, once per process.** Checking `cuda` imports numba-cuda and asks for a device,
   which is the cost the lazy rule in §2 avoids on ordinary calls. The result is cached, so a
   later `backend=` call that names an unavailable backend raises from the cache without

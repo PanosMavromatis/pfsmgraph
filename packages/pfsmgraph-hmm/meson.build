@@ -42,6 +42,10 @@ py.install_sources(
     # Baum-Welch re-estimation for revision 03: the M-step and the EM loop over
     # the forward-backward counts. Not a DP kernel, so no lifecycle phases.
     'src/pfsmgraph/hmm/_baum_welch.py',
+    # The torch backend of baum_welch: the E-step as reverse-mode gradients,
+    # held to the numpy reference within the ADR 0020 tolerance. Imported only
+    # when a probe or backend= names it, so torch stays optional.
+    'src/pfsmgraph/hmm/_baum_welch_torch.py',
     # Forward-backward for revision 03, ADR 0002 phase 1, in the scaled
     # probability domain (ADR 0020). No apostrophes in these comments: the
     # source test reads entries as single-quoted strings.

@@ -202,3 +202,17 @@ def _expected_counts(alpha, beta, transition_p, output_p, codes):
         emission_counts[:, :, present[u]] += xi
 
     return init_counts, transition_counts, emission_counts
+
+
+def _e_step(init_state_p, transition_p, output_p, codes):
+    """``((init_counts, transition_counts, emission_counts), bits)`` for one record.
+
+    The ``python`` row of the ``baum_welch`` backend table: the recurrences, the
+    description length and the expected counts, composed. Every backend of that
+    call implements this signature; the ``torch`` one derives the same counts as
+    gradients and builds no β, which is why the table's key is this step rather
+    than :func:`_forward_backward`.
+    """
+    alpha, beta, scale = _forward_backward(init_state_p, transition_p, output_p, codes)
+    counts = _expected_counts(alpha, beta, transition_p, output_p, codes)
+    return counts, _description_length(scale)

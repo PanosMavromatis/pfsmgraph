@@ -34,7 +34,14 @@ import pytest
 
 import pfsmgraph.hmm
 import pfsmgraph.hmm._backends as hmm_backends
-from pfsmgraph.hmm import BackendStatus, BackendUnavailableError, backends, viterbi
+from pfsmgraph.hmm import (
+    BackendStatus,
+    BackendUnavailableError,
+    BaumWelchResult,
+    backends,
+    baum_welch,
+    viterbi,
+)
 
 
 @pytest.fixture
@@ -87,7 +94,7 @@ def test_backends_refuses_a_private_kernel_name():
     ADR 0021 section 4 keys enumeration by the public call so revision 04 can
     rename or split kernels; accepting this name would publish it.
     """
-    with pytest.raises(ValueError, match="known: \\['viterbi'\\]"):
+    with pytest.raises(ValueError, match="known: \\['baum_welch', 'viterbi'\\]"):
         backends("forward_backward")
 
 
@@ -134,6 +141,13 @@ def test_missing_numba_cuda_is_reported_with_the_gpu_extra(fresh):
     status = _status("cuda")
     assert status.available is False
     assert status.reason == "numba-cuda is not installed: pip install 'pfsmgraph-hmm[gpu]'"
+
+
+def test_missing_torch_is_reported_with_the_torch_extra(fresh):
+    fresh("torch", "pfsmgraph.hmm._baum_welch_torch")
+    status = {s.name: s for s in backends("baum_welch")}["torch"]
+    assert status.available is False
+    assert status.reason == "torch is not installed: pip install 'pfsmgraph-hmm[torch]'"
 
 
 def test_a_missing_extension_is_reported_as_a_pure_install(fresh):
@@ -251,7 +265,8 @@ def test_importing_the_package_loads_no_backend_dependency():
     code = (
         "import sys, pfsmgraph.hmm; "
         "print(sorted(m for m in ('numba', 'pfsmgraph.hmm._viterbi_cython', "
-        "'pfsmgraph.hmm._viterbi_cuda') if m in sys.modules))"
+        "'pfsmgraph.hmm._viterbi_cuda', 'torch', 'pfsmgraph.hmm._baum_welch_torch') "
+        "if m in sys.modules))"
     )
     result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
     assert result.stdout.strip() == "[]"
@@ -261,6 +276,6 @@ def test_importing_the_package_loads_no_backend_dependency():
 
 
 def test_the_selection_names_are_exported():
-    for name in ("backends", "BackendStatus", "BackendUnavailableError"):
+    for name in ("backends", "BackendStatus", "BackendUnavailableError", "baum_welch", "BaumWelchResult"):
         assert name in pfsmgraph.hmm.__all__
         assert getattr(pfsmgraph.hmm, name) is globals()[name]

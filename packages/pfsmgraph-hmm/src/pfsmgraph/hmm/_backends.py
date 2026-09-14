@@ -22,7 +22,9 @@ not noticed. The probe is an import, and nothing is imported until something ask
 
 **The table carries private algorithms too.** ``forward_backward`` has a row so the
 session header can report it, but it is not a public call, so :func:`backends`
-refuses its name; :func:`_status` accepts it. Kernel module names are private and
+refuses its name; :func:`_status` accepts it. ``baum_welch`` is public, and its
+rows are per-record E-steps rather than forward-backward kernels, since its
+``torch`` backend builds no β. Kernel module names are private and
 revision 04 is free to change them, which is why the public key is the call.
 
 .. [ADR 0002] ``docs/design/adr/0002-three-phase-algorithm-lifecycle.md``
@@ -38,16 +40,18 @@ from typing import Callable, Final, Literal
 
 __all__ = ["BackendName", "BackendStatus", "BackendUnavailableError", "backends"]
 
-BackendName = Literal["python", "cython", "cpu_parallel", "cuda"]
+BackendName = Literal["python", "cython", "cpu_parallel", "cuda", "torch"]
 
-#: Every backend name, in lifecycle-phase order. The same vocabulary as the
-#: session header and ``PFSMGRAPH_REQUIRE_BACKENDS``.
-BACKEND_NAMES: Final[tuple[str, ...]] = ("python", "cython", "cpu_parallel", "cuda")
+#: Every backend name: the ADR 0002 lifecycle phases in order, then ``torch``,
+#: which is no phase but a second derivation held to the reference within
+#: ADR 0020's tolerance. The same vocabulary as the session header and
+#: ``PFSMGRAPH_REQUIRE_BACKENDS``.
+BACKEND_NAMES: Final[tuple[str, ...]] = ("python", "cython", "cpu_parallel", "cuda", "torch")
 
 #: What an absence can be attributable to. ``None`` means nothing external: a
 #: failed import is a broken install. The repo-root test policy escalates ``None``
-#: and ``"compiled extension"`` and skips the other two (ADR 0021 section 3).
-Needs = Literal["compiled extension", "numba", "CUDA device"]
+#: and ``"compiled extension"`` and skips the other three (ADR 0021 section 3).
+Needs = Literal["compiled extension", "numba", "CUDA device", "torch"]
 
 
 class BackendUnavailableError(ImportError):
@@ -98,15 +102,22 @@ _TABLE: Final[dict[str, tuple[_Row, ...]]] = {
         ),
         _Row("cuda", "pfsmgraph.hmm._viterbi_cuda", "_viterbi", needs="CUDA device", extra="gpu"),
     ),
-    # Phase 1 only. Private, so it is here for the session header and for EM's
-    # eventual public call, and absent from _PUBLIC.
+    # Phase 1 only. Private, so it is here for the session header and absent
+    # from _PUBLIC; baum_welch reaches it through its python row's E-step.
     "forward_backward": (
         _Row("python", "pfsmgraph.hmm._forward_backward", "_forward_backward"),
+    ),
+    # Keyed by the public call (ADR 0021 section 4), and its rows are E-steps,
+    # not forward-backward kernels: torch derives the counts as gradients and
+    # builds no beta, so the step is the one signature both share.
+    "baum_welch": (
+        _Row("python", "pfsmgraph.hmm._forward_backward", "_e_step"),
+        _Row("torch", "pfsmgraph.hmm._baum_welch_torch", "_e_step", needs="torch", extra="torch"),
     ),
 }
 
 #: The names :func:`backends` accepts: public calls, never private kernels.
-_PUBLIC: Final = frozenset({"viterbi"})
+_PUBLIC: Final = frozenset({"viterbi", "baum_welch"})
 
 _lock = threading.Lock()
 _cache: dict[tuple[str, str], tuple[Callable | None, str | None]] = {}
@@ -131,6 +142,10 @@ def _reason(row: _Row, exc: ImportError) -> str:
         if missing == "numba":
             return f"numba is not installed: pip install 'pfsmgraph-hmm[{row.extra}]'"
         return f"numba did not import: {exc}"
+    if row.needs == "torch":
+        if missing == "torch":
+            return f"torch is not installed: pip install 'pfsmgraph-hmm[{row.extra}]'"
+        return f"torch did not import: {exc}"
     # CUDA device. The kernel module raises ImportError itself when numba-cuda
     # reports no device, because @cuda.jit decorates lazily and an import would
     # otherwise succeed on a machine that cannot run it.

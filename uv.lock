@@ -33,6 +33,7 @@ dev = [
     { name = "numpy", specifier = ">=2.1" },
     { name = "numpy", marker = "sys_platform == 'linux'", specifier = "<2.5" },
     { name = "pytest", specifier = ">=8" },
+    { name = "torch", specifier = ">=2.13" },
 ]
 
 [[package]]
@@ -1021,6 +1022,9 @@ gpu = [
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' and sys_platform != 'darwin'" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' and sys_platform != 'darwin'" },
 ]
+torch = [
+    { name = "torch" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -1029,8 +1033,9 @@ requires-dist = [
     { name = "numpy", specifier = ">=2.1" },
     { name = "numpy", marker = "sys_platform != 'darwin' and extra == 'gpu'", specifier = "<2.5" },
     { name = "pfsmgraph-dataseq", editable = "packages/pfsmgraph-dataseq" },
+    { name = "torch", marker = "extra == 'torch'", specifier = ">=2.13" },
 ]
-provides-extras = ["cpu-parallel", "gpu"]
+provides-extras = ["cpu-parallel", "gpu", "torch"]
 
 [[package]]
 name = "pfsmgraph-hseg"

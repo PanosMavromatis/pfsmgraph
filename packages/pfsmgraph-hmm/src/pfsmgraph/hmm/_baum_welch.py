@@ -1,7 +1,9 @@
 """Baum-Welch re-estimation over :mod:`._forward_backward`'s expected counts.
 
-The E-step is :func:`~._forward_backward._expected_counts`; this module turns its
-three count arrays into new parameters, and :func:`_em` alternates the two until
+The E-step is a backend's ``_e_step`` -- the reference composes
+:func:`~._forward_backward._expected_counts`, and ``torch`` takes gradients -- and
+this module turns its
+three count arrays into new parameters, and :func:`baum_welch` alternates the two until
 ``run-converge``'s stopping rule fires. It is kept out of ``_forward_backward.py``
 because that module is the dynamic-programming kernel ADR 0002's phases
 transliterate, and the M-step has no recurrence to transliterate: it is two
@@ -57,16 +59,17 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from ._backends import BackendName, _resolve
 from ._forward_backward import (
     _description_length,
-    _expected_counts,
+    _e_step,
     _forward_backward,
 )
 from ._numeric import safe_divide
 from ._params import HMMParams
 from ._viterbi import ImpossibleSequenceError
 
-__all__: list[str] = []
+__all__ = ["BaumWelchResult", "baum_welch"]
 
 
 def _m_step(init_counts, transition_counts, emission_counts):
@@ -102,13 +105,18 @@ PATIENCE = 3
 
 
 @dataclass(frozen=True)
-class _EMResult:
-    """What :func:`_em` returns. Private, as the loop is.
+class BaumWelchResult:
+    """What :func:`baum_welch` returns.
 
     ``description_lengths[c]`` is the corpus description length, in bits, of the
     model after ``c`` cycles, so it has ``cycles + 1`` entries and its first is
     the starting model's. ``degenerate_states`` are the states whose previous
     row and fibres the final cycle restored.
+
+    Each per-cycle entry comes from the E-step of the backend that ran, so on
+    ``backend="torch"`` it is torch's own, within ADR 0020's tolerance of the
+    reference; the check at the end of each batch, and so the last entry, is the
+    reference forward pass on every backend.
     """
 
     params: HMMParams
@@ -132,9 +140,10 @@ def _check_codes(params, records):
                 )
 
 
-def _corpus_step(params, records):
+def _corpus_step(params, records, e_step=_e_step):
     """One E-step over every record: summed counts and summed description length.
 
+    ``e_step`` is a ``baum_welch`` backend's kernel, the reference by default.
     Records are visited in order and their counts added elementwise, so the sum
     over records has the same fixed ascending order as the sums inside one.
     """
@@ -144,12 +153,8 @@ def _corpus_step(params, records):
     emission_counts = np.zeros((size, size, n_symbols), dtype=np.float64)
     bits_per_record = np.zeros(len(records), dtype=np.float64)
     for index, record in enumerate(records):
-        alpha, beta, scale = _forward_backward(
+        counts, bits_per_record[index] = e_step(
             params.init_state_p, params.transition_p, params.output_p, record.codes
-        )
-        bits_per_record[index] = _description_length(scale)
-        counts = _expected_counts(
-            alpha, beta, params.transition_p, params.output_p, record.codes
         )
         init_counts += counts[0]
         transition_counts += counts[1]
@@ -205,7 +210,7 @@ def _data_description_length(params, records, d):
     ``+inf`` when rounding leaves some record with no path, which the original
     reports as ``1e100`` through its ``-1`` sentinel (``update-total-dl``). The
     original's final ``bits`` of the last column's sum is 1 within rounding and is
-    omitted, as it is in :func:`_em`. Raises ``ValueError`` for a ``d`` that is
+    omitted, as it is in :func:`baum_welch`. Raises ``ValueError`` for a ``d`` that is
     not positive and finite, and for a code outside the symbol axis.
     """
     if not (np.isfinite(d) and d > 0):
@@ -220,15 +225,16 @@ def _data_description_length(params, records, d):
     )
 
 
-def _em(
-    params,
+def baum_welch(
+    params: HMMParams,
     records,
     *,
-    batch_cycles=BATCH_CYCLES,
-    change_bits=CHANGE_BITS,
-    patience=PATIENCE,
-    max_cycles=None,
-):
+    backend: BackendName = "python",
+    batch_cycles: int = BATCH_CYCLES,
+    change_bits: float = CHANGE_BITS,
+    patience: int = PATIENCE,
+    max_cycles: int | None = None,
+) -> BaumWelchResult:
     """Baum-Welch from ``params`` over ``records`` until ``run-converge`` stops.
 
     ``run-converge`` runs ``batch_cycles`` cycles, recomputes the description
@@ -250,7 +256,18 @@ def _em(
     the symbol axis, for a corpus with no symbols in it, and for a stopping rule
     that cannot stop; :class:`ImpossibleSequenceError` when a record has no path
     under the starting model, since nothing can then be re-estimated from it.
+
+    :param backend: which implementation computes each record's expected counts
+        -- ``"python"`` (the numpy reference, and the default) or ``"torch"``,
+        which derives them as gradients, float64 on CPU, within ADR 0020's
+        tolerance of the reference. Validated before any work (ADR 0021); see
+        :func:`~pfsmgraph.hmm.backends`.
+    :raises ValueError: if ``backend`` is not a backend name, or names one
+        ``baum_welch`` does not have.
+    :raises BackendUnavailableError: if ``backend`` cannot run in this
+        environment. Nothing falls back.
     """
+    e_step = _resolve("baum_welch", backend)
     records = list(records)
     if batch_cycles < 1 or patience < 1:
         raise ValueError(
@@ -277,7 +294,7 @@ def _em(
         for _ in range(batch_cycles):
             if max_cycles is not None and cycles >= max_cycles:
                 return _finish(params, history, records, cycles, False, degenerate)
-            counts, bits_per_record, total = _corpus_step(params, records)
+            counts, bits_per_record, total = _corpus_step(params, records, e_step)
             if cycles == 0:
                 _raise_if_impossible(params, records, bits_per_record)
                 old_bits = total
@@ -293,7 +310,7 @@ def _em(
             unchanged = 0
         old_bits = new_bits
     history.append(new_bits)
-    return _EMResult(params, tuple(history), cycles, True, degenerate)
+    return BaumWelchResult(params, tuple(history), cycles, True, degenerate)
 
 
 def _finish(params, history, records, cycles, converged, degenerate):
@@ -302,7 +319,7 @@ def _finish(params, history, records, cycles, converged, degenerate):
             params.init_state_p, params.transition_p, params.output_p, records
         )
     )
-    return _EMResult(params, tuple(history), cycles, converged, degenerate)
+    return BaumWelchResult(params, tuple(history), cycles, converged, degenerate)
 
 
 def _raise_if_impossible(params, records, bits_per_record):

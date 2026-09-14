@@ -35,6 +35,14 @@ not carry — and it is what makes a stale or misremembered reference detectable
   recollection, and revision 03 should confirm it before the equivalence test is written
   on its authority.*
 
+  *The identity itself was checked numerically on 2026-09-14, not against the paper's
+  text. `packages/pfsmgraph-hmm/tests/test_baum_welch_backends.py` compares torch's
+  gradients with the reference's explicit ξ within `4 · N · eps · max(1, count)`. It held
+  in floating point only under two conditions the recollection above does not mention: the
+  per-step normalisers detached, and gradients taken at the arc weights rather than at the
+  transition and emission arrays separately. Checking the attribution against the paper's
+  text is still open.*
+
 - **Jelinek, Frederick (1997). *Statistical Methods for Speech Recognition.*** MIT Press,
   Language, Speech, and Communication series.
 

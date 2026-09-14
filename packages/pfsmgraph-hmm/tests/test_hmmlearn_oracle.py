@@ -181,7 +181,7 @@ def test_the_comparison_can_fail():
 # Our EM leaves the reduced family after one cycle: the M-step estimates an
 # emission for every arc, so ``output_p[i, j, k]`` stops being independent of
 # ``i``, and our transition counts include the ``s_0 -> s_1`` crossing that
-# hmmlearn has no counterpart for. ``_em`` itself is therefore not comparable,
+# hmmlearn has no counterpart for. ``baum_welch`` itself is therefore not comparable,
 # and these tests check the E-step and M-step it is built from instead, through
 # a harness that keeps the model inside the family:
 #
@@ -196,7 +196,7 @@ def test_the_comparison_can_fail():
 #   ``_m_step``'s own per-arc emission division is consequently not checked here;
 #   ``test_baum_welch.py``'s exact oracle covers it.
 #
-# Counts come from ``_corpus_step``, the one ``_em`` uses, so the sum over records
+# Counts come from ``_corpus_step``, the one ``baum_welch`` uses, so the sum over records
 # is ours and hmmlearn's ``lengths`` is its counterpart. ``fit`` runs with
 # ``tol=0`` so it performs exactly ``n_iter`` cycles, and ``init_params=""`` so it
 # starts from the parameters given.
@@ -231,7 +231,7 @@ def _tied_cycles(params, records, cycles):
         history.append(total)
         init, transition, _, out_counts = _m_step(*counts)
         # Dense random data occupies every state before the last position, so
-        # no row needs _em's degenerate-state restore, which hmmlearn lacks.
+        # no row needs baum_welch's degenerate-state restore, which hmmlearn lacks.
         assert (out_counts > 0).all()
         by_destination = np.add.accumulate(
             counts[2][:, :size, USER_BASE:], axis=0

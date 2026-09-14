@@ -73,7 +73,13 @@ four parts.
 compiled phases on one host.** It is not bit-exact across machines, for the same reason
 the decode's is not: numpy's `log2` dispatches by CPU. Nor is it bit-exact against
 `torch`, whose reductions no caller can order. The `torch` backend is held to the
-reference **within a stated tolerance of a few ulps**, and its tests say so.
+reference **within a stated tolerance of a few ulps**, and its tests say so. *(Amended
+2026-09-14, once measured on `feat/hmm-torch-backend`: the tolerance is
+`N · eps · max(1, x)` per element, for each expected count and each description length `x`
+over a record of length `N`. The measured worst was 1.00 and 0.21, and the tests allow 4×.
+"A few ulps" was the right size and the wrong form. Relative to the value, the error
+reaches 15 578 eps on records costing a fraction of a bit, and `5e57` on counts near
+underflow, while staying at rounding in absolute terms.)*
 
 The base is 2, because the only logarithms are description lengths. The semiring the
 phases 2-4 subgoal asked about is **sum-product with per-step renormalisation**. It is
@@ -203,10 +209,20 @@ most of the reference-speed cost under *Negative / costs* moot: at `S = 160` it 
   where the Cython phase will first build. Add it when a non-x86 build is first
   exercised, or pre-emptively at forward-backward's phase 2 if the constructed test
   would not run on such a host anyway.
-- **The `torch` tolerance.** "A few ulps" is the float64 expectation. A float32 `torch`
-  run needs its own figure, recorded in the `torch` subgoal as the master plan already
-  requires.
+- **The float32 `torch` tolerance.** A float32 `torch` run needs its own figure; float64's
+  is resolved below.
 - **An associative scan over time.** Sum-product with renormalisation is associative up
   to the scale factors, so a parallel prefix is possible in principle. Whether it is
   worth it, or whether batch parallelism alone is the phase-3 answer, is still the phases
   2-4 subgoal's question. That subgoal now knows which semiring it is asking about.
+
+## Resolved
+
+- **The float64 `torch` tolerance.** Settled 2026-09-14, as the amendment to the Decision
+  states, and pinned by `packages/pfsmgraph-hmm/tests/test_baum_welch_backends.py`. Two
+  kernel properties turned out to be conditions of meeting it at all, since without either
+  the kernel's counts crashed `HMMParams`. The scale factors are detached from the autograd
+  graph, because differentiating through them cancels near-equal terms and produced
+  negative counts. The gradient is taken at the arc table `w`, because transition and
+  emission gradients taken separately round a subnormal unit apart on an arc of probability
+  `8e-322`.
