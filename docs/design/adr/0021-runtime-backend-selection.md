@@ -4,7 +4,8 @@
 - **Date:** 2026-09-14
 - **Source:** none in the PRD — postdates it. Settles the question
   [ADR 0003](0003-one-parameterized-test-suite-per-algorithm.md)'s Open section defers,
-  under `docs/plan/DEFERRED.md`'s `## Trigger: align acquiring a backend-selection API`.
+  under `docs/plan/DEFERRED.md`'s `## Trigger: a backend-selection API` (titled `align acquiring a
+  backend-selection API` until this record fired it).
 
 ## Context
 
@@ -128,9 +129,11 @@ device; and the extra that supplies it, if any. The public calls resolve through
 
 **The repo-root `_backends.py` keeps ADR 0003's policy and nothing else**: the session
 header, the skip-or-escalate rule and `PFSMGRAPH_REQUIRE_BACKENDS`. It holds no table. It
-takes availability from the public enumeration in §4, and reads only the private "absence
-attributable to" field from `pfsmgraph.hmm._backends` to decide skip versus escalation, so the
-header and a user's `backends()` call run one probe and cannot disagree. A future
+takes availability from the private `_status(algorithm)` behind the public enumeration in
+§4, which accepts private algorithms too, and reads the private "absence attributable to"
+field to decide skip versus escalation, so the header and a user's `backends()` call run one
+probe and cannot disagree. *(Amended 2026-09-14 while building it: the first wording named
+`backends()` itself, which refuses the private `forward_backward` the header reports.)* A future
 `pfsmgraph.align` is read beside it; no distribution imports another's table.
 
 The row's "absence attributable to" field is what lets one table serve two policies:

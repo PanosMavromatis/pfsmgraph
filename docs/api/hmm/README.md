@@ -7,6 +7,8 @@ topology search are later revisions.
 - **Parameters** — [`params.md`](params.md): `HMMParams`.
 - **Decode** — [`viterbi.md`](viterbi.md): `viterbi`, `ViterbiPath`,
   `ImpossibleSequenceError`.
+- **Backends** — [`backends.md`](backends.md): `backend=`, `backends`, `BackendStatus`,
+  `BackendUnavailableError`.
 
 It depends on `pfsmgraph-dataseq`, for its vocabulary and its records, and on `numpy`.
 
@@ -108,21 +110,25 @@ attribute beginning with `_` — is private, out of contract, and may change wit
 | `viterbi` | function | [viterbi.md](viterbi.md) |
 | `ViterbiPath` | frozen dataclass | [viterbi.md](viterbi.md) |
 | `ImpossibleSequenceError` | exception | [viterbi.md](viterbi.md) |
+| `backends` | function | [backends.md](backends.md) |
+| `BackendStatus` | frozen dataclass | [backends.md](backends.md) |
+| `BackendUnavailableError` | exception | [backends.md](backends.md) |
 
 ## Backends and extras
 
-**`viterbi` runs a pure-Python/numpy kernel, and in 0.1.0 there is no way to choose
-another.** The repository also holds a Cython, a Numba CPU-parallel and a Numba CUDA
-translation of the same kernel, each tested against it for equivalence. None of them is
-reachable through a public call: selecting a backend at run time is an open question
-([ADR 0003](../../design/adr/0003-one-parameterized-test-suite-per-algorithm.md)), and
-until it is settled the public decode is the reference kernel only.
+**`viterbi` has four implementations, and `backend=` chooses among them**: `"python"`,
+`"cython"`, `"cpu_parallel"` and `"cuda"`, one per lifecycle phase, each tested against the
+others for exact equality on the same inputs. **The default is `"python"`**, and nothing in
+the environment changes it. **A backend that cannot run here raises
+`BackendUnavailableError`** naming what is missing; nothing falls back. `backends("viterbi")`
+reports which can run, and why the others cannot.
+([ADR 0021](../../design/adr/0021-runtime-backend-selection.md))
 
-**0.1.0 declares no optional extras.** A backend you could not select would install `numba`
-or `numba-cuda` for nothing, so the extras arrive with the API that makes them reachable.
-When they do, GPU here means `numba-cuda`, unrelated to the `torch` stack `pfsmgraph-dl`
-uses.
+**The compiled backends' dependencies are optional extras**, `cpu-parallel` for numba and
+`gpu` for numba-cuda, so the base install stays lean. GPU here means `numba-cuda`,
+unrelated to the `torch` stack `pfsmgraph-dl` uses.
 ([ADR 0004](../../design/adr/0004-gpu-backends-and-optional-dependency-strategy.md))
+[backends.md](backends.md) has the detail.
 
 ## Related records
 
@@ -133,5 +139,7 @@ uses.
   the reserved block the symbol axis spans.
 - [ADR 0016](../../design/adr/0016-numba-cpu-parallel-phase.md) — the four-phase
   lifecycle the backends follow.
+- [ADR 0021](../../design/adr/0021-runtime-backend-selection.md) — choosing a backend at
+  run time, and why nothing falls back.
 - [`FORMALIZATION.md`](../../design/algorithms/viterbi/FORMALIZATION.md) — the
   recurrence, base cases and tie-breaking rule, independent of any language.

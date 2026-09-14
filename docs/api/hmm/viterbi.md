@@ -29,10 +29,12 @@ path = viterbi(params, record)
 ## `viterbi`
 
 ```python
-viterbi(params: HMMParams, record: SequenceRecord) -> ViterbiPath
+viterbi(params: HMMParams, record: SequenceRecord, *, backend: BackendName = "python") -> ViterbiPath
 ```
 
-The most probable state path over one record under one model.
+The most probable state path over one record under one model. `backend` chooses which of
+four implementations runs it, all returning the same path; [backends.md](backends.md)
+describes them.
 
 ```python
 >>> record.codes

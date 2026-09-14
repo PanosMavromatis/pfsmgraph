@@ -56,7 +56,7 @@ Requires [uv](https://docs.astral.sh/uv/) and Python ≥ 3.10.
 
 ```bash
 uv sync                             # venv + all five members editable + dev tools
-uv run pytest                       # run the suite (708: 74 dataseq, 584 hmm, 50 root)
+uv run pytest                       # run the suite (709: 74 dataseq, 584 hmm, 51 root)
 uv build --package pfsmgraph-align  # build one distribution
 uv lock                             # refresh uv.lock (committed; one per family)
 ```

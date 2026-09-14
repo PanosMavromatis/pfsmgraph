@@ -180,7 +180,8 @@ reports it identically:
   green run could conceal a backend that is implemented but not importable — the case
   *Policy* makes a hard failure. That member is `align`, and the obligation to revisit is
   filed in `docs/plan/DEFERRED.md` under the `align` migration rather than left to
-  memory.
+  memory. *(Corrected 2026-09-14: it was `hmm`, from 2026-09-04, when its phase-1 decode
+  became the matrix's first row.)*
 
 - **Runtime backend selection is settled by
   [ADR 0021](0021-runtime-backend-selection.md)** (2026-09-14), the record the Open section
