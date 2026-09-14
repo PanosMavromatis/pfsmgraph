@@ -1,4 +1,4 @@
-# dp-compile: derived-from packages/pfsmgraph-hmm/src/pfsmgraph/hmm/_viterbi_cpu_parallel.py sha256:5f45abb4477880c66b70b25a24fec12c12bc048aff2ac1d9bbae4108a22df4ab
+# dp-compile: derived-from packages/pfsmgraph-hmm/src/pfsmgraph/hmm/_viterbi_cpu_parallel.py sha256:7d9613675425d21c901b690300fd54066661469be4fae3b2b63c1f9264be3f9b
 """The Viterbi decode, ADR 0002 phase 4: Numba CUDA.
 
 The decomposition is ``_viterbi_cpu_parallel.py``'s, re-expressed in the CUDA
@@ -30,16 +30,23 @@ oracle**, by construction rather than by tolerance.
 this paragraph said phases 1-3 "share one ``log2``" and are bit-identical only
 because of it. They do not: phase 1 takes numpy's vectorised ``log2``, phases 2
 and 3 call libm's scalar one, and on an AVX-512 host the two differ by one ulp in
-about 0.1% of inputs (3,937 of 4,000,000, numpy 2.4.6). So this kernel matches
-phase 1 bit for bit and can sit one ulp per arc from phases 2 and 3 in
-``total_bits``. Unifying the logarithm across the backends is filed in
-``docs/plan/DEFERRED.md``.
+about 0.1% of inputs (3,937 of 4,000,000, numpy 2.4.6). So this kernel matched
+phase 1 bit for bit and could sit one ulp per arc from phases 2 and 3 in
+``total_bits``.
+
+*Resolved 2026-09-14 on* ``fix/hmm-viterbi-log2``. Phases 2 and 3 now take their
+logarithms the way this file does -- ``bits`` on the host, over the same
+``(S, S, U)`` table -- and perform only ``+`` and ``<``, so all four backends are
+bit-exact with one another on a given host. The contract is numpy's ``log2`` as
+evaluated through ``bits``; it is not a promise of identical bits across
+machines, since numpy's SIMD dispatch differs between them.
 
 **The table spans the symbols present, not the vocabulary.** ``arc_bits`` is
 ``(S, S, U)`` over ``U = np.unique(codes)``, and the record is re-indexed into
 it. ``(S, S, A)`` would grow with the vocabulary -- this family's symbols are
 words -- and ``(N, S, S)`` with the record; ``U <= min(N, A)`` bounds it by both.
-This is not the ``(S, S, A)`` precompute phases 1 and 2 refused: that was refused
+Phases 2 and 3 now build the same table. It is not the ``(S, S, A)`` precompute
+phase 1 refused: that was refused
 as ``O(S**2 * A)`` host work hoisted for speed, and it reads like the emission
 hoist ADR 0015 forbids. Here the emission factor still depends on both
 endpoints -- ``arc_bits[i, j, k]`` -- and is still read inside the inner loop;

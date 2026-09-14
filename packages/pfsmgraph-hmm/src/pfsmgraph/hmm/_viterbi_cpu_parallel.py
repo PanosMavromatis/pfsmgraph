@@ -1,4 +1,4 @@
-# dp-compile: derived-from packages/pfsmgraph-hmm/src/pfsmgraph/hmm/_viterbi_cython.pyx sha256:79da7c8de03cf69be864a08a7d07650ae46eabb1998e13013e17a2a19a67d057
+# dp-compile: derived-from packages/pfsmgraph-hmm/src/pfsmgraph/hmm/_viterbi_cython.pyx sha256:923163bbef4f0f09411732d0cff4a13bad3696fe3c06c95deeb5685b8c0d6b6d
 """The Viterbi decode, ADR 0002 phase 3: Numba CPU-parallel, ``prange``.
 
 A **mechanical** translation of ``_viterbi_cython.pyx``, which is itself a
@@ -31,19 +31,27 @@ the wavefront is "the same transformation for every DP kernel in the family" is
 withdrawn in ADR 0016's ``Resolved`` section; it holds for ``align``, whose
 two-dimensional matrix does have independent anti-diagonals.
 
-**The domain is bits, so this is a min-sum**, and ``-log2(0.0)`` is ``+inf`` in
-nopython mode exactly as it is in libc and numpy -- verified rather than assumed,
-since a nopython ``math.log2(0.0)`` raising instead would have turned the
-impossible-sequence path into an exception inside a kernel that must not raise.
-``+inf`` absorbs under addition and sorts where it means, so impossibility falls
-out of the arithmetic.
+**The domain is bits, so this is a min-sum**, and every logarithm is taken on the
+host by :func:`bits`, where ``bits(0)`` is ``+inf``. ``+inf`` absorbs under
+addition and sorts where it means, so impossibility falls out of the arithmetic
+and the kernel never evaluates a logarithm that could raise.
 
-**Bit-exactness with phases 1 and 2 is intended.** The same two float64
-operations happen in the same order -- multiply, ``-log2``, add -- so candidate
-values are identical bit patterns and the minima are too. Note this is safe here
-precisely because the reduction is ``min``, which is exact and order-independent
-in a way a float *sum* is not: a forward or posterior recurrence parallelised the
-same way would reassociate and need a tolerance. Revision 03 writes one.
+**Bit-exactness with phases 1 and 2 holds by construction.** The wrapper builds
+the seed and the ``(S, S, U)`` arc-cost table exactly as phase 2's does -- phase
+1's operation order, one float64 multiply then one numpy ``-log2`` -- and the
+kernel performs only ``+`` and ``<``, which are exact IEEE-754 operations. So
+candidate values are identical bit patterns and the minima are too. Note this is
+safe here precisely because the reduction is ``min``, which is exact and
+order-independent in a way a float *sum* is not: a forward or posterior
+recurrence parallelised the same way would reassociate and need a tolerance.
+Revision 03 writes one.
+
+*Corrected 2026-09-14.* This file used to evaluate ``-np.log2`` inside the
+``prange`` body, which numba lowers to libm's scalar ``log2``, and claimed
+bit-exactness with phase 1 on the strength of a matching operation order. On an
+AVX-512 host numpy's vectorised ``log2`` rounds one ulp away from libm's in
+roughly 0.07-0.19% of probability-shaped inputs, so that claim was false; the
+measurement is in the branch plan for ``fix/hmm-viterbi-log2``.
 
 **The parallelism is thin, and this kernel may be slower than phase 2.** ``S`` is
 5 and 8 in the tracked fixtures and on the order of 50 at the ceiling, so
@@ -72,24 +80,27 @@ from __future__ import annotations
 import numpy as np
 from numba import njit, prange
 
+from ._numeric import bits
+
 
 @njit(parallel=True)
-def _decode(init_p, trans_p, out_p, codes, delta, psi, states):
+def _decode(seed, arc_bits, sym, delta, psi, states):
     """The recurrence and the backtrace. The caller owns every buffer."""
-    n = codes.shape[0]
-    size = trans_p.shape[0]
+    n = sym.shape[0]
+    size = seed.shape[0]
 
     # Base case, in the bit domain: deviation 1 of the formalization and the
-    # whole of the seeding fix. Serial rather than prange -- it is S elements
-    # once per call, so a fork/join here would cost more than it saves.
+    # whole of the seeding fix. The caller took the logarithm. Serial rather
+    # than prange -- it is S elements once per call, so a fork/join here would
+    # cost more than it saves.
     for j in range(size):
-        delta[0, j] = -np.log2(init_p[j])
+        delta[0, j] = seed[j]
 
     # psi's row 0 is never read; the backtrace stops at psi[1]. Zeroed by the
     # caller rather than left undefined, matching phases 1 and 2.
 
     for t in range(1, n + 1):
-        code = codes[t - 1]
+        k = sym[t - 1]
         # THE parallel loop. Each iteration writes delta[t, j] and psi[t, j] and
         # nothing else, and reads only row t - 1. Do not lift the `i` loop into
         # this one: see the module docstring.
@@ -98,12 +109,11 @@ def _decode(init_p, trans_p, out_p, codes, delta, psi, states):
             best_i = 0
             # Serial, ascending, strict `<`. This is the tie-break.
             for i in range(size):
-                # The arc cost, fused: multiply the two probabilities, then one
-                # logarithm -- the same order as phases 1 and 2, so the rounding
-                # is identical rather than merely equivalent. Emission is on the
-                # arc (ADR 0015), so out_p depends on both endpoints and cannot
-                # be hoisted out of either loop.
-                cand = delta[t - 1, i] + -np.log2(trans_p[i, j] * out_p[i, j, code])
+                # Only + and < here: the arc cost was taken on the host by
+                # bits(), the function phase 1 uses. Emission is on the arc
+                # (ADR 0015), so arc_bits depends on both endpoints and is read
+                # inside both loops.
+                cand = delta[t - 1, i] + arc_bits[i, j, k]
                 if cand < best:
                     best = cand
                     best_i = i
@@ -133,26 +143,31 @@ def _viterbi(init_state_p, transition_p, output_p, codes):
     could not be compared. Returns ``(states, total_bits)`` with ``states`` of
     shape ``(N + 1,)`` -- a path over ``N`` symbols visits ``N + 1`` states.
 
-    This wrapper does what the kernel cannot: coerce the inputs to a layout
-    nopython mode can type, allocate the working buffers, and convert back to
-    Python. It does **not** validate and does not raise.
+    This wrapper does what the kernel cannot: take every logarithm with
+    :func:`bits`, coerce the results to a layout nopython mode can type, allocate
+    the working buffers, and convert back to Python. It does **not** validate and
+    does not raise.
     """
-    # Contiguous and float64, matching phase 2. A no-op on what HMMParams
-    # actually holds. Unlike the Cython memoryviews these need no `const`
-    # treatment -- numba reads a read-only array without complaint -- so ADR
-    # 0017's frozen buffers cost nothing here.
     init_c = np.ascontiguousarray(init_state_p, dtype=np.float64)
     trans_c = np.ascontiguousarray(transition_p, dtype=np.float64)
     out_c = np.ascontiguousarray(output_p, dtype=np.float64)
-    codes_c = np.ascontiguousarray(codes, dtype=np.int32)
+    codes_c = np.ascontiguousarray(codes, dtype=np.int64)
 
-    n = codes_c.shape[0]
-    size = trans_c.shape[0]
+    # The logarithms, on the host, exactly as phase 2 takes them: one float64
+    # multiply, then one numpy -log2, over the symbols this record uses. An
+    # empty record gives a (S, S, 0) table and no timesteps.
+    seed = np.ascontiguousarray(bits(init_c))
+    present, sym = np.unique(codes_c, return_inverse=True)
+    arc_bits = np.ascontiguousarray(bits(trans_c[:, :, None] * out_c[:, :, present]))
+    sym_c = np.ascontiguousarray(sym, dtype=np.int64)
+
+    n = sym_c.shape[0]
+    size = seed.shape[0]
 
     delta = np.empty((n + 1, size), dtype=np.float64)
     psi = np.zeros((n + 1, size), dtype=np.int64)
     states = np.empty(n + 1, dtype=np.int64)
 
-    _decode(init_c, trans_c, out_c, codes_c, delta, psi, states)
+    _decode(seed, arc_bits, sym_c, delta, psi, states)
 
     return states, float(delta[n, states[n]])
