@@ -36,6 +36,9 @@ fs = import('fs')
 py.install_sources(
   [
     'src/pfsmgraph/hmm/__init__.py',
+    # Baum-Welch re-estimation for revision 03: the M-step and the EM loop over
+    # the forward-backward counts. Not a DP kernel, so no lifecycle phases.
+    'src/pfsmgraph/hmm/_baum_welch.py',
     # Forward-backward for revision 03, ADR 0002 phase 1, in the scaled
     # probability domain (ADR 0020). No apostrophes in these comments: the
     # source test reads entries as single-quoted strings.
