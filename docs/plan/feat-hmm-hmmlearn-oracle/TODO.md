@@ -1,6 +1,6 @@
 # feat/hmm-hmmlearn-oracle
 
-**Status**: active
+**Status**: merged — PR #32 — 2026-09-14
 **Created**: 2026-09-14
 **Subgoal**: Validate the numpy reference against an external oracle — `docs/plan/TODO.md`, revision 03-hmm-v0.2.0
 
