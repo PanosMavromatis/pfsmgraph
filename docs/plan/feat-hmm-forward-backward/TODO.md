@@ -1,6 +1,6 @@
 # feat/hmm-forward-backward
 
-**Status**: active
+**Status**: merged — PR #30 — 2026-09-14
 **Created**: 2026-09-14
 **Subgoal**: Implement forward-backward in numpy as the reference — `docs/plan/TODO.md`,
 revision 03-hmm-v0.2.0
