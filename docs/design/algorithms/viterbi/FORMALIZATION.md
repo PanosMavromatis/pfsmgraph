@@ -203,7 +203,7 @@ The two decompositions not taken:
   and batching arrives with revision 03.
 - **An associative scan over time** in the min-plus semiring, since `(min, +)` matrix
   "multiplication" is associative. Costs `O(N·S³)` against `O(N·S²)`, does not produce
-  `psi`, and re-associates the comparisons — so it forfeits bit-exactness with phases 1-2
+  `psi`, and re-associates the comparisons — so it forfeits bit-exactness with the other phases
   and would need its own equivalence argument rather than a differential test.
 
 **The logarithm is evaluated on the host, never on a device.** Settled 2026-09-13 at phase
@@ -216,13 +216,20 @@ symbols the record uses, and the device performs only `+` and `<`, which are exa
 is not the emission hoist forbidden above: `arc_bits[i, j, k]` still depends on both
 endpoints and is still read inside the reduction; only the logarithm moved.
 
-**Which host `log2` is contract remains open.** Phase 1 (and phase 4's table) use numpy's
-vectorised `log2`; phases 2 and 3 call libm's scalar one; on an AVX-512 host the two
-differ by one ulp in about 0.1% of inputs (3,937 of 4,000,000, numpy 2.4.6). Phase 4 is
-therefore bit-exact with phase 1 and within one ulp per arc of phases 2-3 in `total_bits`.
-Unifying the logarithm across backends is filed in `docs/plan/DEFERRED.md` under
-revision 03 opening; until then, this section names where the function runs, not which
-function it is.
+**The host `log2` is numpy's, evaluated through `bits`, and that is contract.** Settled
+2026-09-14 on `fix/hmm-viterbi-log2`. Every arc cost and the seed are computed on the host
+by `bits` — `seed = bits(init_state_p)`, and `arc_bits = bits(transition_p[:, :, None] *
+output_p[:, :, present])` over the symbols the record uses — and every phase after the
+first performs only `+` and `<` on them. Phases 2 and 3 used to call libm's scalar `log2`
+inside the recurrence, which rounds one ulp away from numpy's vectorised one in roughly
+0.07-0.19% of probability-shaped inputs on an AVX-512 host, most often on high-probability
+arcs. At an exact tie that chose a different predecessor with an identical `total_bits`
+(TC-21). **The scope is one host.** numpy's result is a function of the value alone on a
+given machine — measured across 0-d scalars, call lengths 1-17, and strided and transposed
+views — but it depends on numpy's SIMD dispatch, so this contract promises that all
+backends agree on the same host, not that two machines produce the same bits. It also
+covers the decode only: a forward recurrence needs `log`/`exp` inside the recurrence, where
+no host table can reach.
 
 **The tie-breaking rule belongs here as much as in the recurrence**: smallest index wins, at
 both the recurrence and the final `argmin`. Two backends disagreeing on ties will fail an
@@ -367,6 +374,22 @@ satisfies, so a reader must be able to tell a specified behaviour from a ratifie
     Implemented 2026-09-09 as `test_impossibility_is_reported_at_position_zero`.
     Mutation-tested: with `enumerate(codes, start=1)`, the case fails.
 
+### TC-21: an exact tie in bits resolves to state 0 on every backend — `constructed`, exact
+    Input:  S=2, one symbol, N=1, init (0.5, 0.5), transition [[p, 1-p], [p', 1-p']],
+            where p' = nextafter(p, 1) and 1 + bits(p) == 1 + bits(p') exactly; the
+            pair is found at test time, since it is a fact about the host's numpy
+    Expect: states [0, 0] and total 1 + bits(p) on every backend. A decode taking its
+            logarithms from libm inside the recurrence yields [1, 0] with the same
+            total, which the suite asserts too, skipping only on a host where libm
+            breaks no drawn tie.
+    Why:    the tie exists because `1 + bits(p)` rounds to steps of 2.2e-16 while
+            `bits(p)` near zero moves in steps of about 1.4e-17, so adjacent
+            probabilities collapse to equal sums on any IEEE-754 host. A logarithm one
+            ulp off moves the path, not the score, so no bound on `total_bits` sees it.
+
+    Implemented 2026-09-14 as the "one logarithm for every backend" section of
+    `test_viterbi.py`. Mutation-tested: see Notes.
+
 ## Notes
 
 - **This document was recovered from an implementation, not written before one.** The
@@ -387,5 +410,10 @@ satisfies, so a reader must be able to tell a specified behaviour from a ratifie
   a constructed model showed both raising; the resolution is that *both are right about
   their own model*, and the case is only meaningful once the model is pinned. A boundary
   assertion that does not say which model it holds in is not yet a specification.
+- **TC-21 was mutation-tested against the defect it names.** With the pre-fix phase-3
+  kernel from `10c442e` swapped in, the tie test fails, while the generated-models case for
+  phase 3 still passes. So the generated cases were never evidence about the logarithm:
+  an arc-level ulp is usually absorbed when added to `delta`, and seeded models reached the
+  split in 1 of 200. Only a constructed tie reaches the case that matters.
 - **Phase 3 must not invent a decomposition.** See *Parallel decomposition*; "undetermined"
   is the answer until a kernel that exists settles it.

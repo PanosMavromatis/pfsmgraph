@@ -381,6 +381,12 @@ and several of these must land *as part of* the merge rather than after it.
   route phase 1 through libm; either reopens phases 2 and 3 and regenerates their headers,
   and `FORMALIZATION.md` should then name *which* `log2` is contract, not merely where it
   is evaluated.
+  **Settled (2026-09-14), and the entry is closed.** The first fix was taken: phases 2 and
+  3 build phase 4's `(S, S, U)` table with `bits` on the host and perform only `+` and
+  `<`, so phase 1 was not reopened and `FORMALIZATION.md` stayed fresh. `FORMALIZATION.md`
+  now names numpy's `log2` through `bits` as contract, scoped to one host, and TC-21
+  constructs the tie the split could break. The branch plan for `fix/hmm-viterbi-log2`
+  has the measurements.
 
 ## Trigger: the `align` migration
 
