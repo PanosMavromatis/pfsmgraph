@@ -39,12 +39,31 @@ dependencies = [
     "numpy>=2.1",
 ]
 
-# No optional dependencies in 0.1.0, although the Numba CPU-parallel and CUDA
-# backends ship: no public call can reach them until a backend-selection API
-# exists, and an extra that changes nothing costs its users a numpy ceiling
-# while being hard to withdraw later (an upgraded install silently loses it).
-# Both return, with the measurements that shaped them, under
-# docs/plan/DEFERRED.md "`align` acquiring a backend-selection API".
+# Two extras, one per accelerated backend family, and deliberately not merged
+# (ADR 0004): the CPU-parallel backend needs no device, and `gpu` satisfies
+# `cpu-parallel` only because numba-cuda depends on numba -- a resolution
+# accident. Both are optional because numba imposes a numpy *ceiling* (numba
+# 0.61 caps it below 2.2, 0.67 below 2.6), which as a hard dependency would bind
+# every consumer, including one who only runs the pure-Python decode. Withheld
+# from 0.1.0, when no public call could reach these backends; restored with
+# ADR 0021's `backend=`, which can. An extra changes no call's behaviour: the
+# default stays "python", and `backends("viterbi")` reports what an install lacks.
+[project.optional-dependencies]
+# numba>=0.61 is the version phase 3 was measured on (2026-09-10); the lock tests
+# 0.67. A floor only has to be honest.
+cpu-parallel = ["numba>=0.61"]
+# Bare numba-cuda, with no cu12/cu13 toolkit extra: naming a CUDA major would
+# decide driver compatibility for every consumer (the dev group picks cu13 for
+# this repository only). The numpy<2.5 cap is numba-cuda's, which its metadata
+# omits: 0.30.4, still the latest on 2026-09-14, calls np.row_stack at import and
+# numpy 2.5 removed it. Drop the cap when a numba-cuda release stops doing that.
+# Not on macOS, where numba-cuda publishes no wheel and no sdist: the extra
+# installs nothing there, and backends() says numba-cuda is not installed,
+# rather than the whole install failing to resolve.
+gpu = [
+    "numba-cuda>=0.30.4; sys_platform != 'darwin'",
+    "numpy<2.5; sys_platform != 'darwin'",
+]
 
 [project.urls]
 Homepage = "https://github.com/PanosMavromatis/pfsmgraph"

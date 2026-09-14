@@ -180,4 +180,16 @@ reports it identically:
   green run could conceal a backend that is implemented but not importable — the case
   *Policy* makes a hard failure. That member is `align`, and the obligation to revisit is
   filed in `docs/plan/DEFERRED.md` under the `align` migration rather than left to
-  memory.
+  memory. *(Corrected 2026-09-14: it was `hmm`, from 2026-09-04, when its phase-1 decode
+  became the matrix's first row.)*
+
+- **Runtime backend selection is settled by
+  [ADR 0021](0021-runtime-backend-selection.md)** (2026-09-14), the record the Open section
+  asked for. A caller names a backend per call with `backend=`; the default is `"python"`;
+  a requested backend that cannot run raises `BackendUnavailableError` and nothing falls
+  back; and `backends(name)` lists what runs here, with reasons. The Open section expected
+  `align` to force the question, and `hmm` did instead, by reaching all four lifecycle phases
+  of the Viterbi decode first. Two consequences for this record: the *Decision*'s
+  parameterisation becomes satisfiable against the public API, and the backend table moves
+  out of the repo-root `_backends.py` into the distribution that owns the kernels, leaving
+  that module with the *Policy* above and nothing else. The policy itself does not change.

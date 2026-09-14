@@ -427,7 +427,12 @@ and several of these must land *as part of* the merge rather than after it.
   table — exclude `tests/`, or duplicate the mechanism per member — alongside whatever
   `align`'s shape suggests. Nothing is owed before that.
 
-## Trigger: `align` acquiring a backend-selection API
+## Trigger: a backend-selection API (fired by `hmm`, 2026-09-14)
+
+Filed expecting `align` to force it, since `align` was to be the first member with a compiled
+phase; `hmm` reached all four Viterbi phases first, and revision 03-hmm-v0.2.0 took the three
+items on `feat/hmm-backend-seam`. Retitled rather than left naming `align`, so it cannot fire
+a second time.
 
 - **Write the runtime backend-selection ADR** (next free number). What the public API
   does when a caller explicitly requests an unavailable backend — raise, or fall back to
@@ -438,6 +443,10 @@ and several of these must land *as part of* the merge rather than after it.
   taken a house position on the general shape of the question — strictness, on the
   grounds that silently absorbing a problem produces work that merely looks fine — but
   it has not been applied here.
+
+  **Done (2026-09-14), and the entry is closed.** [ADR 0021](../design/adr/0021-runtime-backend-selection.md)
+  applies it: a per-call `backend=` defaulting to `"python"`, `BackendUnavailableError` with
+  no fallback, the table shipped in `hmm`, and public `backends(name)`.
 
 - **Parameterize the DP suites over backends, and fold the labelled non-shared tests into
   them.** [ADR 0003](../design/adr/0003-one-parameterized-test-suite-per-algorithm.md)
@@ -452,6 +461,12 @@ and several of these must land *as part of* the merge rather than after it.
   lifecycle phases before `align` begins, so the whole of revision 02 runs without it, and
   `backends: python ✓` in the session header means the kernel imports rather than that any
   suite ran twice.
+
+  **Done (2026-09-14), and the entry is closed.** A `backend` fixture in
+  `packages/pfsmgraph-hmm/tests/conftest.py` runs every shared `test_viterbi.py` case on every
+  backend (55 each), the per-phase copies folded into shared tests, and what remains below the
+  line is only what the public call cannot see. The repo-root `_backends.py` now reads `hmm`'s
+  table rather than holding one.
 
 - **Restore `pfsmgraph-hmm`'s accelerator extras**, in the version whose public API can
   select a backend. Withheld from 0.1.0 on `chore/release-hmm-0.1.0` (2026-09-13): the
@@ -485,12 +500,22 @@ and several of these must land *as part of* the merge rather than after it.
   treating them as optional. `docs/api/hmm/README.md`'s "Backends and extras" section
   returns to describing them.
 
+  **Done (2026-09-14), and the entry is closed.** Both extras are declared again with the
+  measured floors (`b00ad2c`), re-checked against PyPI that day: `numba-cuda` 0.30.4 is still
+  the latest and still needs the cap. The `gpu` entries are marked `sys_platform != 'darwin'`,
+  since `numba-cuda` publishes no macOS wheel or sdist. The reasoning above now lives in
+  `packages/pfsmgraph-hmm/pyproject.toml`, and `docs/api/hmm/backends.md` describes the extras.
+
   **The same version ends 0.1.0's pure wheel.** Once a public call reaches a compiled
   kernel, drop the justfile `build` recipe's `-C setup-args=-Dcompiled=false` for `pfsmgraph-hmm`,
   restore `Programming Language :: Cython`, and plan real platform wheels. PyPI refuses a
   plain `linux_x86_64` tag, so that means manylinux builds (cibuildwheel in CI is the usual
   route, which would also retire the local token), and `preflight`'s `py3-none-any` check
   has to learn platform tags.
+
+  **Moved 2026-09-14 to the master plan's 0.2.0 release subgoal**, which carries it as a note:
+  it needs CI, and dropping the flag earlier would make `just build` produce a wheel PyPI and
+  preflight both refuse.
 
 ## Trigger: a vocabulary outliving the process that built it
 

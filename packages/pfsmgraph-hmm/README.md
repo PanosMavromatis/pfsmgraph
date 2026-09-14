@@ -60,12 +60,27 @@ included, so a record's codes index it directly. And four symbols give five stat
 as the path becomes less likely. A sequence every path of which crosses a zero-probability
 arc raises `ImpossibleSequenceError`, a `ValueError`, rather than returning a path.
 
-## One kernel in 0.1.0
+## Backends
 
-`viterbi` runs a pure-Python/numpy kernel. Cython, Numba CPU-parallel and Numba CUDA
-translations of it exist in the repository, each tested against it for equivalence, but
-no public call selects them yet, so this release ships no compiled code and declares no
-optional extras.
+`viterbi` has four implementations — pure Python/numpy, Cython, Numba CPU-parallel and
+Numba CUDA — each tested against the others for exact equality. The keyword-only
+`backend=` chooses one, and defaults to the pure-Python reference. A backend that cannot run
+here raises `BackendUnavailableError` naming what is missing, and nothing falls back:
+
+```python
+>>> from pfsmgraph.hmm import backends
+>>> [s.name for s in backends("viterbi")]
+['python', 'cython', 'cpu_parallel', 'cuda']
+>>> viterbi(params, ds[0], backend="python").total_bits == path.total_bits
+True
+```
+
+The compiled backends' dependencies are optional extras:
+
+```bash
+pip install 'pfsmgraph-hmm[cpu-parallel]'   # numba
+pip install 'pfsmgraph-hmm[gpu]'            # numba-cuda
+```
 
 ## Documentation
 

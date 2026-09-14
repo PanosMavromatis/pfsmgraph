@@ -36,6 +36,9 @@ fs = import('fs')
 py.install_sources(
   [
     'src/pfsmgraph/hmm/__init__.py',
+    # ADR 0021 backend table and selection. Shipped, because the public calls
+    # resolve backend= through it.
+    'src/pfsmgraph/hmm/_backends.py',
     # Baum-Welch re-estimation for revision 03: the M-step and the EM loop over
     # the forward-backward counts. Not a DP kernel, so no lifecycle phases.
     'src/pfsmgraph/hmm/_baum_welch.py',
