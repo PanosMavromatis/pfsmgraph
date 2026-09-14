@@ -5,7 +5,7 @@ which implementation of a dynamic-programming kernel runs, and how it finds out 
 here. See [README.md](README.md) for the contracts, and [viterbi.md](viterbi.md) for the
 decode these examples call.
 
-Every decode in this package has up to four implementations, one per lifecycle phase
+The decode has up to four implementations, one per lifecycle phase
 ([ADR 0016](../../design/adr/0016-numba-cpu-parallel-phase.md)):
 
 | Name | Implementation | Needs |
@@ -14,6 +14,14 @@ Every decode in this package has up to four implementations, one per lifecycle p
 | `"cython"` | a compiled Cython extension | a platform wheel, or a source build |
 | `"cpu_parallel"` | Numba, parallel over the states of one timestep | the `cpu-parallel` extra |
 | `"cuda"` | Numba CUDA | the `gpu` extra and a CUDA device |
+
+Training has two, and they are not lifecycle phases of each other
+([baum_welch.md](baum_welch.md)):
+
+| Name | Implementation | Needs |
+|---|---|---|
+| `"python"` | explicit forward and backward passes, numpy, the reference | nothing |
+| `"torch"` | the forward pass, with counts as reverse-mode gradients | the `torch` extra |
 
 Every example on this page runs against the same model and record:
 
@@ -53,7 +61,7 @@ an extra or plugging in a GPU never changes what an unqualified call runs.
 ViterbiPath(n_symbols=4, total_bits=5.0180, label='s1')
 ```
 
-**Every backend computes the same function.** All four take their logarithms on the host with
+**Every decode backend computes the same function.** All four take their logarithms on the host with
 numpy and then only add and compare, so on one machine they return identical states and
 identical `total_bits`, not merely close ones:
 
@@ -121,6 +129,8 @@ Every backend the public call `name` has, **available or not**, in lifecycle-pha
 ```python
 >>> [s.name for s in backends("viterbi")]
 ['python', 'cython', 'cpu_parallel', 'cuda']
+>>> [s.name for s in backends("baum_welch")]
+['python', 'torch']
 >>> backends("viterbi")[0]
 BackendStatus(name='python', available=True, reason=None)
 ```
@@ -162,6 +172,7 @@ The compiled backends' dependencies are optional, so the base install stays lean
 ```bash
 pip install 'pfsmgraph-hmm[cpu-parallel]'   # numba
 pip install 'pfsmgraph-hmm[gpu]'            # numba-cuda, numpy<2.5
+pip install 'pfsmgraph-hmm[torch]'          # torch, for baum_welch
 ```
 
 They are two extras rather than one because the CPU-parallel backend needs no device.
@@ -170,3 +181,9 @@ numba-cuda, unrelated to the `torch` stack `pfsmgraph-dl` uses. `gpu` caps numpy
 because numba-cuda 0.30.4 fails to import against numpy 2.5, and it installs nothing on macOS,
 where numba-cuda publishes no wheel; `backends()` says so. Neither extra names a CUDA toolkit,
 since that choice belongs to the machine's driver.
+
+`torch` is a third extra, for `baum_welch`'s `"torch"` backend, which runs in float64 on the
+CPU and so needs no device. It is unrelated to `gpu`. **A `torch` result is not bit-identical
+to the reference**, and `BackendStatus` carries no tolerance: each expected count agrees within
+`N · eps · max(1, count)` and each description length within `N · eps · max(1, bits)`, as
+[baum_welch.md](baum_welch.md) shows.
