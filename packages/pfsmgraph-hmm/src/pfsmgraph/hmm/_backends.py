@@ -111,8 +111,8 @@ _TABLE: Final[dict[str, tuple[_Row, ...]]] = {
     # not forward-backward kernels: torch derives the counts as gradients and
     # builds no beta, so the step is the one signature both share.
     "baum_welch": (
-        _Row("python", "pfsmgraph.hmm._forward_backward", "_e_step"),
-        _Row("torch", "pfsmgraph.hmm._baum_welch_torch", "_e_step", needs="torch", extra="torch"),
+        _Row("python", "pfsmgraph.hmm._forward_backward", "_e_step_batch"),
+        _Row("torch", "pfsmgraph.hmm._baum_welch_torch", "_e_step_batch", needs="torch", extra="torch"),
     ),
 }
 

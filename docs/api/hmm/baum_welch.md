@@ -33,7 +33,7 @@ result = baum_welch(params, ds)
 ## `baum_welch`
 
 ```python
-baum_welch(params: HMMParams, records, *, backend: BackendName = "python", batch_cycles: int = 10, change_bits: float = 0.1, patience: int = 3, max_cycles: int | None = None) -> BaumWelchResult
+baum_welch(params: HMMParams, records, *, backend: BackendName = "python", batch_size: int | None = None, device: str | None = None, batch_cycles: int = 10, change_bits: float = 0.1, patience: int = 3, max_cycles: int | None = None) -> BaumWelchResult
 ```
 
 Alternates an E-step, the expected counts of every start, arc crossing and emission under
@@ -60,6 +60,27 @@ counts are computed separately and summed before every M-step, so no transition 
 counted across the boundary between two records. A whole corpus concatenated into one
 record is the special case, and trains exactly as the Lush original's single flat stream
 did.
+
+### It batches, and the result does not depend on how
+
+`batch_size` is how many records go through the E-step together, padded to the longest of
+them; `None`, the default, sends the whole corpus at once. Memory grows as
+`batch_size · S² · A`, and nothing else changes: each record's counts come back separately
+and are summed in record order, so on `"python"` a run at any batch size is identical to
+the last bit:
+
+```python
+>>> one_at_a_time = baum_welch(params, ds, batch_size=1)
+>>> one_at_a_time.description_lengths == result.description_lengths
+True
+>>> all(bool((a == b).all()) for a, b in zip(
+...     (one_at_a_time.params.init_state_p, one_at_a_time.params.transition_p, one_at_a_time.params.output_p),
+...     (result.params.init_state_p, result.params.transition_p, result.params.output_p)))
+True
+```
+
+Padding cannot reach a count: `PAD`'s emission probability is zero in every model, and the
+E-step masks padded positions besides.
 
 ### It stops by the original's rule
 
@@ -138,7 +159,9 @@ True
 That bound is relative to the size of each value and grows with `N`, and it is not "a few
 units in the last place": a record that costs a fraction of a bit can differ by thousands of
 them relative to itself while differing by `1e-14` bits outright. `torch` runs in float64 on
-the CPU; a `backend=` never picks a device for you.
+the CPU unless `device=` names a torch device such as `"cuda:0"`, which is probed before
+training starts and never falls back; nothing picks a device for you. Only `torch` takes a
+device other than `"cpu"`, and the tolerance above holds there too.
 
 Neither backend is a lifecycle phase of the other, so `"cython"` and the rest are not
 `baum_welch` backends:
@@ -162,3 +185,20 @@ ImpossibleSequenceError: record 0 has no path of finite description length under
 Code 1 is `UNK`, whose fibres are zero in every model, so no path emits it. A code outside
 the model's symbol axis, a corpus with no symbols, and a stopping rule that cannot stop
 raise `ValueError`.
+
+So do a `batch_size` below 1 and a device the backend cannot use. Only `"torch"` runs
+anywhere but the CPU, and a device name must be a string:
+
+```python
+>>> baum_welch(params, ds, batch_size=0)
+ValueError: batch_size must be at least 1 or None, got 0
+>>> baum_welch(params, ds, device="cuda")
+ValueError: backend 'python' runs on the CPU only; device='cuda' needs backend='torch'
+>>> baum_welch(params, ds, device=0)
+TypeError: device must be a device name or None, got int
+```
+
+On `"torch"`, a name torch cannot parse raises `ValueError`, and a device it parses but
+cannot allocate on here (a GPU ordinal past the last, say) raises `BackendUnavailableError`
+carrying torch's own message, which differs by machine and build. Both are raised before
+any cycle runs, and neither falls back to the CPU.

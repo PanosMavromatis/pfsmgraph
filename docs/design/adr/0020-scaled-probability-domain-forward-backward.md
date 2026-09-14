@@ -225,4 +225,9 @@ most of the reference-speed cost under *Negative / costs* moot: at `S = 160` it 
   graph, because differentiating through them cancels near-equal terms and produced
   negative counts. The gradient is taken at the arc table `w`, because transition and
   emission gradients taken separately round a subnormal unit apart on an arc of probability
-  `8e-322`.
+  `8e-322`. *(Extended 2026-09-14 on `feat/hmm-batched-training`: the tolerance holds
+  unchanged for the batched kernel and on a device. Over 40 ragged padded batches, lengths
+  0-300 and `S` 1-7, the worst ratio was 1.00 for counts on both the CPU and an NVIDIA L4,
+  and 0.15 and 0.05 for description lengths, with no negative count. The numpy batched
+  kernel is bit-exact with the per-record one row by row, since `accumulate` over a state
+  axis is elementwise across a leading batch axis.)*

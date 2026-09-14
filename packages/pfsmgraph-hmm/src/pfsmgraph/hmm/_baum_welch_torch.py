@@ -21,13 +21,22 @@ probabilities rather than logarithms because ``exp(log p)`` is not bit-exactly
 ``p``.
 
 **The scale factors are constants to autograd.** Each ``q_t`` is detached, and
-the backward pass starts from ``ln Σ_j`` of the last unnormalised column, not
-from ``Σ ln q_t``. The gradient is the same, since dividing by a constant
-leaves a log-derivative unchanged, but the graph then holds only ``+``, ``*``
-and division by constants, so every count is a sum of nonnegative terms.
+the backward pass starts from ``ln Σ_j`` of each record's last unnormalised
+column, not from ``Σ ln q_t``. The gradient is the same, since dividing by a
+constant leaves a log-derivative unchanged, but the graph then holds only ``+``,
+``*`` and division by constants, so every count is a sum of nonnegative terms.
 Differentiating through ``q_t`` instead subtracts near-equal terms, and where a
 true count is near zero the rounding left behind can be negative: down to
 ``-3e-19`` on EM trajectories whose parameters had fallen to ``1e-50``.
+
+**Every record has its own leaves.** The batch's counts are returned per record,
+as every ``baum_welch`` kernel returns them, so the leaves are ``(B, S)`` and
+``(B, S, S, U)`` copies and one backward pass over the sum of the records'
+losses leaves each record's gradient in its own slice. A padded step carries α
+and the last column unchanged through ``torch.where``, so padding is off the
+graph rather than weighted by zero. An impossible or empty record's loss term is
+replaced by ``ln 1`` *before* the logarithm: masking it afterwards would still
+send ``0 · (1/0) = nan`` through the logarithm's backward.
 
 **The arithmetic follows ADR 0020 as far as torch allows.** The pass is scaled,
 not in log space, so gradients stay finite on unreachable states. The arc table
@@ -38,13 +47,14 @@ other backend. Measured against the reference, every count agrees within
 ``N · eps · max(1, count)`` and the description length within
 ``N · eps · max(1, bits)``; the tests hold both to four times that.
 
-**float64 on CPU.** No environment chooses a device (ADR 0021), and device
-placement belongs to the batching subgoal.
+**float64 on ``device``, the CPU when ``None``.** No environment chooses a device
+(ADR 0021): the caller names one, :func:`_device` probes it before any work, and
+nothing falls back. Measured on an NVIDIA L4, the tolerance is unchanged there.
 
 **Nothing raises, as for every kernel.** An impossible sequence has a zero scale
-factor, after which every column is zeros rather than ``nan``; the description
-length is ``+inf``, no backward pass runs, and every count is zero, as the
-reference returns. So is every count of an empty record.
+factor, after which its columns are zeros rather than ``nan``; its description
+length is ``+inf`` and every count is zero, as the reference returns. So is every
+count of an empty record.
 
 .. [ADR 0020] ``docs/design/adr/0020-scaled-probability-domain-forward-backward.md``
 """
@@ -54,59 +64,93 @@ from __future__ import annotations
 import numpy as np
 import torch
 
+from ._backends import BackendUnavailableError
 from ._numeric import bits
 
 __all__: list[str] = []
 
 
-def _forward(init, w, sym):
-    """The scaled forward pass: ``(scale, log_last)``.
+def _device(device):
+    """The ``torch.device`` for ``baum_welch``'s ``device=``, probed by allocation.
 
-    ``init`` is ``(S,)`` and ``w`` the ``(S, S, U)`` arc table, both tensors;
-    ``sym`` indexes ``w``'s last axis per position. ``scale`` is ``(N + 1,)``
-    with ``scale[0] = 1``, as the reference's is. ``log_last`` is ``ln Σ_j`` of
-    the last unnormalised column, in the autograd graph: with the scale factors
-    detached it differs from ``ln P`` by a constant, so its gradient is
-    ``∂ln P``, and its value is not used.
+    ``None`` is the CPU. A name torch cannot parse raises ``ValueError``; a device
+    that parses but cannot hold a float64 tensor here -- an ordinal past the last
+    GPU, a backend this torch build lacks -- raises
+    :class:`BackendUnavailableError` with torch's own message.
     """
-    alpha = init
-    column = init
-    factors = [torch.ones((), dtype=torch.float64)]
-    for u in sym:
-        column = (alpha[:, None] * w[:, :, u]).sum(dim=0)
-        q = column.detach().sum()
-        alpha = column / q if q > 0 else torch.zeros_like(column)
-        factors.append(q)
-    return torch.stack(factors), torch.log(column.sum())
+    if device is None:
+        return torch.device("cpu")
+    try:
+        parsed = torch.device(device)
+    except RuntimeError as exc:
+        raise ValueError(f"device {device!r} is not a torch device name: {exc}") from None
+    try:
+        torch.empty(0, dtype=torch.float64, device=parsed)
+    except Exception as exc:
+        raise BackendUnavailableError(
+            f"backend 'torch' cannot allocate on device {device!r}: {exc}"
+        ) from None
+    return parsed
 
 
-def _e_step(init_state_p, transition_p, output_p, codes):
-    """``((init_counts, transition_counts, emission_counts), bits)`` for one record.
+def _e_step_batch(init_state_p, transition_p, output_p, codes, lengths, device=None):
+    """Per-record ``(counts, bits)`` for a padded batch, as gradients.
 
-    The signature of every ``baum_welch`` backend. Arrays in and out are numpy
-    float64; the counts have the reference's shapes, ``(S,)``, ``(S, S)`` and
-    ``(S, S, A)``.
+    The signature of every ``baum_welch`` backend. ``codes`` ``(B, L)`` and
+    ``lengths`` ``(B,)`` are ``pad_collate``'s; arrays in and out are numpy
+    float64, and the counts have shapes ``(B, S)``, ``(B, S, S)`` and
+    ``(B, S, S, A)``. ``device`` is a ``torch.device``, a device name, or ``None``
+    for the CPU.
     """
+    dev = device if isinstance(device, torch.device) else torch.device(device or "cpu")
+    codes = np.asarray(codes)
+    lengths = np.asarray(lengths, dtype=np.int64)
+    batch, width = codes.shape
     init = np.asarray(init_state_p, dtype=np.float64)
     transition = np.asarray(transition_p, dtype=np.float64)
     output = np.asarray(output_p, dtype=np.float64)
-    present, sym = np.unique(np.asarray(codes), return_inverse=True)
+    size = init.shape[0]
+    present, sym = np.unique(codes, return_inverse=True)
+    sym = sym.reshape(codes.shape)
     w = transition[:, :, np.newaxis] * output[:, :, present]
 
-    init_leaf = torch.tensor(init, requires_grad=True)
-    w_leaf = torch.tensor(w, requires_grad=True)
-    scale, log_last = _forward(init_leaf, w_leaf, sym.tolist())
-    total = float(np.add.accumulate(bits(scale.numpy()))[-1])
+    init_leaf = torch.tensor(np.broadcast_to(init, (batch, size)), device=dev, requires_grad=True)
+    w_leaf = torch.tensor(np.broadcast_to(w, (batch, *w.shape)), device=dev, requires_grad=True)
+    live = torch.as_tensor(np.arange(width)[np.newaxis, :] < lengths[:, np.newaxis], device=dev)
+    sym_t = torch.as_tensor(sym, device=dev)
+    rows = torch.arange(batch, device=dev)
 
-    init_counts = np.zeros_like(init)
-    transition_counts = np.zeros_like(transition)
-    emission_counts = np.zeros_like(output)
-    if present.size == 0 or not np.isfinite(total):
+    alpha = init_leaf
+    last = init_leaf
+    factors = [torch.ones(batch, dtype=torch.float64, device=dev)]
+    for t in range(width):
+        column = (alpha[:, :, None] * w_leaf[rows, :, :, sym_t[:, t]]).sum(dim=1)
+        q = column.detach().sum(dim=1)
+        on = live[:, t]
+        possible = on & (q > 0)
+        q_safe = torch.where(possible, q, torch.ones_like(q))
+        scaled = torch.where(possible[:, None], column / q_safe[:, None], torch.zeros_like(column))
+        alpha = torch.where(on[:, None], scaled, alpha)
+        last = torch.where(on[:, None], column, last)
+        factors.append(torch.where(on, q, torch.ones_like(q)))
+    scale = torch.stack(factors, dim=1).cpu().numpy()
+    total = np.add.accumulate(bits(scale), axis=1)[:, -1]
+
+    init_counts = np.zeros((batch, size), dtype=np.float64)
+    transition_counts = np.zeros((batch, size, size), dtype=np.float64)
+    emission_counts = np.zeros((batch, size, size, output.shape[2]), dtype=np.float64)
+    trainable = (lengths > 0) & np.isfinite(total)
+    if not trainable.any():
         return (init_counts, transition_counts, emission_counts), total
 
-    log_last.backward()
-    per_symbol = w * w_leaf.grad.numpy()
-    init_counts = init * init_leaf.grad.numpy()
-    emission_counts[:, :, present] = per_symbol
-    transition_counts = np.add.accumulate(per_symbol, axis=2)[:, :, -1]
+    keep = torch.as_tensor(trainable, device=dev)
+    mass = last.sum(dim=1)
+    torch.log(torch.where(keep, mass, torch.ones_like(mass))).sum().backward()
+
+    per_symbol = w[np.newaxis] * w_leaf.grad.cpu().numpy()
+    per_symbol[~trainable] = 0.0
+    init_counts = init[np.newaxis] * init_leaf.grad.cpu().numpy()
+    init_counts[~trainable] = 0.0
+    emission_counts[:, :, :, present] = per_symbol
+    transition_counts = np.add.accumulate(per_symbol, axis=3)[:, :, :, -1]
     return (init_counts, transition_counts, emission_counts), total

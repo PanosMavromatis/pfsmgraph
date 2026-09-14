@@ -207,12 +207,88 @@ def _expected_counts(alpha, beta, transition_p, output_p, codes):
 def _e_step(init_state_p, transition_p, output_p, codes):
     """``((init_counts, transition_counts, emission_counts), bits)`` for one record.
 
-    The ``python`` row of the ``baum_welch`` backend table: the recurrences, the
-    description length and the expected counts, composed. Every backend of that
-    call implements this signature; the ``torch`` one derives the same counts as
-    gradients and builds no β, which is why the table's key is this step rather
-    than :func:`_forward_backward`.
+    The recurrences, the description length and the expected counts, composed,
+    for one unpadded record. :func:`_e_step_batch` is the table's ``python`` row
+    and is held bit for bit to this function row by row; the ``torch`` backend
+    derives the same counts as gradients and builds no β, which is why the table's
+    rows are E-steps rather than :func:`_forward_backward`.
     """
     alpha, beta, scale = _forward_backward(init_state_p, transition_p, output_p, codes)
     counts = _expected_counts(alpha, beta, transition_p, output_p, codes)
     return counts, _description_length(scale)
+
+
+def _e_step_batch(init_state_p, transition_p, output_p, codes, lengths, device=None):
+    """Per-record ``(counts, bits)`` for a padded batch: the ``baum_welch`` kernel.
+
+    ``codes`` ``(B, L)`` and ``lengths`` ``(B,)`` are ``pad_collate``'s. Returns
+    ``((init_counts, transition_counts, emission_counts), bits)``, shapes ``(B, S)``,
+    ``(B, S, S)``, ``(B, S, S, A)`` and ``(B,)``. Row ``b`` is :func:`_e_step` on
+    record ``b`` alone, **bit for bit**, which is what lets ``baum_welch``'s result
+    ignore ``batch_size``:
+
+    - every reduction is the per-record one with a leading batch axis, and
+      ``accumulate`` over a state axis is elementwise across it;
+    - at a padded step α is carried unchanged and the scale factor is exactly 1,
+      whose ``bits`` is ``-0.0`` and adds nothing;
+    - β is seeded with each record's own ``1 / scale[n_b]`` at every padded row, so
+      the recurrence resumes at ``n_b - 1`` exactly as it starts there alone;
+    - ξ at a padded position is selected to ``0.0`` with ``np.where``, never
+      multiplied by the mask, and adding an exact zero changes no count.
+
+    Counts are returned per record rather than summed, because the sum over records
+    is the caller's and regrouping it by batch moves the last bits. The liveness
+    mask is derived from ``lengths`` rather than taken as a second input, so the two
+    cannot disagree. ``device`` is part of the signature every backend shares and is
+    ``None`` here; ``baum_welch`` validates it.
+    """
+    codes = np.asarray(codes)
+    lengths = np.asarray(lengths, dtype=np.int64)
+    batch, width = codes.shape
+    size = int(transition_p.shape[0])
+    n_symbols = int(output_p.shape[2])
+    rows = np.arange(batch)
+
+    present, sym = np.unique(codes, return_inverse=True)
+    sym = sym.reshape(codes.shape)
+    # (U, S, S): indexing it by a column of ``sym`` gives each record its (S, S) slice.
+    table = np.moveaxis(transition_p[:, :, np.newaxis] * output_p[:, :, present], 2, 0)
+    live = np.arange(width)[np.newaxis, :] < lengths[:, np.newaxis]
+
+    alpha = np.empty((batch, width + 1, size), dtype=np.float64)
+    beta = np.empty((batch, width + 1, size), dtype=np.float64)
+    scale = np.empty((batch, width + 1), dtype=np.float64)
+    alpha[:, 0] = init_state_p
+    scale[:, 0] = 1.0
+    for t in range(1, width + 1):
+        terms = alpha[:, t - 1, :, np.newaxis] * table[sym[:, t - 1]]
+        column = np.add.accumulate(terms, axis=1)[:, -1]
+        total = np.add.accumulate(column, axis=1)[:, -1]
+        on = live[:, t - 1]
+        scale[:, t] = np.where(on, total, 1.0)
+        alpha[:, t] = np.where(
+            on[:, np.newaxis], safe_divide(column, total[:, np.newaxis]), alpha[:, t - 1]
+        )
+
+    end = safe_divide(1.0, scale[rows, lengths])[:, np.newaxis]
+    beta[:, width] = end
+    for t in range(width - 1, -1, -1):
+        terms = table[sym[:, t]] * beta[:, t + 1, np.newaxis, :]
+        row = np.add.accumulate(terms, axis=2)[:, :, -1]
+        beta[:, t] = np.where(
+            live[:, t, np.newaxis], safe_divide(row, scale[:, t, np.newaxis]), end
+        )
+
+    init_counts = np.zeros((batch, size), dtype=np.float64)
+    transition_counts = np.zeros((batch, size, size), dtype=np.float64)
+    emission_counts = np.zeros((batch, size, size, n_symbols), dtype=np.float64)
+    for t in range(width):
+        xi = (alpha[:, t, :, np.newaxis] * table[sym[:, t]]) * beta[:, t + 1, np.newaxis, :]
+        xi = np.where(live[:, t, np.newaxis, np.newaxis], xi, 0.0)
+        if t == 0:
+            init_counts = np.add.accumulate(xi, axis=2)[:, :, -1]
+        transition_counts += xi
+        emission_counts[rows, :, :, codes[:, t]] += xi
+
+    bits_per_record = np.add.accumulate(bits(scale), axis=1)[:, -1]
+    return (init_counts, transition_counts, emission_counts), bits_per_record
