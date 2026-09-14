@@ -1,6 +1,6 @@
 # feat/hmm-backend-seam
 
-**Status**: active
+**Status**: merged — PR #33 — 2026-09-14
 **Created**: 2026-09-14
 **Subgoal**: Write the runtime backend-selection ADR and build the seam it decides — `docs/plan/TODO.md`, revision 03-hmm-v0.2.0
 
