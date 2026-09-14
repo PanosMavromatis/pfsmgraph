@@ -21,7 +21,11 @@ below are therefore ``np.add.accumulate(...)[-1]``, never ``np.sum``, ``@``,
 ``np.dot`` or ``einsum``. ``accumulate`` returns every partial sum, so
 ``r[k] = r[k-1] + x[k]`` is part of its definition, and it cannot reorder the
 way a reduction that returns only the total is free to. The terms themselves
-are elementwise products of two factors, which have no order to fix.
+are elementwise products of two factors, which have no order to fix. Do not be
+reassured by ``terms.sum(axis=0)`` agreeing with the ascending loop: it does, on
+a C-ordered array, and the same call on a Fortran-ordered copy of the same
+values disagreed in every one of 50 trials at ``S >= 16``. Its order follows
+memory layout, which is not a contract.
 
 **Emission is on the arc** [ADR 0015]. The table
 ``w[i, j, u] = transition_p[i, j] * output_p[i, j, present[u]]`` holds one

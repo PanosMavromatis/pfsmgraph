@@ -6,21 +6,26 @@ Shared project knowledge for any coding agent working in this repository.
 
 **`dataseq` and `hmm` are implemented and released (0.1.0, 2026-09-02 and 2026-09-13); the other three members are still empty scaffolding.** In place: the uv workspace root `pyproject.toml` (virtual — no `[project]` table), `uv.lock`, all five `packages/*` members with their own `pyproject.toml`, the `meson.build` files for `align` and `hmm` (`align`'s extension block still dormant, `hmm`'s live since the first `.pyx` landed 2026-09-09), and an empty `pfsmgraph/<pkg>/__init__.py` for the three members that have no code yet (plus `dl/rnn/` and `dl/transformer/`). The ADRs in `docs/design/adr/` are authoritative for the decisions they cover — the twelve initial records from the PRD, plus 0013 (how this family documents its public surfaces) and 0014 (how imported migration source is retained), both added 2026-09-01; the PRD remains the narrative design document.
 
-**What `dataseq` now contains.** Six modules under `packages/pfsmgraph-dataseq/src/pfsmgraph/dataseq/` (the container landed 2026-08-31, the encoder API 2026-09-01) and 74 tests — the first tests in this repository, and 74 of the suite's 390 today; 270 are `hmm`'s and the remaining 46 are the repo-root backend-matrix, API-docs, release-runbook and meson-source tests. `_reserved.py` hard-codes the ADR 0011 block as module constants, with no class or parameter that could relocate it; `_vocabulary.py` holds the `Vocabulary` protocol and `SymbolTable`, a frozen first-appearance-ordered implementation that encodes strictly and decodes *totally*, reserved codes included; `_record.py` and `_dataset.py` are the ragged container, whose records carry true lengths and never padding; `_collate.py` is `pad_collate`, where padding is introduced and always returned with its mask. The container imports neither torch nor pandas — verified in a subprocess — and its one runtime dependency is `numpy`.
+**What `dataseq` now contains.** Six modules under `packages/pfsmgraph-dataseq/src/pfsmgraph/dataseq/` (the container landed 2026-08-31, the encoder API 2026-09-01) and 74 tests — the first tests in this repository, and 74 of the suite's 431 today; 311 are `hmm`'s and the remaining 46 are the repo-root backend-matrix, API-docs, release-runbook and meson-source tests. `_reserved.py` hard-codes the ADR 0011 block as module constants, with no class or parameter that could relocate it; `_vocabulary.py` holds the `Vocabulary` protocol and `SymbolTable`, a frozen first-appearance-ordered implementation that encodes strictly and decodes *totally*, reserved codes included; `_record.py` and `_dataset.py` are the ragged container, whose records carry true lengths and never padding; `_collate.py` is `pad_collate`, where padding is introduced and always returned with its mask. The container imports neither torch nor pandas — verified in a subprocess — and its one runtime dependency is `numpy`.
 
-**What `hmm` now contains.** Six Python modules, one Cython kernel, and 270 tests. The sixth
+**What `hmm` now contains.** Six Python modules, one Cython kernel, and 311 tests. The sixth
 is `_forward_backward.py`, the project's second dynamic-programming kernel, written 2026-09-14 on
 `feat/hmm-forward-backward`: the private `_forward_backward(init_state_p, transition_p,
 output_p, codes) -> (alpha, beta, scale)` in the scaled probability domain, under
 [ADR 0020](../design/adr/0020-scaled-probability-domain-forward-backward.md), not exported.
 Beside it are `_description_length`, `_state_posteriors` and `_expected_counts`, the last
 returning `run-add`'s three count arrays while building ξ one position at a time rather than
-storing `(N, S, S)`. `tests/test_forward_backward.py` holds their 67 consistency tests.
-Those identities hold for *any* model, so a kernel that is correct for the wrong one, such as
-an arc table transposed everywhere, passes every identity about values; exact enumeration is
-the check for that. Its reductions are `np.add.accumulate(...)[-1]`, which is
-bit-identical to an explicit ascending loop because it returns every partial sum; do not
-"simplify" them to `np.sum` or `@`, whose order is theirs to choose. Of the others, the
+storing `(N, S, S)`. `tests/test_forward_backward.py` holds 108 tests in four layers:
+identities that hold for *any* model; **exact enumeration of every state path in
+`fractions.Fraction`**, which is what catches a kernel correct for the wrong model (an arc
+table transposed everywhere passes every identity about values); constructed cases (an
+impossible sequence under `np.errstate(all="raise")`, an exactly uniform model asserted with
+`==`); and a bit-for-bit pin against scalar ascending loops. Its reductions are
+`np.add.accumulate(...)[-1]`, which is bit-identical to an explicit ascending loop because it
+returns every partial sum; do not "simplify" them to `np.sum` or `@`, whose order is theirs
+to choose. **Agreement is not permission**: `terms.sum(axis=0)` matches the loop on a
+C-ordered array and disagreed in 50 of 50 trials on a Fortran-ordered copy at `S >= 16`, so
+it survives a mutation test as an equivalent mutant while depending on memory layout. Of the others, the
 fourth module is `_viterbi_cpu_parallel.py`, the ADR 0002 phase-3 backend, landed
 2026-09-10, and the fifth is `_viterbi_cuda.py`, the phase-4 CUDA backend, written
 2026-09-13 on `feat/hmm-viterbi-cuda` and registered as the fourth backend row. It keeps
@@ -380,7 +385,7 @@ Still to do, in PRD order (§11): `hmm` (Lush translation), then `align`, then `
 Toolchain: **uv** (workspace) + **pytest**. Requires `uv` and Python ≥ 3.10.
 
 - `uv sync` — create/refresh the venv; installs all five members editable (plain `.pth`) plus the `dev` group (`pytest`).
-- `uv run pytest` — run the suite (390 tests: 74 in `packages/pfsmgraph-dataseq/tests/`, 270 in `packages/pfsmgraph-hmm/tests/`, and 46 in the repo-root `tests/` — 19 covering the ADR 0003 backend matrix, 9 executing documented code blocks against their pasted output per ADR 0013, 2 checking that `docs/ops/release.md` names only recipes the root `justfile` defines, and 16 asserting each `meson.build`'s `install_sources` matches the package on disk). That last figure was 7 until 2026-09-04: it is parameterised over `packages/*/meson.build`, so it grew by itself when the three pure members got theirs, and that growth **is** the 271 → 280 — no test was written for the change that occasioned it. That verifier reads `docs/api/*/*.md` **and `packages/*/README.md`**: a member README becomes a PyPI long description under an immutable version, so it is the one documentation surface where drift cannot be corrected in place. Every run opens with the backend header. Two narrow skips are by design: `test_torch_interop.py` verifies the `DataLoader` integration and skips when torch is absent, since torch is a dependency of no member; and the 18 CUDA tests in `test_viterbi.py` skip without a CUDA device, with the header reading `cuda ✗ (no CUDA device detected)` — set `PFSMGRAPH_REQUIRE_BACKENDS=cuda` where a GPU is expected, so a lost device fails the run instead.
+- `uv run pytest` — run the suite (431 tests: 74 in `packages/pfsmgraph-dataseq/tests/`, 311 in `packages/pfsmgraph-hmm/tests/`, and 46 in the repo-root `tests/` — 19 covering the ADR 0003 backend matrix, 9 executing documented code blocks against their pasted output per ADR 0013, 2 checking that `docs/ops/release.md` names only recipes the root `justfile` defines, and 16 asserting each `meson.build`'s `install_sources` matches the package on disk). That last figure was 7 until 2026-09-04: it is parameterised over `packages/*/meson.build`, so it grew by itself when the three pure members got theirs, and that growth **is** the 271 → 280 — no test was written for the change that occasioned it. That verifier reads `docs/api/*/*.md` **and `packages/*/README.md`**: a member README becomes a PyPI long description under an immutable version, so it is the one documentation surface where drift cannot be corrected in place. Every run opens with the backend header. Two narrow skips are by design: `test_torch_interop.py` verifies the `DataLoader` integration and skips when torch is absent, since torch is a dependency of no member; and the 18 CUDA tests in `test_viterbi.py` skip without a CUDA device, with the header reading `cuda ✗ (no CUDA device detected)` — set `PFSMGRAPH_REQUIRE_BACKENDS=cuda` where a GPU is expected, so a lost device fails the run instead.
 - `uv build --package pfsmgraph-<pkg>` — build one member's sdist + wheel.
 - `uv lock` — refresh `uv.lock` (committed; one lockfile for the whole family).
 
