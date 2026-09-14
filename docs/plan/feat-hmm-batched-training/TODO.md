@@ -1,6 +1,6 @@
 # feat/hmm-batched-training
 
-**Status**: active
+**Status**: merged — PR #35 — 2026-09-14
 **Created**: 2026-09-14
 **Subgoal**: Batch the trainer over sequences (revision 03-hmm-v0.2.0)
 
