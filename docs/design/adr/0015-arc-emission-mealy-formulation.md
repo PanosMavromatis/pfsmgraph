@@ -86,6 +86,7 @@ the intended reading of the model are the same object.
   against `hmmlearn`'s `CategoricalHMM` before it is trusted under the search. This is
   available to revision `03-hmm-v0.2.0` and is **not yet a subgoal of it**; see
   [`arc-emission-hmm-handoff.md`](../arc-emission-hmm-handoff.md) §3.
+  *(It became one and landed 2026-09-14; see **Resolved** below for what it found.)*
 
 ### Negative / costs
 
@@ -185,3 +186,32 @@ Esposito before an MDL score is published on its authority.
   for batched tensor ops. Bracketed with the anti-diagonal question already deferred to
   revision 02's phase-3 subgoal, since both are the same doubt about that ADR's claimed
   universality.
+
+## Resolved
+
+- **The reduced case as a test oracle** (2026-09-14, `feat/hmm-hmmlearn-oracle`). It
+  works for the forward-backward exactly as proposed and **does not work for EM as
+  written**, and both halves were measured.
+
+  The embedding needs one correction at the first step. Our first symbol is emitted
+  crossing `s_0 → s_1`, and a state-emission model's first state is our `s_1`, so
+  `hmmlearn`'s `startprob_` is `init_state_p @ transition_p`, not `init_state_p`. With
+  that, the description length matches `score` to 3.2e-15 relative and `gamma[1:]`
+  matches `predict_proba` to 1.4e-15, up to `S = 32` over 3000 symbols. The map runs only
+  from arc to state emission: going back needs `init @ A = π`, which may have no
+  stochastic solution.
+
+  **The reduced case is not closed under Baum-Welch.** One arc-emission M-step estimates a
+  separate emission for every arc, so `output_p[i, j, k]` stops being independent of `i`
+  (by up to 0.096 in one cycle), and the transition counts include the `s_0 → s_1`
+  crossing a state-emission model does not have. So the fitted parameters of `_em`
+  cannot be compared with `CategoricalHMM.fit`. That is the richer model estimating the
+  extra parameters this record's Negative section counts, not a defect on either side.
+  What is compared instead is the E- and M-step through a dedicated start state, occupied
+  only at `s_0`, whose re-estimated row is `startprob_`, with emission counts tied over
+  the source. Over up to 200 cycles that agrees with `fit` to 1.2e-14.
+
+  The oracle therefore cannot see `_m_step`'s per-arc emission division or `_em`'s
+  zero-count restore; exact enumeration in `test_baum_welch.py` still covers both. None
+  of this settles the second **Open** item: the reduction is still test-only, in
+  `packages/pfsmgraph-hmm/tests/test_hmmlearn_oracle.py`.
