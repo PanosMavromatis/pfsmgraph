@@ -86,6 +86,12 @@ no-build-isolation-package = [
 #                  point. It brings scipy and scikit-learn along. 0.3.3
 #                  (2024-10-31) is the latest release and has no cp314 wheels,
 #                  so a 3.14 environment builds it from source.
+#   torch        - the baum_welch torch backend (hmm's `torch` extra), for the
+#                  reason numba is here: a plain `uv sync` has to exercise it.
+#                  pfsmgraph-dl already brings torch as a hard dependency, but
+#                  that is a resolution accident rather than a promise, and the
+#                  backend would turn into a silent skip if dl ever made it
+#                  optional. The floor is the version the backend was measured on.
 dev = [
     "pytest>=8",
     "meson-python",
@@ -96,6 +102,7 @@ dev = [
     "numba-cuda[cu13]>=0.30.4; sys_platform == 'linux'",
     "numpy<2.5; sys_platform == 'linux'",
     "hmmlearn>=0.3.3",
+    "torch>=2.13",
 ]
 
 [tool.pytest.ini_options]

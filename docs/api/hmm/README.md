@@ -94,14 +94,14 @@ These hold for every caller and are not configurable.
 
 ## The public surface
 
-`pfsmgraph.hmm.__all__` is exactly seven names. Anything underscore-prefixed — the
+`pfsmgraph.hmm.__all__` is exactly nine names. Anything underscore-prefixed — the
 `_params`, `_viterbi`, `_backends` and `_numeric` modules, the backend kernels, and every
 attribute beginning with `_` — is private, out of contract, and may change without notice.
 
 ```python
 >>> import pfsmgraph.hmm
 >>> pfsmgraph.hmm.__all__
-['BackendStatus', 'BackendUnavailableError', 'HMMParams', 'ImpossibleSequenceError', 'ViterbiPath', 'backends', 'viterbi']
+['BackendStatus', 'BackendUnavailableError', 'BaumWelchResult', 'HMMParams', 'ImpossibleSequenceError', 'ViterbiPath', 'backends', 'baum_welch', 'viterbi']
 ```
 
 | Name | Kind | Documented in |

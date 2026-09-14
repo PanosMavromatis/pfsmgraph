@@ -69,7 +69,7 @@ so the last bit of `total_bits` is not promised to match between machines.
 
 ```python
 >>> viterbi(params, record, backend="numba")
-ValueError: backend must be one of ['python', 'cython', 'cpu_parallel', 'cuda'], got 'numba'
+ValueError: backend must be one of ['python', 'cython', 'cpu_parallel', 'cuda', 'torch'], got 'numba'
 ```
 
 ## `BackendUnavailableError`
@@ -142,7 +142,7 @@ imports no backend.
 
 ```python
 >>> backends("forward_backward")
-ValueError: no public call 'forward_backward' has backends; known: ['viterbi']
+ValueError: no public call 'forward_backward' has backends; known: ['baum_welch', 'viterbi']
 ```
 
 ## `BackendStatus`

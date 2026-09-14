@@ -64,6 +64,10 @@ gpu = [
     "numba-cuda>=0.30.4; sys_platform != 'darwin'",
     "numpy<2.5; sys_platform != 'darwin'",
 ]
+# The torch backend of baum_welch (ADR 0021): float64 on CPU, measured on torch
+# 2.13.0. Unrelated to gpu: numba-cuda and torch are separate extras with
+# separate meanings, and this one needs no device.
+torch = ["torch>=2.13"]
 
 [project.urls]
 Homepage = "https://github.com/PanosMavromatis/pfsmgraph"

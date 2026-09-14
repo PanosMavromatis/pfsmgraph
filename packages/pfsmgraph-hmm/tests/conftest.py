@@ -17,8 +17,8 @@ The session header and its escalation live in the repo-root `conftest.py`, and
 must stay there: `pytest_report_header` is a startup hook, and a conftest under
 `packages/*/tests/` is loaded too late for it. Fixtures have no such constraint.
 
-It is keyed to `viterbi`, the only public call with backends. A module whose
-call has a different table overrides it with a fixture of the same name.
+It is keyed to `viterbi`. `baum_welch` has a different table, so a module
+testing it overrides the fixture with one of the same name.
 """
 
 from __future__ import annotations

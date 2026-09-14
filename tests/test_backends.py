@@ -84,10 +84,12 @@ def test_viterbi_has_all_four_phases_in_lifecycle_order_and_forward_backward_one
     # Order is asserted, not just membership, because format_header prints the rows
     # in this order and ADR 0003's header is a specified string. Viterbi completed its
     # lifecycle on 2026-09-13; forward_backward is at phase 1 with no public call, and
-    # is here so the header can say so.
+    # is here so the header can say so. baum_welch is public, and its rows are
+    # E-steps: the reference and torch's gradients.
     assert {a: [r.name for r in rows] for a, rows in hmm_backends._TABLE.items()} == {
         "viterbi": ["python", "cython", "cpu_parallel", "cuda"],
         "forward_backward": ["python"],
+        "baum_welch": ["python", "torch"],
     }
 
 
@@ -106,6 +108,11 @@ def test_only_the_numba_and_cuda_rows_may_be_skipped():
         ("cpu_parallel", "numba"),
         ("cuda", "CUDA device"),
     ]
+    # torch, like numba, is promised to no install of pfsmgraph-hmm: an extra.
+    assert [(r.name, r.needs) for r in hmm_backends._TABLE["baum_welch"]] == [
+        ("python", None),
+        ("torch", "torch"),
+    ]
     assert ESCALATED_NEEDS == {None, "compiled extension"}
 
 
@@ -120,6 +127,8 @@ def test_every_registered_module_is_a_kernel_not_a_package():
         "_viterbi_cpu_parallel",
         "_viterbi_cuda",
         "_forward_backward",
+        "_forward_backward",
+        "_baum_welch_torch",
     ]
 
 
@@ -136,6 +145,8 @@ def test_the_registered_backends_actually_resolve():
         Availability("viterbi", "cpu_parallel", True, None),
         Availability("viterbi", "cuda", _CUDA_REASON is None, _CUDA_REASON),
         Availability("forward_backward", "python", True, None),
+        Availability("baum_welch", "python", True, None),
+        Availability("baum_welch", "torch", True, None),
     )
 
 
@@ -144,7 +155,7 @@ def test_the_header_names_every_registered_backend():
     assert format_header(detect()) == (
         "backends: viterbi python ✓ · cython ✓ · cpu_parallel ✓ · "
         + cuda_cell
-        + " | forward_backward python ✓"
+        + " | forward_backward python ✓ | baum_welch python ✓ · torch ✓"
     )
 
 
@@ -287,5 +298,5 @@ def test_header_actually_reaches_the_session_output(pytester):
         shutil.copy(REPO_ROOT / name, pytester.path / name)
     pytester.makepyfile(test_trivial="def test_trivial(): pass")
     result = pytester.runpytest_subprocess()
-    result.stdout.fnmatch_lines(["backends: viterbi python ✓*| forward_backward python ✓"])
+    result.stdout.fnmatch_lines(["backends: viterbi python ✓*| forward_backward python ✓ | baum_welch python ✓ · torch ✓"])
     result.assert_outcomes(passed=1)
