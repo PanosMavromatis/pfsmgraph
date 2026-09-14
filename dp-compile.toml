@@ -51,9 +51,9 @@ build_manifest = "packages/pfsmgraph-{package}/meson.build"
 require_env    = "PFSMGRAPH_REQUIRE_BACKENDS"
 
 # Note this is pyproject.toml, not the meson.build above: build sources and runtime
-# dependencies are different questions about the same package. 0.1.0 withholds both
-# extras below until a backend is selectable (docs/plan/DEFERRED.md); the rows stay so a
-# phase skill keeps treating them as optional rather than hard. `gpu` is the extra this
+# dependencies are different questions about the same package. Both extras below are
+# declared again since ADR 0021 made the backends selectable (2026-09-14), after 0.1.0
+# withheld them; the rows are what make a phase skill treat them as optional rather than hard. `gpu` is the extra this
 # member declared (ADR 0004 keeps numba-cuda and dl's torch deliberately
 # unmerged, so there is no family-wide [gpu]). The numba floor pairs with the
 # numpy>=2.1 this member declares; raising either is a reason to review the other.
