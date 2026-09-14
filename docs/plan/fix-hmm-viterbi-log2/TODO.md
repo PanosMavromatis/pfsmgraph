@@ -1,6 +1,6 @@
 # fix/hmm-viterbi-log2
 
-**Status**: active
+**Status**: merged — PR #28 — 2026-09-14
 **Created**: 2026-09-14
 **Subgoal**: Unify the logarithm across the Viterbi backends — `docs/plan/TODO.md`,
 revision 03-hmm-v0.2.0
