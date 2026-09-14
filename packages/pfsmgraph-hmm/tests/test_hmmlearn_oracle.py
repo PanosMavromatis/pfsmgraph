@@ -36,12 +36,14 @@ import numpy as np
 import pytest
 from hmmlearn.hmm import CategoricalHMM
 
-from pfsmgraph.dataseq import USER_BASE
+from pfsmgraph.dataseq import USER_BASE, SequenceRecord, SymbolTable
+from pfsmgraph.hmm._baum_welch import _corpus_step, _m_step
 from pfsmgraph.hmm._forward_backward import (
     _description_length,
     _forward_backward,
     _state_posteriors,
 )
+from pfsmgraph.hmm._params import HMMParams
 
 SEED = 20260916
 
@@ -172,3 +174,121 @@ def test_the_comparison_can_fail():
     shifted = _state_posteriors(alpha, beta, scale)[:-1]
     assert np.abs(shifted - posteriors).max() > 1e6 * ORACLE_TOL
     assert np.abs(gamma - posteriors).max() <= ORACLE_TOL
+
+
+# --- EM ----------------------------------------------------------------------
+#
+# Our EM leaves the reduced family after one cycle: the M-step estimates an
+# emission for every arc, so ``output_p[i, j, k]`` stops being independent of
+# ``i``, and our transition counts include the ``s_0 -> s_1`` crossing that
+# hmmlearn has no counterpart for. ``_em`` itself is therefore not comparable,
+# and these tests check the E-step and M-step it is built from instead, through
+# a harness that keeps the model inside the family:
+#
+# - **A dedicated start state** ``S``: ``init_state_p`` is ``e_S``, row ``S`` is
+#   hmmlearn's ``startprob_``, and column ``S`` is zero, so the state is occupied
+#   at ``s_0`` only. Its re-estimated row is then γ₁, which is how hmmlearn
+#   re-estimates ``startprob_``, and rows ``:S`` count only the crossings hmmlearn
+#   counts. This needs no tying: ``_m_step``'s transition and initial rows are
+#   compared as they come.
+# - **Tied emission**: the harness sums the emission counts over the source state
+#   (ascending, as ADR 0020 orders every sum here) and normalises per destination.
+#   ``_m_step``'s own per-arc emission division is consequently not checked here;
+#   ``test_baum_welch.py``'s exact oracle covers it.
+#
+# Counts come from ``_corpus_step``, the one ``_em`` uses, so the sum over records
+# is ours and hmmlearn's ``lengths`` is its counterpart. ``fit`` runs with
+# ``tol=0`` so it performs exactly ``n_iter`` cycles, and ``init_params=""`` so it
+# starts from the parameters given.
+
+
+def _em_case(seed, size, n_user, lengths, dead_fraction):
+    rng = np.random.default_rng(seed)
+    start, transition, emission = _reduced_model(rng, size, n_user, dead_fraction)
+    records = [rng.integers(0, n_user, n) for n in lengths]
+    return start, transition, emission, records
+
+
+def _augmented(start, transition, emission, vocabulary):
+    size, n_user = emission.shape
+    init = np.zeros(size + 1)
+    init[size] = 1.0
+    arcs = np.zeros((size + 1, size + 1))
+    arcs[:size, :size] = transition
+    arcs[size, :size] = start
+    output = np.zeros((size + 1, size + 1, USER_BASE + n_user))
+    output[:, :size, USER_BASE:] = emission[np.newaxis, :, :]
+    return HMMParams(init, arcs, output, vocabulary)
+
+
+def _tied_cycles(params, records, cycles):
+    """``cycles`` rounds of E-step, M-step and re-tying; returns the last model
+    and the corpus description length before each round, in bits."""
+    size = params.n_states - 1
+    history = []
+    for _ in range(cycles):
+        counts, _, total = _corpus_step(params, records)
+        history.append(total)
+        init, transition, _, out_counts = _m_step(*counts)
+        # Dense random data occupies every state before the last position, so
+        # no row needs _em's degenerate-state restore, which hmmlearn lacks.
+        assert (out_counts > 0).all()
+        by_destination = np.add.accumulate(
+            counts[2][:, :size, USER_BASE:], axis=0
+        )[-1]
+        totals = np.add.accumulate(by_destination, axis=1)[:, -1:]
+        output = np.zeros_like(params.output_p)
+        output[:, :size, USER_BASE:] = (by_destination / totals)[np.newaxis, :, :]
+        params = HMMParams(init, transition, output, params.vocabulary)
+    return params, history
+
+
+EM_CASES = [
+    # (seed, states, user symbols, record lengths, dead fraction, cycles)
+    (1, 2, 3, (12,), 0.0, 5),
+    (2, 3, 4, (30, 1, 17), 0.3, 5),
+    (3, 5, 6, (200,), 0.4, 20),
+    (4, 8, 10, (400, 50, 3), 0.5, 50),
+    (5, 16, 12, (1500,), 0.6, 50),
+    (6, 3, 4, (30, 1, 17), 0.3, 200),
+]
+
+
+@pytest.mark.parametrize(
+    "seed, size, n_user, lengths, dead, cycles",
+    EM_CASES,
+    ids=[f"S{c[1]}-{len(c[3])}rec-{c[5]}cyc" for c in EM_CASES],
+)
+def test_tied_em_matches_hmmlearn_fit(seed, size, n_user, lengths, dead, cycles):
+    start, transition, emission, records = _em_case(seed, size, n_user, lengths, dead)
+    vocabulary = SymbolTable([f"s{k}" for k in range(n_user)])
+    params = _augmented(start, transition, emission, vocabulary)
+    ours, history = _tied_cycles(
+        params, [SequenceRecord(r + USER_BASE) for r in records], cycles
+    )
+
+    model = CategoricalHMM(
+        n_components=size,
+        n_features=n_user,
+        implementation="scaling",
+        init_params="",
+        params="ste",
+        tol=0.0,
+        n_iter=cycles,
+    )
+    model.startprob_, model.transmat_, model.emissionprob_ = start, transition, emission
+    model.fit(np.concatenate(records).reshape(-1, 1), [len(r) for r in records])
+    assert model.monitor_.iter == cycles
+
+    np.testing.assert_allclose(
+        ours.transition_p[size, :size], model.startprob_, rtol=0, atol=ORACLE_TOL
+    )
+    np.testing.assert_allclose(
+        ours.transition_p[:size, :size], model.transmat_, rtol=0, atol=ORACLE_TOL
+    )
+    assert (ours.transition_p[:, size] == 0.0).all()
+    np.testing.assert_allclose(
+        ours.output_p[0, :size, USER_BASE:], model.emissionprob_, rtol=0, atol=ORACLE_TOL
+    )
+    theirs = -np.array(model.monitor_.history) / math.log(2)
+    np.testing.assert_allclose(history, theirs, rtol=ORACLE_TOL, atol=0)
