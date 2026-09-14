@@ -42,6 +42,11 @@ identically. The stopping rule is the original's and so is its weakness: it
 watches only the size of each batch's change, so a start close enough to a
 symmetric saddle stops *on* the saddle, and an exactly uniform start is one.
 
+**The data description length at a precision ``d`` is the same forward pass over
+rounded parameters**, which is what the original's ``update-data-dl`` is. Rounding
+is what makes precision cost bits, so the value means nothing apart from ``d``;
+choosing ``d`` belongs with the model description length in revision 04.
+
 .. [ADR 0002] ``docs/design/adr/0002-three-phase-algorithm-lifecycle.md``
 .. [ADR 0020] ``docs/design/adr/0020-scaled-probability-domain-forward-backward.md``
 """
@@ -153,14 +158,66 @@ def _corpus_step(params, records):
     return (init_counts, transition_counts, emission_counts), bits_per_record, total
 
 
-def _corpus_description_length(params, records):
+def _corpus_description_length(init_state_p, transition_p, output_p, records):
+    """Bits over every record, from arrays rather than an ``HMMParams``.
+
+    Arrays because :func:`_data_description_length` passes rounded parameters,
+    which need not be a valid model: a row can round to all zeros.
+    """
     bits_per_record = np.zeros(len(records), dtype=np.float64)
     for index, record in enumerate(records):
         _, _, scale = _forward_backward(
-            params.init_state_p, params.transition_p, params.output_p, record.codes
+            init_state_p, transition_p, output_p, record.codes
         )
         bits_per_record[index] = _description_length(scale)
-    return float(np.add.accumulate(bits_per_record)[-1])
+    return float(np.add.accumulate(bits_per_record)[-1]) if len(records) else 0.0
+
+
+def _quantize(p, d):
+    """Round each probability to a multiple of ``1 / d`` and renormalise the last axis.
+
+    ``update-approx-init-state-p``, ``-transition-p`` and ``-output-p``
+    (``hmm-trainer.lsh:269-341``) in one function: ``round-using``
+    (``util.lsh:59-62``) is ``int(x * d + 0.5) / d``, which for the non-negative
+    values here is ``floor``, so an exact half rounds up. Each vector is then
+    divided by its own sum, taken ascending, through ``safe_divide``.
+
+    The result is arrays, never an ``HMMParams``, and nothing is checked: a vector
+    whose every entry is below ``1 / (2 d)`` rounds to all zeros and stays zero,
+    which is how coarse precision can make a record impossible. ``d`` need not be
+    an integer, as in the original.
+    """
+    p = np.asarray(p, dtype=np.float64)
+    rounded = np.floor(p * d + 0.5) / d
+    total = np.add.accumulate(rounded, axis=-1)[..., -1:]
+    return safe_divide(rounded, total)
+
+
+def _data_description_length(params, records, d):
+    """The data description length at precision ``d``: ``update-data-dl``.
+
+    The original runs its forward pass again over the rounded ``-r`` matrices
+    (``hmm-trainer.lsh:346-402``); here the same corpus description length the EM
+    loop uses is called on :func:`_quantize`'s arrays, so there is one forward
+    pass, not two. It is the data half of revision 04's two-part score, where
+    ``d`` is chosen against the model half; this function takes ``d`` as given.
+
+    ``+inf`` when rounding leaves some record with no path, which the original
+    reports as ``1e100`` through its ``-1`` sentinel (``update-total-dl``). The
+    original's final ``bits`` of the last column's sum is 1 within rounding and is
+    omitted, as it is in :func:`_em`. Raises ``ValueError`` for a ``d`` that is
+    not positive and finite, and for a code outside the symbol axis.
+    """
+    if not (np.isfinite(d) and d > 0):
+        raise ValueError(f"d must be positive and finite, got {d}")
+    records = list(records)
+    _check_codes(params, records)
+    return _corpus_description_length(
+        _quantize(params.init_state_p, d),
+        _quantize(params.transition_p, d),
+        _quantize(params.output_p, d),
+        records,
+    )
 
 
 def _em(
@@ -227,7 +284,9 @@ def _em(
             history.append(total)
             params, degenerate = _re_estimate(params, counts)
             cycles += 1
-        new_bits = _corpus_description_length(params, records)
+        new_bits = _corpus_description_length(
+            params.init_state_p, params.transition_p, params.output_p, records
+        )
         if abs(new_bits - old_bits) < change_bits:
             unchanged += 1
         else:
@@ -238,7 +297,11 @@ def _em(
 
 
 def _finish(params, history, records, cycles, converged, degenerate):
-    history.append(_corpus_description_length(params, records))
+    history.append(
+        _corpus_description_length(
+            params.init_state_p, params.transition_p, params.output_p, records
+        )
+    )
     return _EMResult(params, tuple(history), cycles, converged, degenerate)
 
 

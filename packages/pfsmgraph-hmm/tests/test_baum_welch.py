@@ -10,7 +10,7 @@ about *consistent* counts, where the emission counts summed over symbols are the
 transition counts, and a synthetic array would not have that property unless the
 test reimplemented the E-step to give it one.
 
-Five sections:
+Six sections:
 
 - **The oracle**: each division redone in exact rational arithmetic over the very
   floats the M-step read, so the only disagreement allowed is the float64
@@ -24,6 +24,8 @@ Five sections:
 - **The EM loop**: the description length never rises, a fixed point stays
   fixed bit for bit, the stopping rule is `run-converge`'s read back from the
   trace, and a degenerate state tracks the original's zero-row likelihood.
+- **The data description length at precision `d`**, against the `data-dl` each
+  tracked model's own training log recorded.
 """
 
 from __future__ import annotations
@@ -35,7 +37,16 @@ import pytest
 
 from pfsmgraph.dataseq import USER_BASE, SequenceRecord, SymbolTable
 from pfsmgraph.hmm import HMMParams, ImpossibleSequenceError
-from pfsmgraph.hmm._baum_welch import BATCH_CYCLES, CHANGE_BITS, PATIENCE, _em, _m_step
+from pfsmgraph.hmm._baum_welch import (
+    BATCH_CYCLES,
+    CHANGE_BITS,
+    PATIENCE,
+    _corpus_description_length,
+    _data_description_length,
+    _em,
+    _m_step,
+    _quantize,
+)
 from pfsmgraph.hmm._forward_backward import (
     _description_length,
     _expected_counts,
@@ -493,3 +504,114 @@ def test_the_loop_rejects_what_it_cannot_train_on(records, kwargs, message):
     params = _random_params(rng, 2, 3)
     with pytest.raises(ValueError, match=message):
         _em(params, [SequenceRecord(codes) for codes in records], **kwargs)
+
+
+# === the data description length at precision d ================================
+#
+# Each tracked model directory stores the `d` it was saved at and a training log
+# whose last row printed `data-dl` at that `d`, with `%g`, so to six significant
+# figures. That is an oracle computed by the original from these very parameters.
+
+#: Two sources, both measured. The log prints six significant figures, so half a
+#: printed unit is 0.005 bits at these magnitudes. And the parameters were saved
+#: with four decimals, so `x * d` near a half can round the other way from the
+#: original's full-precision value: measured, `m001_0001_001` at `d = 29` lands
+#: 0.009 bits below its log, the other two within the print. 0.02 covers both,
+#: and every unrounded description length is more than a bit away (asserted).
+LOGGED_DL_TOL = 0.02
+
+
+def _logged(model):
+    directory = FIXTURES / f"{model}.hmm"
+    last = (directory / "_training_log").read_text().strip().splitlines()[-1].split()
+    # A row ends `data-dl model-dl total-dl d flag`; what precedes varies with the
+    # move the row records, so read from the end.
+    return load_params(directory), float((directory / "d").read_text()), float(last[-5])
+
+
+@pytest.mark.parametrize("model", ["m001_0001_001", "m001_0005_005", "m008_0001_008"])
+def test_the_data_description_length_is_the_originals_logged_value(model):
+    params, d, logged = _logged(model)
+    records = [load_corpus_record()]
+
+    got = _data_description_length(params, records, d)
+    unrounded = _corpus_description_length(
+        params.init_state_p, params.transition_p, params.output_p, records
+    )
+
+    assert got == pytest.approx(logged, abs=LOGGED_DL_TOL)
+    # Rounding is what the oracle sees: without it every model misses by bits.
+    assert abs(unrounded - logged) > 1.0
+
+
+def test_parameters_already_on_the_grid_give_the_unrounded_length_bit_for_bit():
+    # Every probability a multiple of 1/4 and every vector summing to 1 exactly,
+    # so rounding at d = 4 returns the same arrays and the forward pass is shared.
+    output = np.zeros((2, 2, USER_BASE + 2))
+    output[:, :, USER_BASE:] = [[[0.25, 0.75], [0.5, 0.5]], [[1.0, 0.0], [0.75, 0.25]]]
+    params = HMMParams(
+        np.array([0.75, 0.25]),
+        np.array([[0.5, 0.5], [0.25, 0.75]]),
+        output,
+        _vocabulary(USER_BASE + 2),
+    )
+    records = _random_corpus(np.random.default_rng(SEED), 2, (30, 0, 17))
+
+    for array in (params.init_state_p, params.transition_p, params.output_p):
+        assert np.array_equal(_quantize(array, 4), array)
+    assert _data_description_length(params, records, 4) == _corpus_description_length(
+        params.init_state_p, params.transition_p, params.output_p, records
+    )
+
+
+def test_rounding_is_round_half_up_then_an_ascending_renormalisation():
+    # 0.125 * 4 = 0.5 exactly, which rounds up to 1/4; 0.0625 * 4 + 0.5 = 0.75,
+    # which rounds down to 0. Values are binary fractions, so the grid is exact.
+    p = np.array([0.125, 0.0625, 0.8125])
+    rounded = np.array([0.25, 0.0, 0.75])
+    total = 0.0
+    for r in rounded:
+        total += r
+    assert _quantize(p, 4).tolist() == [r / total for r in rounded]
+
+
+def test_a_vector_below_half_a_step_rounds_to_zeros_and_can_make_a_record_impossible():
+    # Ten equal emissions of 0.1 at d = 3: 0.3 + 0.5 truncates to 0 everywhere.
+    n_user = 10
+    output = np.zeros((1, 1, USER_BASE + n_user))
+    output[:, :, USER_BASE:] = 0.1
+    params = HMMParams(np.ones(1), np.ones((1, 1)), output, _vocabulary(USER_BASE + n_user))
+
+    with np.errstate(all="raise"):
+        quantized = _quantize(params.output_p, 3)
+        bits = _data_description_length(params, [SequenceRecord(np.array([USER_BASE]))], 3)
+
+    assert not quantized.any()
+    assert bits == np.inf
+    # At d = 10 every emission is on the grid and the record costs log2(10) bits.
+    assert _data_description_length(
+        params, [SequenceRecord(np.array([USER_BASE]))], 10
+    ) == pytest.approx(np.log2(10), abs=ROW_TOL)
+
+
+@pytest.mark.parametrize("d", [0, -1.0, np.inf, np.nan])
+def test_a_precision_that_is_not_positive_and_finite_is_rejected(d):
+    params = _random_params(np.random.default_rng(SEED), 2, 3)
+    with pytest.raises(ValueError, match="positive and finite"):
+        _data_description_length(params, [SequenceRecord(np.array([USER_BASE]))], d)
+
+
+def test_the_renormalisation_is_the_literal_ascending_loop_bit_for_bit():
+    # Long vectors at a precision whose steps are not binary fractions, so the
+    # order of the sum shows in the last bits. np.sum's pairwise blocks disagree.
+    rng = np.random.default_rng(SEED + 3)
+    p = rng.dirichlet(np.ones(64), size=(6, 6))
+    d = 29.0
+    got = _quantize(p, d)
+
+    for index in np.ndindex(p.shape[:-1]):
+        rounded = [float(np.floor(x * d + 0.5) / d) for x in p[index]]
+        total = 0.0
+        for r in rounded:
+            total += r
+        assert got[index].tolist() == [r / total if total else 0.0 for r in rounded]
