@@ -52,6 +52,23 @@ not carry — and it is what makes a stale or misremembered reference detectable
   Recognition," *IEEE Trans. PAMI* PAMI-5(2):179–190**; the state-emission presentation
   became the default later, with Rabiner's 1989 tutorial.
 
+- **`hmmlearn` developers. `hmmlearn`: Hidden Markov Models in Python.** Version 0.3.3,
+  released 2024-10-31. [`github.com/hmmlearn/hmmlearn`](https://github.com/hmmlearn/hmmlearn)
+  · [PyPI](https://pypi.org/project/hmmlearn/)
+
+  **Relied on for:** an external oracle for `pfsmgraph.hmm`'s numpy reference that shares
+  no derivation with it: `CategoricalHMM`'s scaled forward-backward and Baum-Welch. It is
+  used only on [ADR 0015](adr/0015-arc-emission-mealy-formulation.md)'s reduced case,
+  where emission depends on the destination alone, and only through its `scaling`
+  implementation. Its `log` implementation rounds its posteriors to 9.5e-13 at `S = 32`,
+  which is too coarse for the comparison. EM is compared through a harness rather than
+  directly, for the reason ADR 0015's Resolved section gives. A test-only dependency in
+  the root `dev` group; nothing ships it.
+
+  *Version and release date checked 2026-09-14 against PyPI. The behaviour relied on
+  (`init_params=""` starts from the given parameters, and `tol=0` runs exactly `n_iter`
+  cycles) was measured, not read from its documentation.*
+
 ## Probabilistic automata and HMM equivalence
 
 - **Dupont, Pierre; Denis, François; Esposito, Yann (2005). "Links between probabilistic
