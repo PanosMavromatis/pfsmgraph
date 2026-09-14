@@ -4,6 +4,12 @@ These cover the reporting mechanism itself, which nothing else touches: every
 other suite here tests library behaviour, and a broken header would fail none of
 them. ADR 0003's premise is that an unexercised backend must say so, which makes
 the thing doing the saying worth testing directly.
+
+Since 2026-09-14 the table is ``pfsmgraph/hmm/_backends.py``'s (ADR 0021) and the
+repo-root module is the policy over it, so the tests about which rows exist read
+that table, and the synthetic cases swap rows into it -- which also exercises the
+real probe and the real reason text rather than a stand-in. The package's own
+tests of ``backends()`` are in ``packages/pfsmgraph-hmm/tests/test_backend_selection.py``.
 """
 
 from __future__ import annotations
@@ -13,12 +19,13 @@ import shutil
 
 import pytest
 
+import pfsmgraph.hmm._backends as hmm_backends
 from _backends import (
-    BACKENDS,
     EMPTY_HEADER,
+    ESCALATED_NEEDS,
     REQUIRE_ENV,
+    TABLES,
     Availability,
-    Backend,
     BackendError,
     check_required,
     detect,
@@ -26,9 +33,10 @@ from _backends import (
 )
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
+Row = hmm_backends._Row
 
 
-def _device_present() -> bool:
+def _expected_cuda_reason() -> str | None:
     """Ask numba-cuda directly, never through `_viterbi_cuda`.
 
     Deriving the expectation from the module under test would make the `detect()`
@@ -39,164 +47,185 @@ def _device_present() -> bool:
     try:
         from numba import cuda
     except ImportError:
-        return False
-    return bool(cuda.is_available())
+        return "numba-cuda is not installed: pip install 'pfsmgraph-hmm[gpu]'"
+    return None if cuda.is_available() else "no CUDA device detected"
 
 
-_EXPECTED_CUDA = (
-    Availability("cuda", True, None)
-    if _device_present()
-    else Availability("cuda", False, "no CUDA device detected")
-)
+_CUDA_REASON = _expected_cuda_reason()
+
+
+@pytest.fixture
+def table(monkeypatch):
+    """Swap a synthetic table into `pfsmgraph.hmm._backends`, with an empty cache.
+
+    Returns a setter; the real table and cache are restored afterwards.
+    """
+    monkeypatch.setattr(hmm_backends, "_cache", {})
+
+    def use(rows_by_algorithm):
+        monkeypatch.setattr(hmm_backends, "_TABLE", rows_by_algorithm)
+        return [hmm_backends]
+
+    return use
 
 
 # --- the matrix as it stands -------------------------------------------------
 
-def test_the_matrix_is_python_then_cython_then_cpu_parallel_then_cuda():
-    # Filled 2026-09-04 by pfsmgraph.hmm._viterbi, the first DP kernel to reach
-    # ADR 0002 phase 1. This was `BACKENDS == ()` until then, and its comment
-    # said it would fail when align or hmm added the first row -- which is what
-    # happened. The previous version of this test then said "adding the *second*
-    # row should break this one the same way", and on 2026-09-09 it did: phase 2
-    # landed as _viterbi_cython. On 2026-09-10 it broke a third time, for phase
-    # 3 -- _viterbi_cpu_parallel. Order is asserted, not just membership, because
-    # format_header prints the rows in this order and ADR 0003's header is a
-    # specified string. Rows are in lifecycle order. It broke a fourth time on
-    # 2026-09-13 for phase 4's _viterbi_cuda, the first row to carry a real
-    # hardware absence, and that completes the Viterbi lifecycle -- so the next
-    # break is a new algorithm rather than a new phase.
-    assert BACKENDS == (
-        Backend("python", "pfsmgraph.hmm._viterbi", None),
-        Backend("cython", "pfsmgraph.hmm._viterbi_cython", None),
-        Backend("cpu_parallel", "pfsmgraph.hmm._viterbi_cpu_parallel", "numba"),
-        Backend("cuda", "pfsmgraph.hmm._viterbi_cuda", "CUDA device"),
-    )
+def test_the_policy_reads_the_hmm_table_and_holds_none_of_its_own():
+    # ADR 0021 section 3: the table ships with the kernels; this module is policy.
+    # A second table here would be two lists of the same backends that can disagree.
+    import _backends
+
+    assert TABLES == ("pfsmgraph.hmm._backends",)
+    assert not hasattr(_backends, "BACKENDS")
 
 
-def test_only_the_numba_rows_may_be_skipped():
-    # optional_on is the whole claim, and it means something different on each
-    # row. For `python`, nothing external is needed to run pure Python at all.
-    # For `cython`, the source is committed but the extension exists only if it
-    # was built -- so ADR 0003's "implemented but not importable (missing or
-    # stale Cython build) is a hard failure" is the clause doing the work, and a
-    # missing compiler is a broken working copy rather than a legitimate
-    # absence.
-    #
-    # `cpu_parallel` is the first row where the absence *is* legitimate, and the
-    # reason it is not a broken working copy is a packaging decision rather than
-    # a property of the kernel: numba is not a dependency of pfsmgraph-hmm (ADR
-    # 0004 -- acceleration is opt-in; the extra is withheld in 0.1.0 and optional
-    # when restored), so an install without it is entitled to lack this backend. Pin the value, not just
-    # its truthiness: making it None would silently escalate a legitimate skip
-    # into a startup failure for every lean install.
-    #
-    # `cuda` is the absence the field was first named for, and the only row whose
-    # probe can fail with every package installed: `_viterbi_cuda` raises
-    # ImportError when numba-cuda reports no device, because `@cuda.jit`
-    # decorates lazily and a plain import would otherwise succeed on a machine
-    # with no GPU.
-    assert [b.optional_on for b in BACKENDS] == [None, None, "numba", "CUDA device"]
+def test_viterbi_has_all_four_phases_in_lifecycle_order_and_forward_backward_one():
+    # Order is asserted, not just membership, because format_header prints the rows
+    # in this order and ADR 0003's header is a specified string. Viterbi completed its
+    # lifecycle on 2026-09-13; forward_backward is at phase 1 with no public call, and
+    # is here so the header can say so.
+    assert {a: [r.name for r in rows] for a, rows in hmm_backends._TABLE.items()} == {
+        "viterbi": ["python", "cython", "cpu_parallel", "cuda"],
+        "forward_backward": ["python"],
+    }
+
+
+def test_only_the_numba_and_cuda_rows_may_be_skipped():
+    # `needs` is the whole claim, and it means something different on each row.
+    # `python` needs nothing external. `cython`'s source is committed but the
+    # extension exists only if it was built, so in a checkout its absence is a
+    # missing or stale build -- escalated -- while at runtime it is a pure wheel.
+    # `cpu_parallel` needs numba, which no install of pfsmgraph-hmm is promised
+    # (ADR 0004), and `cuda` a device. Pin the values, not their truthiness: moving
+    # a row into ESCALATED_NEEDS would silently turn a legitimate skip into a
+    # startup failure for every lean install.
+    assert [(r.name, r.needs) for r in hmm_backends._TABLE["viterbi"]] == [
+        ("python", None),
+        ("cython", "compiled extension"),
+        ("cpu_parallel", "numba"),
+        ("cuda", "CUDA device"),
+    ]
+    assert ESCALATED_NEEDS == {None, "compiled extension"}
 
 
 def test_every_registered_module_is_a_kernel_not_a_package():
-    # `import pfsmgraph.hmm` succeeds whether or not a decode exists in it, so
-    # the package would be a row that cannot fail. Each row is a claim about one
+    # `import pfsmgraph.hmm` succeeds whether or not a decode exists in it, so the
+    # package would be a row that cannot fail. Each row is a claim about one
     # lifecycle phase of one algorithm, so it names the module carrying it.
-    assert [b.module.rsplit(".", 1)[-1] for b in BACKENDS] == [
+    modules = [r.module.rsplit(".", 1)[-1] for rows in hmm_backends._TABLE.values() for r in rows]
+    assert modules == [
         "_viterbi",
         "_viterbi_cython",
         "_viterbi_cpu_parallel",
         "_viterbi_cuda",
+        "_forward_backward",
     ]
 
 
 def test_the_registered_backends_actually_resolve():
-    # The rows are not aspirational: this is the import probe running against
-    # the real matrix rather than a synthetic one. For `cython` it is also the
-    # only assertion in the suite that the extension was actually built -- if it
-    # was not, detect() raises BackendError here rather than returning a skip.
-    #
-    # `cpu_parallel` resolves here because numba is in the root `dev` group, not
-    # because it is required: no install of the package promises numba, and the
-    # dev group is what makes this repository's own suite exercise the backend. A parallel
-    # backend nobody runs is worse than none, which is why both halves exist.
-    #
-    # `cuda` is different in kind: it resolves only where a device exists, and
-    # asserting it unconditionally would make this repository's suite fail on
-    # every machine without a GPU, which is the one absence ADR 0003 calls
-    # legitimate. So the expected row follows the device. What stays pinned is
-    # the *shape* of an absence -- a skip with the reason, never an escalation.
+    # The rows are not aspirational: this is the probe running against the real
+    # table. For `cython` it is also the assertion that the extension was built --
+    # if not, detect() raises BackendError here rather than returning a skip.
+    # `cpu_parallel` resolves because numba is in the root `dev` group. `cuda`
+    # resolves only where a device exists, so its expectation follows the device;
+    # what stays pinned is the *shape* of an absence -- a skip with the reason.
     assert detect() == (
-        Availability("python", True, None),
-        Availability("cython", True, None),
-        Availability("cpu_parallel", True, None),
-        _EXPECTED_CUDA,
+        Availability("viterbi", "python", True, None),
+        Availability("viterbi", "cython", True, None),
+        Availability("viterbi", "cpu_parallel", True, None),
+        Availability("viterbi", "cuda", _CUDA_REASON is None, _CUDA_REASON),
+        Availability("forward_backward", "python", True, None),
     )
 
 
 def test_the_header_names_every_registered_backend():
-    cuda_cell = "cuda ✓" if _EXPECTED_CUDA.available else "cuda ✗ (no CUDA device detected)"
+    cuda_cell = "cuda ✓" if _CUDA_REASON is None else f"cuda ✗ ({_CUDA_REASON})"
     assert format_header(detect()) == (
-        "backends: python ✓ · cython ✓ · cpu_parallel ✓ · " + cuda_cell
+        "backends: viterbi python ✓ · cython ✓ · cpu_parallel ✓ · "
+        + cuda_cell
+        + " | forward_backward python ✓"
     )
 
 
+def test_the_header_and_backends_report_the_same_reason():
+    # One probe per process: the header is built from the same cached status the
+    # public call returns, so a user and the test run cannot be told different things.
+    public = {s.name: s.reason for s in hmm_backends.backends("viterbi")}
+    header = {s.name: s.reason for s in detect() if s.algorithm == "viterbi"}
+    assert header == public
+
+
 def test_an_empty_matrix_would_still_print_explicitly():
-    # EMPTY_HEADER is no longer what a run prints, but the branch is still live:
-    # ADR 0003 requires that a matrix with nothing in it says so in as many
-    # words, because a missing line is indistinguishable from a hook that was
-    # never registered. Kept under test so the message cannot rot unnoticed.
+    # Not what a run prints, but ADR 0003 requires that a matrix with nothing in it
+    # says so in as many words, because a missing line is indistinguishable from a
+    # hook that was never registered. Kept under test so the message cannot rot.
     assert format_header(()) == EMPTY_HEADER
     assert "none registered" in EMPTY_HEADER
 
 
 # --- format_header -----------------------------------------------------------
 
-def test_header_format_matches_adr_0003():
+def test_header_format_groups_by_algorithm_on_one_line():
     states = (
-        Availability("python", True),
-        Availability("cython", True),
-        Availability("cuda", False, "no CUDA device detected"),
+        Availability("viterbi", "python", True),
+        Availability("viterbi", "cython", True),
+        Availability("viterbi", "cuda", False, "no CUDA device detected"),
+        Availability("forward_backward", "python", True),
     )
     assert format_header(states) == (
-        "backends: python ✓ · cython ✓ · cuda ✗ (no CUDA device detected)"
+        "backends: viterbi python ✓ · cython ✓ · cuda ✗ (no CUDA device detected)"
+        " | forward_backward python ✓"
     )
+    assert "\n" not in format_header(states)
 
 
 # --- detect ------------------------------------------------------------------
 
-def test_importable_backend_is_available():
-    (state,) = detect([Backend("python", "os")])
-    assert state == Availability("python", True, None)
+def test_importable_backend_is_available(table):
+    (state,) = detect(table({"demo": (Row("python", "os", "getcwd"),)}))
+    assert state == Availability("demo", "python", True, None)
 
 
-def test_an_unbuilt_compiled_backend_escalates_rather_than_skipping():
-    # The failure mode the `cython` row exists to catch, exercised against a
-    # synthetic row so the real one stays untouched: a backend whose source is
-    # committed but whose extension was never built. ADR 0003 makes this a hard
-    # failure precisely because a skip would render it as "not available here",
-    # which is indistinguishable from a phase that was never written.
+def test_an_unbuilt_compiled_backend_escalates_rather_than_skipping(table):
+    # The failure mode the `cython` row exists to catch: a backend whose source is
+    # committed but whose extension was never built. At runtime the same absence is
+    # a pure wheel and reports unavailable; in a checkout a skip would render it as
+    # "not available here", indistinguishable from a phase never written.
+    rows = {"demo": (Row("cython", "pfsmgraph.hmm._never_built", "_demo", needs="compiled extension"),)}
     with pytest.raises(BackendError, match="implemented but"):
-        detect([Backend("cython", "pfsmgraph.hmm._viterbi_never_built")])
+        detect(table(rows))
 
 
-def test_backend_missing_its_optional_dependency_is_a_reported_skip():
-    (state,) = detect([Backend("cuda", "pfsmgraph._absent", optional_on="CUDA device")])
+def test_backend_missing_numba_is_a_reported_skip_naming_the_extra(table):
+    rows = {"demo": (Row("cpu_parallel", "numba_is_absent_here", "_demo", needs="numba", extra="cpu-parallel"),)}
+    (state,) = detect(table(rows))
     assert state.available is False
-    assert state.reason == "no CUDA device detected"
+    # The probe names the module that was missing; this synthetic module is not
+    # numba, so the reason reports the import error rather than the extra.
+    assert "did not import" in state.reason
 
 
-def test_unimportable_backend_without_optional_on_is_a_hard_failure():
-    # The stale-or-missing Cython build. ADR 0003 forbids skipping this.
+def test_unimportable_backend_needing_nothing_is_a_hard_failure(table):
+    rows = {"demo": (Row("python", "pfsmgraph._absent", "_demo"),)}
     with pytest.raises(BackendError, match="hard failure"):
-        detect([Backend("cython", "pfsmgraph._absent")])
+        detect(table(rows))
+
+
+def test_a_table_module_that_will_not_import_is_a_hard_failure(monkeypatch):
+    import _backends
+
+    monkeypatch.setattr(_backends, "TABLES", ("pfsmgraph.hmm._no_such_table",))
+    with pytest.raises(BackendError, match="did not import"):
+        _backends.detect()
 
 
 # --- check_required ----------------------------------------------------------
 
 STATES = (
-    Availability("python", True),
-    Availability("cuda", False, "no CUDA device detected"),
+    Availability("viterbi", "python", True),
+    Availability("viterbi", "cuda", False, "no CUDA device detected"),
+    Availability("forward_backward", "python", True),
 )
 
 
@@ -210,14 +239,22 @@ def test_required_and_available_passes():
 
 
 def test_requiring_python_passes_against_the_real_matrix():
-    # The CI escalation, resolved against BACKENDS rather than a fixture: this
-    # is what PFSMGRAPH_REQUIRE_BACKENDS=python does on a runner today.
+    # The CI escalation, resolved against the real table rather than a fixture:
+    # this is what PFSMGRAPH_REQUIRE_BACKENDS=python does on a runner today.
     assert check_required(detect(), {REQUIRE_ENV: "python"}) is None
 
 
-def test_required_but_skipped_is_escalated():
-    with pytest.raises(BackendError, match="would have skipped"):
+def test_required_but_skipped_is_escalated_naming_the_algorithm():
+    with pytest.raises(BackendError, match="would have skipped: viterbi cuda"):
         check_required(STATES, {REQUIRE_ENV: "python,cuda"})
+
+
+def test_a_required_name_covers_every_algorithm_that_has_it():
+    states = STATES + (Availability("forward_backward", "cuda", False, "no CUDA device detected"),)
+    with pytest.raises(BackendError) as excinfo:
+        check_required(states, {REQUIRE_ENV: "cuda"})
+    assert "viterbi cuda" in str(excinfo.value)
+    assert "forward_backward cuda" in str(excinfo.value)
 
 
 def test_unknown_required_name_is_rejected_before_availability():
@@ -243,12 +280,12 @@ def test_conftest_is_at_the_repo_root():
 
 def test_header_actually_reaches_the_session_output(pytester):
     # End to end in a subprocess, so it exercises the real startup path rather
-    # than calling the hook by hand. The copied _backends.py resolves
-    # pfsmgraph.hmm._viterbi out of the same venv, which is also a check that
-    # the row survives being probed from outside the repo root.
+    # than calling the hook by hand. The copied _backends.py reads the table out
+    # of the installed pfsmgraph.hmm, which is also a check that the policy
+    # survives being run from outside the repo root.
     for name in ("conftest.py", "_backends.py"):
         shutil.copy(REPO_ROOT / name, pytester.path / name)
     pytester.makepyfile(test_trivial="def test_trivial(): pass")
     result = pytester.runpytest_subprocess()
-    result.stdout.fnmatch_lines(["backends: python*"])
+    result.stdout.fnmatch_lines(["backends: viterbi python ✓*| forward_backward python ✓"])
     result.assert_outcomes(passed=1)

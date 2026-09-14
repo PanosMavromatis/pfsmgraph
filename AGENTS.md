@@ -9,9 +9,9 @@ Shared project knowledge for any coding agent working in this repository.
 
 **`dataseq` and `hmm` are implemented and released (0.1.0, 2026-09-02 and 2026-09-13); the other three members are still empty scaffolding.** In place: the uv workspace root `pyproject.toml` (virtual — no `[project]` table), `uv.lock`, all five `packages/*` members with their own `pyproject.toml`, the `meson.build` files for `align` and `hmm` (`align`'s extension block still dormant, `hmm`'s live since the first `.pyx` landed 2026-09-09), and an empty `pfsmgraph/<pkg>/__init__.py` for the three members that have no code yet (plus `dl/rnn/` and `dl/transformer/`). The ADRs in `docs/design/adr/` are authoritative for the decisions they cover — the twelve initial records from the PRD, plus 0013 (how this family documents its public surfaces) and 0014 (how imported migration source is retained), both added 2026-09-01; the PRD remains the narrative design document.
 
-**What `dataseq` now contains.** Six modules under `packages/pfsmgraph-dataseq/src/pfsmgraph/dataseq/` (the container landed 2026-08-31, the encoder API 2026-09-01) and 74 tests — the first tests in this repository, and 74 of the suite's 679 today; 559 are `hmm`'s and the remaining 46 are the repo-root backend-matrix, API-docs, release-runbook and meson-source tests. `_reserved.py` hard-codes the ADR 0011 block as module constants, with no class or parameter that could relocate it; `_vocabulary.py` holds the `Vocabulary` protocol and `SymbolTable`, a frozen first-appearance-ordered implementation that encodes strictly and decodes *totally*, reserved codes included; `_record.py` and `_dataset.py` are the ragged container, whose records carry true lengths and never padding; `_collate.py` is `pad_collate`, where padding is introduced and always returned with its mask. The container imports neither torch nor pandas — verified in a subprocess — and its one runtime dependency is `numpy`.
+**What `dataseq` now contains.** Six modules under `packages/pfsmgraph-dataseq/src/pfsmgraph/dataseq/` (the container landed 2026-08-31, the encoder API 2026-09-01) and 74 tests — the first tests in this repository, and 74 of the suite's 708 today; 584 are `hmm`'s and the remaining 50 are the repo-root backend-matrix, API-docs, release-runbook and meson-source tests. `_reserved.py` hard-codes the ADR 0011 block as module constants, with no class or parameter that could relocate it; `_vocabulary.py` holds the `Vocabulary` protocol and `SymbolTable`, a frozen first-appearance-ordered implementation that encodes strictly and decodes *totally*, reserved codes included; `_record.py` and `_dataset.py` are the ragged container, whose records carry true lengths and never padding; `_collate.py` is `pad_collate`, where padding is introduced and always returned with its mask. The container imports neither torch nor pandas — verified in a subprocess — and its one runtime dependency is `numpy`.
 
-**What `hmm` now contains.** Eight Python modules, one Cython kernel, and 559 tests. The
+**What `hmm` now contains.** Eight Python modules, one Cython kernel, and 584 tests. The
 eighth is `_backends.py`, the [ADR 0021](../design/adr/0021-runtime-backend-selection.md)
 backend table and selection, written 2026-09-14 on `feat/hmm-backend-seam` (see the ADR 0003
 paragraph below). The seventh is `_baum_welch.py`, written 2026-09-14 on `feat/hmm-em-loop`: the private
@@ -281,55 +281,47 @@ do not "correct" it downward on that basis, since it would only have to be undon
 first `.pyx` and raising a published lower bound is the breaking direction. Editing it left
 `uv.lock` byte-identical, confirming the workspace footgun below.
 
-**The ADR 0003 reporting mechanism is complete as of 2026-09-01, and it lives at the repo
-root.** `conftest.py` carries `pytest_report_header` and nothing else; `_backends.py`
-beside it holds the registry, the import probe and the `PFSMGRAPH_REQUIRE_BACKENDS`
-escalation; the repo-root `tests/` covers both. **The conftest must stay at the rootdir** —
+**The ADR 0003 reporting mechanism lives at the repo root, and the table it reports on
+lives in the package.** `conftest.py` carries `pytest_report_header` and nothing else;
+`_backends.py` beside it is **policy only** since 2026-09-14 — the header, the escalation
+rule and `PFSMGRAPH_REQUIRE_BACKENDS` — and reads each distribution's table (`TABLES`, today
+`pfsmgraph.hmm._backends`) through that module's private `_status`, the same cached probe
+behind the public `hmm.backends()`. So the header and a user's call report one reason for one
+absence; `tests/test_backends.py` asserts they match. **The conftest must stay at the rootdir** —
 `pytest_report_header` is a *startup* hook while conftest files under `packages/*/tests/`
 are loaded during collection, so a hook sited there is registered too late and discarded
 with no warning at all (measured on pytest 9.1.1: of two conftests each defining it, only
 the root one printed). `tests/test_backends.py` asserts the placement precisely because
-that failure is silent. **The matrix stopped being empty on 2026-09-04**, when
-`hmm/_viterbi.py` reached ADR 0002 phase 1; it **gained its first compiled row on
-2026-09-09** with `_viterbi_cython.pyx` at phase 2, and a third on **2026-09-10** with
-`_viterbi_cpu_parallel.py` at phase 3, and a fourth on **2026-09-13** with
-`_viterbi_cuda.py` at phase 4. `BACKENDS` holds
-`Backend("python", "pfsmgraph.hmm._viterbi")`,
-`Backend("cython", "pfsmgraph.hmm._viterbi_cython")`,
-`Backend("cpu_parallel", "pfsmgraph.hmm._viterbi_cpu_parallel", optional_on="numba")` and
-`Backend("cuda", "pfsmgraph.hmm._viterbi_cuda", optional_on="CUDA device")`, so a run opens
-with `backends: python ✓ · cython ✓ · cpu_parallel ✓ · cuda ✓` on a machine with a GPU and
-`… · cuda ✗ (no CUDA device detected)` without one. **The `cuda` probe can fail only
-because the module makes it**: `@cuda.jit` decorates lazily, so `_viterbi_cuda` raises
-`ImportError` at import when numba-cuda reports no device — otherwise the import would
-succeed on a GPU-less machine and report a backend that fails on first call.
-`tests/test_backends.py` derives that row's expectation from numba-cuda directly, never
-from the module under test. Each row names the *kernel module*, not the package,
-because `import pfsmgraph.hmm` succeeds with or without a decode in it and a probe that
-cannot fail is not a probe. The first two carry `optional_on=None`, so a failed import
-escalates rather than skipping — but **the clause means something different on the compiled row, and
-that is where it first does any work**. Nothing external is needed to run pure Python, so a
-failed import there can only be a broken checkout; a compiled backend can instead be
-*present in the source tree and absent from the environment*, since the `.pyx` is committed
-but the extension exists only if it was built. `optional_on` is for absences an environment
-is entitled to have — no CUDA device — and a missing build is not one, so an unbuilt
-extension errors the session at startup instead of quietly reporting a green run over one
-backend. **That field was called `hardware` until 2026-09-10**, and phase 3 renamed it: an
-install of `pfsmgraph-hmm` without numba, which it has never required, is entitled to lack numba
-exactly as one without a GPU is entitled to lack a CUDA device, so the third row's absence
-is legitimate without being a *device*. The semantics never changed — the name had been
-taken from the only instance that existed when it was written, and one example cannot
-distinguish a concept from its first instance. Correcting it costs nothing a consumer sees,
-because this module reaches no shipped artifact. `EMPTY_HEADER` stays under test — the branch
-is still live and ADR 0003 requires that an empty matrix say so in as many words. **There are two backend tables for now, and that is temporary.**
-[ADR 0021](../design/adr/0021-runtime-backend-selection.md) (2026-09-14) moved selection
-into the package: a shipped, private `pfsmgraph/hmm/_backends.py` keyed by algorithm (four
-`viterbi` rows, one `forward_backward` row), with a once-per-process import probe, remedy
-text derived from the failed import, and public `hmm.backends(name)`. `viterbi(...,
-backend=...)` resolves through it. The repo-root module described above still keeps its own
-`BACKENDS` until `feat/hmm-backend-seam`'s next goal rebuilds it on the package's private
-`_status`, leaving it ADR 0003's policy alone. Nothing reads one table from the other in the
-meantime, so a row added to only one of them is not caught.
+that failure is silent. Fixtures have no such constraint, which is why the `backend` fixture
+lives in `packages/pfsmgraph-hmm/tests/conftest.py`. **The matrix stopped being empty on
+2026-09-04**, when `hmm/_viterbi.py` reached ADR 0002 phase 1, and gained Viterbi's phases 2,
+3 and 4 on 2026-09-09, -10 and -13; `forward_backward`'s phase 1 joined the header with the
+move. A run opens with `backends: viterbi python ✓ · cython ✓ · cpu_parallel ✓ · cuda ✓ |
+forward_backward python ✓` on a machine with a GPU and `… · cuda ✗ (no CUDA device
+detected) | …` without one. **The `cuda` probe can fail only because the module makes it**:
+`@cuda.jit` decorates lazily, so `_viterbi_cuda` raises `ImportError` at import when
+numba-cuda reports no device — otherwise the import would succeed on a GPU-less machine and
+report a backend that fails on first call. `tests/test_backends.py` derives that row's
+expectation from numba-cuda directly, never from the module under test. Each row names the
+*kernel module*, not the package, because `import pfsmgraph.hmm` succeeds with or without a
+decode in it and a probe that cannot fail is not a probe.
+
+**One field, `needs`, lets one table serve two policies** ([ADR 0021](../design/adr/0021-runtime-backend-selection.md)
+section 3). Each `_Row` records what its absence is attributable to: nothing (`python`), the
+compiled extension (`cython`), numba (`cpu_parallel`) or a CUDA device (`cuda`). The root
+policy escalates the first two (`ESCALATED_NEEDS`) — nothing external is needed to run pure
+Python, and a committed `.pyx` whose extension is missing is a missing or stale build — and
+reports the other two as skips. **The public API treats the second differently, and
+correctly**: an install may be a pure wheel, so there `backend="cython"` raises
+`BackendUnavailableError` with the pure-wheel remedy. The field has had three names:
+`hardware` until 2026-09-10, when phase 3 showed an absence can be legitimate without being a
+*device*, then `optional_on` on the root `Backend` row, and `needs` since the table moved.
+The package's probe also distinguishes *which* import failed — the extension itself absent is
+a pure install, any other `ImportError` from inside it is reported as itself — and
+`test_backend_selection.py` checks that with a synthetic stale module. `EMPTY_HEADER` stays
+under test — the branch is still live and ADR 0003 requires that an empty matrix say so in as
+many words. `dp-compile.toml`'s `[backends] registry` names the package's table; its rows are
+`_Row` entries under `_TABLE`, not the phase skills' flat `Backend` template.
 
 **The API documentation lives in a repo-level `docs/api/`, and that layout is now binding on all five members.** [ADR 0013](../design/adr/0013-api-documentation-layout-and-tooling.md) settles it: one subdirectory per distribution (`docs/api/dataseq/`, and `docs/api/hmm/` since 2026-09-13 — a member gets its subdirectory when it gets code; `hmm`'s README states outright that the public `viterbi` runs only the phase-1 kernel and that neither accelerator extra changes a public call in 0.1.0), hand-written Markdown rather than a generator, no build step and no addition to the `dev` group. Two rules divide the labour and are the reason the choice is sustainable: **docstrings are normative for signatures**, since that is where an editor and `help()` look, while **`docs/api/` is normative for contracts** — the invariants, the reasons behind them, and the seams between distributions, which are contracts even when stated nowhere else. And **every code block is executed and its output pasted from the run**, error messages and tracebacks included; it is the only guard against drift that a hand-written layout has. Sphinx is deferred rather than refused (the docstrings already speak reST, so the migration is mostly configuration), and mkdocstrings is refused outright, because its Google/NumPy style expectation would force rewriting all six modules' docstrings to satisfy a tool.
 
@@ -428,7 +420,7 @@ Still to do, in PRD order (§11): `hmm` (Lush translation), then `align`, then `
 Toolchain: **uv** (workspace) + **pytest**. Requires `uv` and Python ≥ 3.10.
 
 - `uv sync` — create/refresh the venv; installs all five members editable (plain `.pth`) plus the `dev` group (`pytest`).
-- `uv run pytest` — run the suite (679 tests: 74 in `packages/pfsmgraph-dataseq/tests/`, 559 in `packages/pfsmgraph-hmm/tests/`, and 46 in the repo-root `tests/` — 19 covering the ADR 0003 backend matrix, 9 executing documented code blocks against their pasted output per ADR 0013, 2 checking that `docs/ops/release.md` names only recipes the root `justfile` defines, and 16 asserting each `meson.build`'s `install_sources` matches the package on disk). That last figure was 7 until 2026-09-04: it is parameterised over `packages/*/meson.build`, so it grew by itself when the three pure members got theirs, and that growth **is** the 271 → 280 — no test was written for the change that occasioned it. That verifier reads `docs/api/*/*.md` **and `packages/*/README.md`**: a member README becomes a PyPI long description under an immutable version, so it is the one documentation surface where drift cannot be corrected in place. Every run opens with the backend header. Two narrow skips are by design: `test_torch_interop.py` verifies the `DataLoader` integration and skips when torch is absent, since torch is a dependency of no member; and the 59 CUDA tests in `test_viterbi.py` (every shared test's `cuda` parameter plus four launch-geometry tests) skip without a CUDA device, with the header reading `cuda ✗ (no CUDA device detected)` — set `PFSMGRAPH_REQUIRE_BACKENDS=cuda` where a GPU is expected, so a lost device fails the run instead.
+- `uv run pytest` — run the suite (708 tests: 74 in `packages/pfsmgraph-dataseq/tests/`, 584 in `packages/pfsmgraph-hmm/tests/`, and 50 in the repo-root `tests/` — 23 covering the ADR 0003 backend matrix, 9 executing documented code blocks against their pasted output per ADR 0013, 2 checking that `docs/ops/release.md` names only recipes the root `justfile` defines, and 16 asserting each `meson.build`'s `install_sources` matches the package on disk). That last figure was 7 until 2026-09-04: it is parameterised over `packages/*/meson.build`, so it grew by itself when the three pure members got theirs, and that growth **is** the 271 → 280 — no test was written for the change that occasioned it. That verifier reads `docs/api/*/*.md` **and `packages/*/README.md`**: a member README becomes a PyPI long description under an immutable version, so it is the one documentation surface where drift cannot be corrected in place. Every run opens with the backend header. Two narrow skips are by design: `test_torch_interop.py` verifies the `DataLoader` integration and skips when torch is absent, since torch is a dependency of no member; and the 59 CUDA tests in `test_viterbi.py` (every shared test's `cuda` parameter plus four launch-geometry tests) skip without a CUDA device, with the header reading `cuda ✗ (no CUDA device detected)` — set `PFSMGRAPH_REQUIRE_BACKENDS=cuda` where a GPU is expected, so a lost device fails the run instead.
 - `uv build --package pfsmgraph-<pkg>` — build one member's sdist + wheel.
 - `uv lock` — refresh `uv.lock` (committed; one lockfile for the whole family).
 

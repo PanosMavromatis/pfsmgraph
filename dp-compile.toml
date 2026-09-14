@@ -38,8 +38,15 @@ cuda          = "packages/pfsmgraph-{package}/src/pfsmgraph/{package}/_{algorith
 
 # A new backend is a row in the registry plus, for a compiled phase, an entry in that
 # member's build file. meson does not glob, so the second half is not optional.
+#
+# The registry is the package's table since 2026-09-14 (ADR 0021): a `_Row(name,
+# module, function, needs, extra)` under the algorithm's key in `_TABLE`, NOT the
+# flat `Backend(name, module, hardware)` tuple the phase skills' template shows. The
+# repo-root `_backends.py` is policy and holds no rows. The manifest documents
+# `{package}` substitution only for `[phases]`, so this path is literal: `align`'s
+# table will need its own entry when that member gets a kernel.
 [backends]
-registry       = "_backends.py"
+registry       = "packages/pfsmgraph-hmm/src/pfsmgraph/hmm/_backends.py"
 build_manifest = "packages/pfsmgraph-{package}/meson.build"
 require_env    = "PFSMGRAPH_REQUIRE_BACKENDS"
 
