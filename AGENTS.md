@@ -11,8 +11,10 @@ Shared project knowledge for any coding agent working in this repository.
 
 **What `dataseq` now contains.** Six modules under `packages/pfsmgraph-dataseq/src/pfsmgraph/dataseq/` (the container landed 2026-08-31, the encoder API 2026-09-01) and 74 tests — the first tests in this repository, and 74 of the suite's 530 today; 410 are `hmm`'s and the remaining 46 are the repo-root backend-matrix, API-docs, release-runbook and meson-source tests. `_reserved.py` hard-codes the ADR 0011 block as module constants, with no class or parameter that could relocate it; `_vocabulary.py` holds the `Vocabulary` protocol and `SymbolTable`, a frozen first-appearance-ordered implementation that encodes strictly and decodes *totally*, reserved codes included; `_record.py` and `_dataset.py` are the ragged container, whose records carry true lengths and never padding; `_collate.py` is `pad_collate`, where padding is introduced and always returned with its mask. The container imports neither torch nor pandas — verified in a subprocess — and its one runtime dependency is `numpy`.
 
-**What `hmm` now contains.** Seven Python modules, one Cython kernel, and 410 tests. The
-seventh is `_baum_welch.py`, written 2026-09-14 on `feat/hmm-em-loop`: the private
+**What `hmm` now contains.** Eight Python modules, one Cython kernel, and 410 tests. The
+eighth is `_backends.py`, the [ADR 0021](../design/adr/0021-runtime-backend-selection.md)
+backend table and selection, written 2026-09-14 on `feat/hmm-backend-seam` (see the ADR 0003
+paragraph below). The seventh is `_baum_welch.py`, written 2026-09-14 on `feat/hmm-em-loop`: the private
 `_m_step(init_counts, transition_counts, emission_counts) -> (init_state_p, transition_p,
 output_p, out_counts)`, `run-add`'s stage 5 translated with `safe_divide` and ascending
 `accumulate` reductions, and not a DP kernel, so it has no lifecycle phases and the
@@ -79,9 +81,10 @@ difference, because an arc-level ulp rarely survives into `total_bits`: 1 genera
 Utility code migrated from the Lush original, landed 2026-09-03 and complete for 0.1.0 at
 five functions; `_params.py` is `HMMParams`, the ADR 0017 frozen parameter value, landed
 the same day; `_viterbi.py` is the decode, landed 2026-09-04 and **the project's first
-dynamic-programming kernel**. Four names are exported from
+dynamic-programming kernel**. Seven names are exported from
 `pfsmgraph/hmm/__init__.py` — `HMMParams`, `viterbi`, `ViterbiPath` and
-`ImpossibleSequenceError`.
+`ImpossibleSequenceError` since 0.1.0, and `backends`, `BackendStatus` and
+`BackendUnavailableError` since 2026-09-14, when `viterbi` gained a keyword-only `backend=`.
 `bits(p)` is `-log2(p)`; `safe_divide(num, den)` yields `0.0` wherever the denominator
 is zero, matching the original for `0/0` and `x/0` alike;
 `stationary_distribution(transition_p)` is the solve behind the original's `state-p`;
@@ -318,12 +321,15 @@ is legitimate without being a *device*. The semantics never changed — the name
 taken from the only instance that existed when it was written, and one example cannot
 distinguish a concept from its first instance. Correcting it costs nothing a consumer sees,
 because this module reaches no shipped artifact. `EMPTY_HEADER` stays under test — the branch
-is still live and ADR 0003 requires that an empty matrix say so in as many words. Backend
-enumeration is test-only and reaches no shipped artifact **today**, but that is now decided
-to change: [ADR 0021](../design/adr/0021-runtime-backend-selection.md) (2026-09-14, on
-`feat/hmm-backend-seam`) moves the table into a shipped, private `pfsmgraph/hmm/_backends.py`
-keyed by algorithm, makes `hmm.backends(name)` public, and leaves the repo-root module with
-ADR 0003's policy alone. Until that branch builds it, the paragraph above describes the code.
+is still live and ADR 0003 requires that an empty matrix say so in as many words. **There are two backend tables for now, and that is temporary.**
+[ADR 0021](../design/adr/0021-runtime-backend-selection.md) (2026-09-14) moved selection
+into the package: a shipped, private `pfsmgraph/hmm/_backends.py` keyed by algorithm (four
+`viterbi` rows, one `forward_backward` row), with a once-per-process import probe, remedy
+text derived from the failed import, and public `hmm.backends(name)`. `viterbi(...,
+backend=...)` resolves through it. The repo-root module described above still keeps its own
+`BACKENDS` until `feat/hmm-backend-seam`'s next goal rebuilds it on the package's private
+`_status`, leaving it ADR 0003's policy alone. Nothing reads one table from the other in the
+meantime, so a row added to only one of them is not caught.
 
 **The API documentation lives in a repo-level `docs/api/`, and that layout is now binding on all five members.** [ADR 0013](../design/adr/0013-api-documentation-layout-and-tooling.md) settles it: one subdirectory per distribution (`docs/api/dataseq/`, and `docs/api/hmm/` since 2026-09-13 — a member gets its subdirectory when it gets code; `hmm`'s README states outright that the public `viterbi` runs only the phase-1 kernel and that neither accelerator extra changes a public call in 0.1.0), hand-written Markdown rather than a generator, no build step and no addition to the `dev` group. Two rules divide the labour and are the reason the choice is sustainable: **docstrings are normative for signatures**, since that is where an editor and `help()` look, while **`docs/api/` is normative for contracts** — the invariants, the reasons behind them, and the seams between distributions, which are contracts even when stated nowhere else. And **every code block is executed and its output pasted from the run**, error messages and tracebacks included; it is the only guard against drift that a hand-written layout has. Sphinx is deferred rather than refused (the docstrings already speak reST, so the migration is mostly configuration), and mkdocstrings is refused outright, because its Google/NumPy style expectation would force rewriting all six modules' docstrings to satisfy a tool.
 

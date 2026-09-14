@@ -43,6 +43,7 @@ from dataclasses import dataclass
 import numpy as np
 from pfsmgraph.dataseq import SequenceRecord
 
+from ._backends import BackendName, _resolve
 from ._numeric import bits
 from ._params import HMMParams
 
@@ -217,7 +218,9 @@ def _dead_symbol(init_state_p, transition_p, output_p, codes) -> int:
     )
 
 
-def viterbi(params: HMMParams, record: SequenceRecord) -> ViterbiPath:
+def viterbi(
+    params: HMMParams, record: SequenceRecord, *, backend: BackendName = "python"
+) -> ViterbiPath:
     """Decode the most probable state path over ``record`` under ``params``.
 
     A free function over a frozen parameter value and one record, not a method
@@ -230,6 +233,13 @@ def viterbi(params: HMMParams, record: SequenceRecord) -> ViterbiPath:
     :param record: one ``dataseq`` ``SequenceRecord``. A record never holds
         padding, so there is no mask to consult; ``pad_collate`` batches are out
         of scope until revision 03.
+    :param backend: which ADR 0002 lifecycle phase runs the decode -- ``"python"``
+        (the reference, and the default), ``"cython"``, ``"cpu_parallel"`` or
+        ``"cuda"``. All four are bit-exact with one another on a given host.
+        Validated before any work (ADR 0021); see :func:`~pfsmgraph.hmm.backends`.
+    :raises ValueError: if ``backend`` is not a backend name.
+    :raises BackendUnavailableError: if ``backend`` cannot run in this
+        environment. Nothing falls back.
     :raises ImpossibleSequenceError: if no path has finite description length.
     :raises ValueError: if a code falls outside the model's symbol axis. This is
         a range check only: a record encoded against a different vocabulary whose
@@ -240,6 +250,7 @@ def viterbi(params: HMMParams, record: SequenceRecord) -> ViterbiPath:
     :class:`HMMParams`), and it is why ADR 0002's later phases have no index
     arithmetic to port.
     """
+    kernel = _resolve("viterbi", backend)
     codes = record.codes
     if codes.size:
         lowest, highest = int(codes.min()), int(codes.max())
@@ -251,7 +262,7 @@ def viterbi(params: HMMParams, record: SequenceRecord) -> ViterbiPath:
                 f"than the one output_p was sized against"
             )
 
-    states, total_bits = _viterbi(
+    states, total_bits = kernel(
         params.init_state_p, params.transition_p, params.output_p, codes
     )
 

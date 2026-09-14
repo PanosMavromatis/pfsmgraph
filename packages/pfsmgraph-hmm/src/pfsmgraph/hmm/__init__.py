@@ -12,9 +12,22 @@ formulation. See ``docs/design/adr/0015-arc-emission-mealy-formulation.md``.
 trainer: the Lush original this package is translated from cannot express a
 decode-only use of itself, so revision 02 builds no trainer at all and
 Baum-Welch arrives in 0.2.0.
+
+``viterbi`` takes a keyword-only ``backend=``, defaulting to the pure-Python
+reference, and :func:`backends` reports which backends can run here
+(``docs/design/adr/0021-runtime-backend-selection.md``).
 """
 
+from ._backends import BackendStatus, BackendUnavailableError, backends
 from ._params import HMMParams
 from ._viterbi import ImpossibleSequenceError, ViterbiPath, viterbi
 
-__all__ = ["HMMParams", "ImpossibleSequenceError", "ViterbiPath", "viterbi"]
+__all__ = [
+    "BackendStatus",
+    "BackendUnavailableError",
+    "HMMParams",
+    "ImpossibleSequenceError",
+    "ViterbiPath",
+    "backends",
+    "viterbi",
+]
