@@ -1,6 +1,6 @@
 # feat/hmm-torch-backend
 
-**Status**: active
+**Status**: merged — PR #34 — 2026-09-14
 **Created**: 2026-09-14
 **Subgoal**: Add the `torch` backend behind the `[torch]` extra (revision 03-hmm-v0.2.0)
 
