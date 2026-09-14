@@ -175,6 +175,26 @@ group of bullets, and each opens with its run command.
   FMA in the baseline instruction set. Apple clang defaults to contracting within an
   expression.
 
+## Extended
+
+**2026-09-14, while the reference was written.** The Decision fixes the order of the
+recurrences, α, β and the scale factors, but the reference also reduces over positions.
+The same rule is extended to those reductions:
+
+- **The description length** is `Σ bits(Q_t)` summed in ascending `t`.
+- **The expected counts** are accumulated in ascending `t`, one elementwise addition of
+  that position's ξ per step. `init_counts` is ξ₀ summed over the destination in
+  ascending order, as `run-add` forms `C-in`.
+- **ξ is never stored in full.** Each position's `(S, S)` slice is built, added and
+  discarded, so memory is `O(S²·A)` rather than `run-add`'s `O(N·S²)`. This is a
+  consequence, not a new rule.
+
+The ordered reductions are `np.add.accumulate(...)[-1]`. It returns every partial sum,
+so its order is fixed by definition, and it was bit-identical to an explicit ascending
+loop at `S` = 4, 16, 64 and 160 while being 2-66× faster than that loop. That makes
+most of the reference-speed cost under *Negative / costs* moot: at `S = 160` it took
+0.14 ms per step, about the same as the `@` form measured above.
+
 ## Open
 
 - **Whether numba-cuda contracts multiply-add in device code.** Unmeasured. Settle it at

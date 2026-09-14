@@ -34,8 +34,16 @@ revision 03-hmm-v0.2.0
     > **Note:** An impossible sequence gives a `scale` of zero from the dead position on, all-zero `alpha` columns after it, all-zero `beta`, and `Σ bits(scale) = +inf`, with no `nan` in `alpha` or `beta`. An empty record gives `alpha = [init]`, `beta = [1…]`, `scale = [1.0]`.
   - [x] The arc-emission factor stays inside the inner loop (ADR 0015)
     > **Note:** It does, per arc. The `(S, S, U)` table holds `transition_p[i, j] · output_p[i, j, sym]` for each arc and each symbol present, and every term indexes it by both endpoints. This is the table the compiled Viterbi phases build, without the logarithm.
-- [ ] ξ, γ and the sequence likelihood
-  - [ ] γ sums to 1 over states at every position, ξ marginalises to γ, and α and β give the same total
+- [x] ξ, γ and the sequence likelihood
+  > **Note:** `run-add` (`hmm-trainer.lsh:584-620`) keeps ξ in full as `P-t`, `(N+1)·S²` floats, and reads it only to sum it into `C-in` (row sums of ξ₀), `C-t` (ξ summed over `t`) and `C-t-y` (ξ accumulated at each position's symbol). The M-step reads nothing else, so ξ and γ are intermediate values there, not results.
+  > **Q:** Produce accumulated expected counts, building ξ one position at a time and never storing it, or materialise ξ as `(N, S, S)` and derive the counts from it, as `run-add` does?
+  > **A:** Accumulated counts.
+  > **Q:** Write the consistency checks as tests now in `tests/test_forward_backward.py`, extended by goal 4, or keep them as a scratch check until goal 4?
+  > **A:** Tests now.
+  > **Done:** `_description_length(scale)`, `_state_posteriors(alpha, beta, scale)` and `_expected_counts(alpha, beta, transition_p, output_p, codes) -> (init_counts, transition_counts, emission_counts)` sit beside the kernel, which shares `_arc_table` with them so that ξ is formed from the same arc weights. Every sum over positions is in ascending `t`, which ADR 0020 now records in an *Extended* section. `tests/test_forward_backward.py` holds 67 tests: 11 identities over 6 cases (five seeded random models from S = 1 to 24 with up to 50% dead arcs, plus the tracked 8-state model over its 1268-symbol corpus) and an empty-record test. The suite is at 390.
+  - [x] γ sums to 1 over states at every position, ξ marginalises to γ, and α and β give the same total
+    > **Note:** Mutation-tested against eight injected bugs, all caught: β transposed in ξ, ξ reading `beta[t]`, γ without the scale factor, emission counted at the present-symbol index rather than the code, `init_counts` summed over the source, β left unscaled, β summed over the wrong axis, and ξ reading the next position's symbol.
+    > **Note:** A ninth mutation marks the limit of these tests. Transposing the arc table *everywhere* makes a kernel that is consistent for the transposed model. It was caught, but only by structure: a dead arc came back to life, and the real fixture became impossible. Every identity about the values passed. On a dense model with no dead arcs, this module would accept it, which is why goal 4's exact enumeration is still needed.
 - [ ] Tests against an oracle inside the repository
   - [ ] Brute-force enumeration over every state path on small models
   - [ ] Constructed cases: an impossible sequence, an exactly uniform model, zero-probability arcs

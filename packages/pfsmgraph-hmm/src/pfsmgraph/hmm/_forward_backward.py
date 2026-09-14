@@ -1,4 +1,4 @@
-"""Forward-backward: scaled α and β over one sequence.
+"""Forward-backward over one sequence: scaled α and β, and what they are for.
 
 The second dynamic-programming kernel in this package, and the first of revision
 03's Baum-Welch. It is [ADR 0002] phase 1, the numpy reference, and it is what
@@ -29,6 +29,14 @@ weight per arc and per symbol present in the record, and every term uses it with
 both endpoints. It is the ``(S, S, U)`` table the compiled Viterbi phases already
 build, without the logarithm, and it is not a hoisted emission factor.
 
+**What the recurrences are for is expected counts, not ξ.** ``run-add`` keeps ξ
+in full as ``P-t``, ``(N + 1)·S²`` floats, only to sum it into the three count
+arrays its M-step reads (``hmm-trainer.lsh:584-620``, ``HMMLIB-ACCOUNT.md`` §9).
+:func:`_expected_counts` builds each position's ξ, adds it into running totals
+and discards it, so memory is ``O(S²·A)`` for the counts plus ``O(N·S)`` for α
+and β, never ``O(N·S²)``. The sums over positions follow the same rule as the
+recurrences: ascending ``t``, one elementwise addition per position.
+
 .. [ADR 0002] ``docs/design/adr/0002-three-phase-algorithm-lifecycle.md``
 .. [ADR 0015] ``docs/design/adr/0015-arc-emission-mealy-formulation.md``
 .. [ADR 0020] ``docs/design/adr/0020-scaled-probability-domain-forward-backward.md``
@@ -38,9 +46,21 @@ from __future__ import annotations
 
 import numpy as np
 
-from ._numeric import safe_divide
+from ._numeric import bits, safe_divide
 
 __all__: list[str] = []
+
+
+def _arc_table(transition_p, output_p, codes):
+    """``(present, sym, w)``: the symbols present, each position's index into them,
+    and ``w[i, j, u] = transition_p[i, j] * output_p[i, j, present[u]]``.
+
+    Shared by the recurrences and the counts so that ξ is formed from the same
+    bits the recurrences used. Elementwise, so it has no order to fix.
+    """
+    present, sym = np.unique(np.asarray(codes), return_inverse=True)
+    w = transition_p[:, :, np.newaxis] * output_p[:, :, present]
+    return present, sym, w
 
 
 def _forward_backward(init_state_p, transition_p, output_p, codes):
@@ -78,9 +98,7 @@ def _forward_backward(init_state_p, transition_p, output_p, codes):
     n = int(codes.shape[0])
     size = int(transition_p.shape[0])
 
-    # (S, S, U) over the symbols this record uses. Elementwise, so order-free.
-    present, sym = np.unique(codes, return_inverse=True)
-    w = transition_p[:, :, np.newaxis] * output_p[:, :, present]
+    _, sym, w = _arc_table(transition_p, output_p, codes)
 
     alpha = np.empty((n + 1, size), dtype=np.float64)
     beta = np.empty((n + 1, size), dtype=np.float64)
@@ -111,3 +129,72 @@ def _forward_backward(init_state_p, transition_p, output_p, codes):
         beta[t] = safe_divide(row, scale[t])
 
     return alpha, beta, scale
+
+
+def _description_length(scale) -> float:
+    """``-log2 P(codes)`` in bits: ``Σ bits(scale)``, summed in ascending ``t``.
+
+    The logarithm is taken on the host by :func:`~pfsmgraph.hmm._numeric.bits`,
+    as for the decode, and the sum is ``accumulate`` rather than ``np.sum`` for
+    the reason the module docstring gives. ``+inf`` exactly when a scale factor
+    is zero, which is when the sequence is impossible.
+    """
+    return float(np.add.accumulate(bits(scale))[-1])
+
+
+def _state_posteriors(alpha, beta, scale):
+    """γ, ``(N + 1, S)``: ``(alpha * beta) * scale``, grouped as written.
+
+    ``gamma[t, i]`` is the probability of occupying state ``i`` before symbol
+    ``t`` is emitted, and ``gamma[N]`` after the last. The scale factor restores
+    the one ``alpha[t]`` and ``beta[t]`` both divided out. Rows sum to 1 within
+    rounding for a possible sequence and are all zeros for an impossible one.
+    """
+    return (alpha * beta) * scale[:, np.newaxis]
+
+
+def _expected_counts(alpha, beta, transition_p, output_p, codes):
+    """The three count arrays Baum-Welch re-estimates from.
+
+    Returns ``(init_counts, transition_counts, emission_counts)``, shapes
+    ``(S,)``, ``(S, S)`` and ``(S, S, A)``: ``run-add``'s ``C-in``, ``C-t`` and
+    ``C-t-y``. ``alpha`` and ``beta`` are :func:`_forward_backward`'s.
+
+    At each position ``t < N`` the pairwise posterior
+    ``xi[i, j] = (alpha[t, i] * w[i, j, u]) * beta[t + 1, j]`` is formed, added
+    into ``transition_counts`` and into ``emission_counts`` at the symbol
+    emitted there, and discarded. Because ``beta`` is scaled as ``run-add``
+    scales it, that product is already normalised by the likelihood.
+
+    - ``init_counts`` is ξ₀ summed over the destination in ascending order,
+      which is how ``run-add`` forms ``C-in``. It equals ``gamma[0]`` within
+      rounding, and is all zeros for an empty record, which has no ξ₀.
+    - ``emission_counts`` spans the whole symbol axis, as ``output_p`` does, so
+      the M-step divides it by ``transition_counts`` with no remapping. Summed
+      over symbols it is ``transition_counts``: every arc crossing emits exactly
+      one symbol.
+
+    Nothing raises. An impossible sequence has all-zero ``alpha`` columns from
+    the dead position on and an all-zero ``beta``, so every count is zero.
+    """
+    codes = np.asarray(codes)
+    n = int(codes.shape[0])
+    size = int(transition_p.shape[0])
+    n_symbols = int(output_p.shape[2])
+
+    present, sym, w = _arc_table(transition_p, output_p, codes)
+
+    init_counts = np.zeros(size, dtype=np.float64)
+    transition_counts = np.zeros((size, size), dtype=np.float64)
+    emission_counts = np.zeros((size, size, n_symbols), dtype=np.float64)
+
+    for t in range(n):
+        u = sym[t]
+        xi = (alpha[t][:, np.newaxis] * w[:, :, u]) * beta[t + 1][np.newaxis, :]
+        if t == 0:
+            init_counts = np.add.accumulate(xi, axis=1)[:, -1]
+        # Elementwise additions, in ascending t: the only order these sums have.
+        transition_counts += xi
+        emission_counts[:, :, present[u]] += xi
+
+    return init_counts, transition_counts, emission_counts
