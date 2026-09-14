@@ -143,7 +143,7 @@ def _check_codes(params, records):
                 )
 
 
-def _corpus_step(params, records, e_step=_e_step_batch, batch_size=None):
+def _corpus_step(params, records, e_step=_e_step_batch, batch_size=None, device=None):
     """One E-step over every record: summed counts and summed description length.
 
     ``e_step`` is a ``baum_welch`` backend's batched kernel, the reference by
@@ -151,6 +151,7 @@ def _corpus_step(params, records, e_step=_e_step_batch, batch_size=None):
     all at once when ``None``. The kernel returns counts per record, and they are
     added here elementwise in record order, so the sum over records has the same
     fixed ascending order as the sums inside one whatever the batch size.
+    ``device`` is passed to the kernel as it is.
     """
     size, n_symbols = params.n_states, params.n_symbols
     init_counts = np.zeros(size, dtype=np.float64)
@@ -166,6 +167,7 @@ def _corpus_step(params, records, e_step=_e_step_batch, batch_size=None):
             params.output_p,
             batch["codes"],
             batch["lengths"],
+            device,
         )
         bits_per_record[start : start + len(bits)] = bits
         for b in range(len(bits)):
@@ -244,6 +246,7 @@ def baum_welch(
     *,
     backend: BackendName = "python",
     batch_size: int | None = None,
+    device: str | None = None,
     batch_cycles: int = BATCH_CYCLES,
     change_bits: float = CHANGE_BITS,
     patience: int = PATIENCE,
@@ -281,10 +284,15 @@ def baum_welch(
         grows as ``batch_size · S² · A``, and changes nothing else: counts come back
         per record and are summed in record order, so the result is bit-identical
         at every batch size on ``"python"``.
+    :param device: where the E-step runs, as a torch device name such as
+        ``"cuda:0"``; ``None`` is the CPU. Only ``"torch"`` runs anywhere else,
+        and the device is probed before any work: nothing falls back to the CPU.
     :raises ValueError: if ``backend`` is not a backend name, or names one
-        ``baum_welch`` does not have.
+        ``baum_welch`` does not have; if ``device`` names anything but the CPU
+        on a backend other than ``"torch"``, or is not a torch device name.
     :raises BackendUnavailableError: if ``backend`` cannot run in this
-        environment. Nothing falls back.
+        environment, or ``device`` cannot hold a tensor. Nothing falls back.
+    :raises TypeError: if ``device`` is not a string or ``None``.
     """
     e_step = _resolve("baum_welch", backend)
     records = list(records)
@@ -302,6 +310,16 @@ def baum_welch(
         raise ValueError(f"max_cycles must be non-negative, got {max_cycles}")
     if batch_size is not None and batch_size < 1:
         raise ValueError(f"batch_size must be at least 1 or None, got {batch_size}")
+    if device is not None and not isinstance(device, str):
+        raise TypeError(f"device must be a device name or None, got {type(device).__name__}")
+    if backend == "torch":
+        from ._baum_welch_torch import _device
+
+        device = _device(device)
+    elif device not in (None, "cpu"):
+        raise ValueError(
+            f"backend {backend!r} runs on the CPU only; device={device!r} needs backend='torch'"
+        )
     _check_codes(params, records)
     if not any(record.length for record in records):
         raise ValueError("the corpus holds no symbols, so there is nothing to count")
@@ -316,7 +334,7 @@ def baum_welch(
             if max_cycles is not None and cycles >= max_cycles:
                 return _finish(params, history, records, cycles, False, degenerate)
             counts, bits_per_record, total = _corpus_step(
-                params, records, e_step, batch_size
+                params, records, e_step, batch_size, device
             )
             if cycles == 0:
                 _raise_if_impossible(params, records, bits_per_record)

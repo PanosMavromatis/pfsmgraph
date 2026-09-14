@@ -183,7 +183,8 @@ where numba-cuda publishes no wheel; `backends()` says so. Neither extra names a
 since that choice belongs to the machine's driver.
 
 `torch` is a third extra, for `baum_welch`'s `"torch"` backend, which runs in float64 on the
-CPU and so needs no device. It is unrelated to `gpu`. **A `torch` result is not bit-identical
+CPU unless `baum_welch`'s `device=` names another torch device. It is unrelated to `gpu`, which
+supplies numba-cuda, not torch's CUDA. **A `torch` result is not bit-identical
 to the reference**, and `BackendStatus` carries no tolerance: each expected count agrees within
 `N · eps · max(1, count)` and each description length within `N · eps · max(1, bits)`, as
 [baum_welch.md](baum_welch.md) shows.

@@ -42,8 +42,14 @@ import functools
 import numpy as np
 import pytest
 
-from pfsmgraph.dataseq import UNK, USER_BASE, SequenceRecord, SymbolTable
-from pfsmgraph.hmm import HMMParams, ImpossibleSequenceError, backends, baum_welch
+from pfsmgraph.dataseq import UNK, USER_BASE, SequenceRecord, SymbolTable, pad_collate
+from pfsmgraph.hmm import (
+    BackendUnavailableError,
+    HMMParams,
+    ImpossibleSequenceError,
+    backends,
+    baum_welch,
+)
 from pfsmgraph.hmm._backends import _TABLE, _resolve
 from pfsmgraph.hmm._baum_welch import _corpus_step, _re_estimate
 
@@ -152,7 +158,7 @@ def test_every_backend_trains_like_the_reference_on_generated_corpora(index, bac
 def test_every_backend_trains_like_the_reference_on_a_lush_fixture(backend):
     """`m008_0001_008` over the corpus as one record, as the original trained it.
 
-    One fixture rather than three, for time (about 4 s on torch): the kernel
+    One fixture rather than three, for time (about 10 s on torch's CPU): the kernel
     section below compares all three, and this is the one whose description
     length differed most there, by 3.1 eps.
     """
@@ -176,25 +182,55 @@ def test_every_backend_refuses_an_impossible_record_before_training(backend):
 # the reference included, since every kernel owes the contract.
 
 
-def _one_record(batched):
+def _one_record(batched, device=None):
     """A batched kernel on a batch of one record, unwrapped: the `B = 1` case.
 
     Every count assertion below takes one unpadded record, so it goes through
-    this; `.batched` is the kernel itself, for `_corpus_step`.
+    this; `.batched` is the kernel bound to its device, for `_corpus_step`.
     """
+    bound = functools.partial(batched, device=device)
 
     def step(init, transition, output, codes):
         codes = np.asarray(codes)
-        counts, bits = batched(init, transition, output, codes[np.newaxis], np.array([codes.size]))
+        counts, bits = bound(init, transition, output, codes[np.newaxis], np.array([codes.size]))
         return tuple(array[0] for array in counts), float(bits[0])
 
-    step.batched = batched
+    # `_corpus_step` passes its own `device`, None here, positionally: ignore it.
+    step.batched = lambda init, transition, output, codes, lengths, _=None: bound(
+        init, transition, output, codes, lengths
+    )
     return step
 
 
+def _cuda_for_torch():
+    """Why torch cannot run on a CUDA device here, or `None` when it can."""
+    status = {s.name: s for s in backends("baum_welch")}["torch"]
+    if not status.available:
+        return f"backend 'torch' unavailable: {status.reason}"
+    import torch
+
+    return None if torch.cuda.is_available() else "no CUDA device for torch"
+
+
+#: Every (backend, device) a kernel runs on. The reference is CPU-only.
+KERNEL_TARGETS = [("python", None), ("torch", None), ("torch", "cuda")]
+
+
+@pytest.fixture(scope="module", params=KERNEL_TARGETS, ids=["python", "torch", "torch-cuda"])
+def target(request):
+    name, device = request.param
+    status = {s.name: s for s in backends("baum_welch")}[name]
+    if not status.available:
+        pytest.skip(f"backend {name!r} unavailable: {status.reason}")
+    if device == "cuda" and (reason := _cuda_for_torch()):
+        pytest.skip(reason)
+    return request.param
+
+
 @pytest.fixture(scope="module")
-def kernel(backend):
-    return _one_record(_resolve("baum_welch", backend))
+def kernel(target):
+    name, device = target
+    return _one_record(_resolve("baum_welch", name), device)
 
 
 @pytest.fixture(scope="module")
@@ -299,3 +335,75 @@ def test_every_kernel_returns_zero_counts_where_there_is_nothing_to_count(codes,
     counts, total = kernel(*_arrays(params), codes)
     assert all(not array.any() for array in counts)
     assert total == (0.0 if codes.size == 0 else np.inf)
+
+
+def test_every_kernel_matches_the_reference_row_by_row_on_a_ragged_batch(kernel, reference):
+    """A real padded batch, not a batch of one: empty, length-1 and impossible rows
+    beside long ones, so most of the batch is padding."""
+    rng = np.random.default_rng(SEED + 7)
+    params = _random_params(rng, 4, 5, 0.25)
+    lengths = [200, 0, 1, 1, 37]
+    records = [SequenceRecord(rng.integers(USER_BASE, USER_BASE + 5, n)) for n in lengths]
+    records.append(SequenceRecord(np.array([USER_BASE, UNK, USER_BASE])))
+    batch = pad_collate(records)
+    assert not batch["mask"].all()
+
+    counts, bits = kernel.batched(*_arrays(params), batch["codes"], batch["lengths"])
+    for b, record in enumerate(records):
+        theirs, their_bits = reference(*_arrays(params), record.codes)
+        n = record.length
+        for name, ours, ref in zip(("init", "transition", "emission"), (c[b] for c in counts), theirs):
+            assert (ours >= 0).all(), f"row {b} {name} counts went negative"
+            assert _within(ours, ref, n), f"row {b} {name} counts differ by {np.abs(ours - ref).max()!r}"
+        if np.isfinite(their_bits):
+            assert _within(bits[b], their_bits, n)
+        else:
+            assert bits[b] == their_bits
+
+
+# --- device= on the public call ---------------------------------------------------
+
+
+def test_torch_trains_like_the_reference_on_a_cuda_device():
+    if reason := _cuda_for_torch():
+        pytest.skip(reason)
+    # A generated corpus rather than the Lush fixture: one 1268-position record
+    # takes about 30 s on the device, and the kernel tests above already compare
+    # the fixtures' counts there.
+    params, records, reference = _reference_run(0)
+    ours = baum_welch(params, records, backend="torch", device="cuda")
+    assert (ours.cycles, ours.converged, ours.degenerate_states) == (
+        reference.cycles,
+        reference.converged,
+        reference.degenerate_states,
+    )
+    for ours_array, reference_array in zip(_arrays(ours.params), _arrays(reference.params)):
+        np.testing.assert_allclose(ours_array, reference_array, rtol=0, atol=PARAMS_ATOL)
+
+
+def _one_symbol_training():
+    rng = np.random.default_rng(SEED)
+    return _random_params(rng, 2, 3, 0.0), [SequenceRecord(np.array([USER_BASE, USER_BASE + 1]))]
+
+
+@pytest.mark.parametrize(
+    "backend_name, device, error, message",
+    [
+        ("python", "cuda", ValueError, "runs on the CPU only"),
+        ("python", 0, TypeError, "device must be a device name"),
+        ("torch", "bogus", ValueError, "not a torch device name"),
+        ("torch", "cuda:99", BackendUnavailableError, "cannot allocate on device 'cuda:99'"),
+    ],
+    ids=["python-on-cuda", "not-a-string", "torch-bogus", "torch-missing-ordinal"],
+)
+def test_a_device_the_backend_cannot_use_is_refused_before_training(backend_name, device, error, message):
+    if backend_name == "torch" and not {s.name: s for s in backends("baum_welch")}["torch"].available:
+        pytest.skip("backend 'torch' unavailable")
+    params, records = _one_symbol_training()
+    with pytest.raises(error, match=message):
+        baum_welch(params, records, backend=backend_name, device=device)
+
+
+def test_the_cpu_is_a_device_every_backend_accepts():
+    params, records = _one_symbol_training()
+    assert baum_welch(params, records, device="cpu", max_cycles=2).cycles == 2

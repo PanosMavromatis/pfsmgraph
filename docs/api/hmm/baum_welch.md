@@ -33,7 +33,7 @@ result = baum_welch(params, ds)
 ## `baum_welch`
 
 ```python
-baum_welch(params: HMMParams, records, *, backend: BackendName = "python", batch_size: int | None = None, batch_cycles: int = 10, change_bits: float = 0.1, patience: int = 3, max_cycles: int | None = None) -> BaumWelchResult
+baum_welch(params: HMMParams, records, *, backend: BackendName = "python", batch_size: int | None = None, device: str | None = None, batch_cycles: int = 10, change_bits: float = 0.1, patience: int = 3, max_cycles: int | None = None) -> BaumWelchResult
 ```
 
 Alternates an E-step, the expected counts of every start, arc crossing and emission under
@@ -138,7 +138,9 @@ True
 That bound is relative to the size of each value and grows with `N`, and it is not "a few
 units in the last place": a record that costs a fraction of a bit can differ by thousands of
 them relative to itself while differing by `1e-14` bits outright. `torch` runs in float64 on
-the CPU; a `backend=` never picks a device for you.
+the CPU unless `device=` names a torch device such as `"cuda:0"`, which is probed before
+training starts and never falls back; nothing picks a device for you. Only `torch` takes a
+device other than `"cpu"`, and the tolerance above holds there too.
 
 Neither backend is a lifecycle phase of the other, so `"cython"` and the rest are not
 `baum_welch` backends:
