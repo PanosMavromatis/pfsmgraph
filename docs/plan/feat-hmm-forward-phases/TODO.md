@@ -30,7 +30,8 @@ once**, so kernel changes between goals should be deliberate.
 
 ## Goals
 
-- [~] Write the phase-0 `FORMALIZATION.md` for forward-backward, recovered from `_forward_backward.py` and the batched E-step, and decide the parallel decomposition (associative scan over time, or batch/state parallelism)
+- [x] Write the phase-0 `FORMALIZATION.md` for forward-backward, recovered from `_forward_backward.py` and the batched E-step, and decide the parallel decomposition (associative scan over time, or batch/state parallelism)
+  > **Done:** Recovered in `c5ac642` and approved 2026-09-15: per-record recurrences and the batched E-step, evaluation order as contract, per-timestep `(record, state)` cells. It reports two findings left unfixed (the N = 0 docstring overclaim, ADR 0020's two-factor association argument) and names the `_training_log` files as oracle candidates for goal 2. TC-20 to TC-23 are specified but unimplemented.
   > **Q:** Which axis should the formalization's Parallel decomposition name for phases 3–4?
   > **A:** Each timestep's (record, state) cells, t serial, reductions serial and ascending (as the Viterbi batch). Whole records and an associative scan are recorded as not taken.
   > **Q:** Which kernel signature are phases 2–4 held to?
@@ -41,7 +42,8 @@ once**, so kernel changes between goals should be deliberate.
   - [x] `/dp-compile:next-phase forward_backward` routes to `dp-compile:algorithm-recover`, which writes `docs/design/algorithms/forward_backward/FORMALIZATION.md` with `Derived from` naming `_forward_backward.py` and its SHA-256
   - [x] It names ADR 0020's evaluation order and no-fused-multiply-add rule as contract
   - [x] Its `Parallel decomposition` section states the chosen axis rather than "undetermined", since `cpu-parallelization` routes an open decomposition back to the document
-  - [ ] Reviewed and approved; `/dp-compile:phase-check forward_backward` reports it `fresh`, target `cython`
+  - [x] Reviewed and approved; `/dp-compile:phase-check forward_backward` reports it `fresh`, target `cython`
+    > **Note:** Approved 2026-09-15. `phase-check` then read the recorded hash `54735d9b…` equal to the kernel's, all 12 sections filled, `python` 129/129 passed, target `cython`.
 - [ ] Implement phase 2 (Cython) and register it, held bit-exact to the numpy reference
   - [ ] `/dp-compile:next-phase forward_backward` passes the step-3 oracle gate. Decide whether `[algorithms.forward_backward]` should declare an `oracles` entry, since `tests/test_hmmlearn_oracle.py` exercises the kernel but the manifest names none
   - [ ] Routes to `dp-compile:cython-translation`: `_forward_backward_cython.pyx` with a `# dp-compile: derived-from` header, listed in `meson.build`, rows in `_backends.py` in ADR 0021's `_Row` shape (not the skill's `Backend` template)
