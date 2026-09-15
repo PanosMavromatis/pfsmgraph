@@ -107,6 +107,7 @@ _TABLE: Final[dict[str, tuple[_Row, ...]]] = {
     # public call. Each lifecycle phase adds its row as it batches.
     "viterbi_batch": (
         _Row("python", "pfsmgraph.hmm._viterbi", "_viterbi_batch"),
+        _Row("cython", "pfsmgraph.hmm._viterbi_cython", "_viterbi_batch", needs="compiled extension"),
     ),
     # Phase 1 only. Private, so it is here for the session header and absent
     # from _PUBLIC; baum_welch reaches it through its python row's E-step.

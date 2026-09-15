@@ -130,6 +130,22 @@ def test_every_row_is_viterbi_on_that_record_alone(backend):
         _assert_rows_are_viterbi(params, records, viterbi_batch(params, records, backend=backend), backend)
 
 
+def test_every_backend_agrees_with_the_batched_reference(backend):
+    """Each backend's batch against `backend="python"`'s batch, exactly.
+
+    The tests around this one hold a backend's batch to its own per-record decode;
+    this holds it to the reference, which is what a lifecycle phase promises.
+    """
+    rng = np.random.default_rng(20260915)
+    for _ in range(200):
+        n_symbols = int(rng.integers(1, 6))
+        params = _random_model(rng, int(rng.integers(1, 41)), n_symbols)
+        records = _random_records(rng, n_symbols, int(rng.integers(0, 8)))
+        reference = viterbi_batch(params, records, backend="python")
+        for path, expected in zip(viterbi_batch(params, records, backend=backend), reference):
+            _assert_same_path(path, expected)
+
+
 @pytest.mark.parametrize("batch_size", [None, 1, 2, 5])
 def test_the_result_ignores_batch_size(batch_size, backend):
     rng = np.random.default_rng(7)

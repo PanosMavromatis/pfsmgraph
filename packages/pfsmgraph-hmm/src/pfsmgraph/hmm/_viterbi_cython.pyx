@@ -1,4 +1,4 @@
-# dp-compile: derived-from packages/pfsmgraph-hmm/src/pfsmgraph/hmm/_viterbi.py sha256:6b26469bd36030a2cc2fcce8c9106deab18cf2851cf934551763d5238db2438a
+# dp-compile: derived-from packages/pfsmgraph-hmm/src/pfsmgraph/hmm/_viterbi.py sha256:094874891f07a4578eb5307da96d787bf4d5de21d385a14dccd5dad0b0725d45
 """The Viterbi decode, ADR 0002 phase 2: compiled, single-threaded Cython.
 
 A **mechanical** translation of ``_viterbi.py``. Every line here traces back to a
@@ -52,6 +52,17 @@ have to agree on it because the wrapper's error message names a position.
 device function cannot raise a Python exception. An impossible sequence comes back
 as ``total_bits == inf``; ``viterbi()`` in ``_viterbi.py`` turns it into
 ``ImpossibleSequenceError``, for every backend, in one place.
+
+**The batch is the same recurrence, one record at a time.** ``_viterbi_batch``
+mirrors ``_viterbi.py``'s: ``pad_collate``'s ``(B, L)`` codes with their lengths,
+``(B, L + 1)`` states and ``(B,)`` totals back, each row bit-exact with the
+per-record decode. Where phase 1 steps every record through one position at a
+time, because that is what numpy vectorises, C finishes a record before starting
+the next: its δ rows stay contiguous, and the inner loops are ``_decode``'s
+unchanged. Both orders compute each row independently with only ``+`` and ``<``,
+so they agree. Padded steps still carry δ forward and the final argmin still reads
+column ``L`` for every row, as in phase 1, although a C loop could stop at the
+record's length: that is what keeps the padding tests able to fail here.
 
 .. [ADR 0015] ``docs/design/adr/0015-arc-emission-mealy-formulation.md``
 """
@@ -136,6 +147,68 @@ cdef void _decode(
         states[t] = psi[t + 1, states[t + 1]]
 
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cdef void _decode_batch(
+    const double[::1] seed,
+    const double[:, :, ::1] arc_bits,
+    const cnp.int64_t[:, ::1] sym,
+    const cnp.int64_t[::1] lengths,
+    double[:, :, ::1] delta,
+    cnp.int64_t[:, :, ::1] psi,
+    cnp.int64_t[:, ::1] states,
+) noexcept nogil:
+    """:func:`_decode` over a padded batch, one record after another, entirely in C.
+
+    ``sym`` is ``(B, L)``, indexing ``arc_bits``' third axis; ``lengths`` is ``(B,)``.
+    The caller zeroes ``psi`` and ``states``, so ψ at padded steps and states past a
+    record's end stay zero. The bounds-check reasoning is ``_decode``'s: every loop
+    is bounded by a shape or by ``lengths[b] <= L``, which ``pad_collate`` guarantees
+    and the kernel contract does not re-check.
+    """
+    cdef Py_ssize_t batch = sym.shape[0]
+    cdef Py_ssize_t width = sym.shape[1]
+    cdef Py_ssize_t size = seed.shape[0]
+    cdef Py_ssize_t b, n, t, i, j, k, best_i
+    cdef double best, cand
+
+    for b in range(batch):
+        n = lengths[b]
+        for j in range(size):
+            delta[b, 0, j] = seed[j]
+
+        # The per-record recurrence, unchanged but for the leading index.
+        for t in range(1, n + 1):
+            k = sym[b, t - 1]
+            for j in range(size):
+                best = INFINITY
+                best_i = 0
+                for i in range(size):
+                    cand = delta[b, t - 1, i] + arc_bits[i, j, k]
+                    if cand < best:
+                        best = cand
+                        best_i = i
+                delta[b, t, j] = best
+                psi[b, t, j] = best_i
+
+        # Padded steps: δ carried, ψ not written. A copy, never a step over PAD.
+        for t in range(n + 1, width + 1):
+            for j in range(size):
+                delta[b, t, j] = delta[b, t - 1, j]
+
+        # The final argmin reads column L, as phase 1's does, so the carry above
+        # is observable rather than an equivalent mutant.
+        best = INFINITY
+        best_i = 0
+        for j in range(size):
+            if delta[b, width, j] < best:
+                best = delta[b, width, j]
+                best_i = j
+        states[b, n] = best_i
+        for t in range(n - 1, -1, -1):
+            states[b, t] = psi[b, t + 1, states[b, t + 1]]
+
+
 def _viterbi(init_state_p, transition_p, output_p, codes):
     """The recurrence itself: ``(S,)``, ``(S, S)``, ``(S, S, A)``, ``(N,)`` in.
 
@@ -185,3 +258,38 @@ def _viterbi(init_state_p, transition_p, output_p, codes):
     _decode(seed, arc_bits, sym_c, delta_np, psi_np, states_np)
 
     return states_np, float(delta_np[n, states_np[n]])
+
+
+def _viterbi_batch(init_state_p, transition_p, output_p, codes, lengths):
+    """The recurrence over a padded batch: ``codes`` ``(B, L)``, ``lengths`` ``(B,)``.
+
+    The signature and result are ``_viterbi.py``'s ``_viterbi_batch``: ``(states,
+    total_bits)``, shapes ``(B, L + 1)`` and ``(B,)``, row ``b`` bit-exact with the
+    per-record decode and zeros past each record's end. The host work is
+    :func:`_viterbi`'s -- every logarithm by :func:`bits`, in phase 1's operation
+    order -- with the symbol table taken over the whole padded array. ``PAD``'s
+    column in it is never read, since no padded step is taken.
+    """
+    init_c = np.ascontiguousarray(init_state_p, dtype=np.float64)
+    trans_c = np.ascontiguousarray(transition_p, dtype=np.float64)
+    out_c = np.ascontiguousarray(output_p, dtype=np.float64)
+    codes_c = np.ascontiguousarray(codes, dtype=np.int64)
+    lengths_c = np.ascontiguousarray(lengths, dtype=np.int64)
+
+    seed = np.ascontiguousarray(bits(init_c))
+    present, sym = np.unique(codes_c, return_inverse=True)
+    arc_bits = np.ascontiguousarray(bits(trans_c[:, :, None] * out_c[:, :, present]))
+    sym_c = np.ascontiguousarray(sym.reshape(codes_c.shape), dtype=np.int64)
+
+    cdef Py_ssize_t batch = codes_c.shape[0]
+    cdef Py_ssize_t width = codes_c.shape[1]
+    cdef Py_ssize_t size = seed.shape[0]
+
+    delta_np = np.empty((batch, width + 1, size), dtype=np.float64)
+    psi_np = np.zeros((batch, width + 1, size), dtype=np.int64)
+    states_np = np.zeros((batch, width + 1), dtype=np.int64)
+
+    _decode_batch(seed, arc_bits, sym_c, lengths_c, delta_np, psi_np, states_np)
+
+    rows = np.arange(batch)
+    return states_np, delta_np[rows, width, states_np[rows, lengths_c]]
