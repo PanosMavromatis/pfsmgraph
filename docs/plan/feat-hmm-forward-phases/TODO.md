@@ -44,7 +44,8 @@ once**, so kernel changes between goals should be deliberate.
   - [x] Its `Parallel decomposition` section states the chosen axis rather than "undetermined", since `cpu-parallelization` routes an open decomposition back to the document
   - [x] Reviewed and approved; `/dp-compile:phase-check forward_backward` reports it `fresh`, target `cython`
     > **Note:** Approved 2026-09-15. `phase-check` then read the recorded hash `54735d9b…` equal to the kernel's, all 12 sections filled, `python` 129/129 passed, target `cython`.
-- [~] Implement phase 2 (Cython) and register it, held bit-exact to the numpy reference
+- [x] Implement phase 2 (Cython) and register it, held bit-exact to the numpy reference
+  > **Done:** Phase 2 landed in `c637e9b`: `_forward_backward_cython.pyx` with both signatures, built with `-ffp-contract=off`, registered under `forward_backward` and `baum_welch` (so `baum_welch(backend="cython")` is public), and held byte for byte by `test_forward_backward_backends.py` (TC-20 to TC-23). The Lush `_training_log` files are now declared oracles (`c07ba5e`). Suite green at 1178.
   > **Q:** Should `[algorithms.forward_backward]` declare an `oracles` entry before phase 2?
   > **A:** Yes: the three tracked `_training_log` files, whose `data-dl` checks the forward pass and DL to 0.02 bits through quantised parameters (TC-01). The comment calling them "not a direct check" is corrected.
   - [x] `/dp-compile:next-phase forward_backward` passes the step-3 oracle gate. Decide whether `[algorithms.forward_backward]` should declare an `oracles` entry, since `tests/test_hmmlearn_oracle.py` exercises the kernel but the manifest names none
@@ -56,7 +57,8 @@ once**, so kernel changes between goals should be deliberate.
   - [x] Routes to `dp-compile:cython-translation`: `_forward_backward_cython.pyx` with a `# dp-compile: derived-from` header, listed in `meson.build`, rows in `_backends.py` in ADR 0021's `_Row` shape (not the skill's `Backend` template)
     > **Done:** phase 2 `cython` — `packages/pfsmgraph-hmm/src/pfsmgraph/hmm/_forward_backward_cython.pyx`, derived-from `packages/pfsmgraph-hmm/src/pfsmgraph/hmm/_forward_backward.py` `sha256:54735d9bfb7261d95506a64bc64ec67cd4b52daa4b17eca393829825fa9343d2`, suite green at 1178.
     > **Note:** Mutation-tested 2026-09-15. A `-march=native -ffp-contract=fast` build failed 36 bit-exact tests (TC-21 among them) and a reversed forward sum failed 29, while all 64 `cython` cases in the tolerance-based `test_baum_welch_backends.py` passed both: only `tobytes()` comparison sees ADR 0020's order. `cdivision` removed an unreachable zero-check that reacquired the GIL; 0 of 45 kernel lines touch the C-API.
-  - [ ] `/dp-compile:phase-check forward_backward` reports `cython` fresh, target `cpu_parallel`; committed through `/workflow-claude:smart-commit`, with the gate's build and test green
+  - [x] `/dp-compile:phase-check forward_backward` reports `cython` fresh, target `cpu_parallel`; committed through `/workflow-claude:smart-commit`, with the gate's build and test green
+    > **Note:** Checked 2026-09-15 after `c637e9b`: the formalization and the `.pyx` both record the kernel's current hash `54735d9b…`, `python` and `cython` passed 235/235 with all three oracles exercised, target `cpu_parallel`. The `dp-compile` gate armed on the `.pyx` in that commit (confirmed with the hook's own `kernel_paths`), so its build and test ran and passed.
 - [ ] Implement phase 3 (Numba CPU-parallel) on the decomposition goal 1 chose, held bit-exact
   - [ ] `/dp-compile:next-phase forward_backward` routes to `dp-compile:cpu-parallelization`: `_forward_backward_cpu_parallel.py` derived from the `.pyx`, `numba` optional under the `cpu-parallel` extra
   - [ ] `/dp-compile:phase-check forward_backward` reports `cpu_parallel` fresh, target `cuda`; committed through `/workflow-claude:smart-commit`
