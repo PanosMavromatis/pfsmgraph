@@ -543,6 +543,15 @@ a second time.
   persisting a `SymbolTable`, and the escaping rule is the undecided part.
   Recorded 2026-09-03 on `feat/hmm-public-surface`.
 
+  **The saved model's `_training_log` file lands with it.** `save-training-log`
+  (`hmm.lsh:166`) looks like reporting and is persistence: its only caller is
+  `save-model`, which always overwrites (no caller passes `append`), and `load-model`
+  reads the file back into the model (`hmm.lsh:207`). What it holds is the per-topology
+  history `training-log-line` builds, one line per accepted split or merge, which revision
+  04 designs. So neither is ported before save/load exists; `baum_welch`'s progress log
+  reaches a file through `log=open(path, "w")`, and needs nothing else.
+  Recorded 2026-09-15 on `feat/hmm-training-log`.
+
 ## Trigger: a corpus large enough for code locality to matter
 
 - **`SymbolTable.from_frequencies()`, offered but never default.** Frequency ordering
