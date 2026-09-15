@@ -232,11 +232,14 @@ def _cuda_for_torch():
     return None if torch.cuda.is_available() else "no CUDA device for torch"
 
 
-#: Every (backend, device) a kernel runs on. The reference is CPU-only.
-KERNEL_TARGETS = [("python", None), ("torch", None), ("torch", "cuda")]
+#: Every (backend, device) a kernel runs on. The reference and its compiled phases
+#: are CPU-only. The phases also meet the far tighter bit-exact bar of
+#: `test_forward_backward_backends.py`; they run here too so the EM-trajectory and
+#: subnormal-arc cases, which only this module constructs, reach them.
+KERNEL_TARGETS = [("python", None), ("cython", None), ("cpu_parallel", None), ("cuda", None), ("torch", None), ("torch", "cuda")]
 
 
-@pytest.fixture(scope="module", params=KERNEL_TARGETS, ids=["python", "torch", "torch-cuda"])
+@pytest.fixture(scope="module", params=KERNEL_TARGETS, ids=["python", "cython", "cpu_parallel", "cuda", "torch", "torch-cuda"])
 def target(request):
     name, device = request.param
     status = {s.name: s for s in backends("baum_welch")}[name]
@@ -410,20 +413,23 @@ def _one_symbol_training():
     "backend_name, device, error, message",
     [
         ("python", "cuda", ValueError, "runs on the CPU only"),
+        ("cuda", "cuda", ValueError, "runs on numba-cuda's current device"),
+        ("cuda", "cpu", ValueError, "applies only to backend='torch'"),
         ("python", 0, TypeError, "device must be a device name"),
         ("torch", "bogus", ValueError, "not a torch device name"),
         ("torch", "cuda:99", BackendUnavailableError, "cannot allocate on device 'cuda:99'"),
     ],
-    ids=["python-on-cuda", "not-a-string", "torch-bogus", "torch-missing-ordinal"],
+    ids=["python-on-cuda", "cuda-given-cuda", "cuda-given-cpu", "not-a-string", "torch-bogus", "torch-missing-ordinal"],
 )
 def test_a_device_the_backend_cannot_use_is_refused_before_training(backend_name, device, error, message):
-    if backend_name == "torch" and not {s.name: s for s in backends("baum_welch")}["torch"].available:
-        pytest.skip("backend 'torch' unavailable")
+    status = {s.name: s for s in backends("baum_welch")}[backend_name]
+    if not status.available:
+        pytest.skip(f"backend {backend_name!r} unavailable: {status.reason}")
     params, records = _one_symbol_training()
     with pytest.raises(error, match=message):
         baum_welch(params, records, backend=backend_name, device=device)
 
 
-def test_the_cpu_is_a_device_every_backend_accepts():
+def test_the_cpu_is_a_device_the_reference_accepts():
     params, records = _one_symbol_training()
     assert baum_welch(params, records, device="cpu", max_cycles=2).cycles == 2

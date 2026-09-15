@@ -92,7 +92,9 @@ build` and `test` and blocks on failure. Scoping is what makes blocking tolerabl
 this manifest it arms on exactly eight paths, four per registered algorithm — `_viterbi.py`,
 `_viterbi_cython.pyx`, `_viterbi_cpu_parallel.py` and `_viterbi_cuda.py`, all four written
 between 2026-09-04 and 2026-09-13, and the same four templates for `forward_backward`,
-registered 2026-09-14 with only `_forward_backward.py` on disk. The paths come from the
+registered 2026-09-14 with only `_forward_backward.py` on disk and joined by
+`_forward_backward_cython.pyx`, `_forward_backward_cpu_parallel.py` and
+`_forward_backward_cuda.py` on 2026-09-15, so all eight are on disk. The paths come from the
 `[phases]` templates, not from the filesystem, so a phase is gated from the commit that
 creates it; measured by calling the hook's own `kernel_paths` on the manifest. So a commit touching `docs/`, a
 helper module such as `_numeric.py`, a *test*, or even a phase-0 `FORMALIZATION.md` passes

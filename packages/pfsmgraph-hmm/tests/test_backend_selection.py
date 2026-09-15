@@ -116,13 +116,14 @@ def test_a_name_that_is_no_backend_is_a_valueerror_before_any_work(bad):
 def test_an_unimplemented_phase_is_a_valueerror_naming_what_exists():
     """ADR 0003's "contributes no parameter", seen from the API: the same everywhere.
 
-    Reached through `_resolve`, since the only algorithm with a missing phase is
-    private; the public call that will expose it goes through the same function.
+    Reached through `_resolve`. Every algorithm has all four lifecycle phases since
+    forward-backward's phase 4 (2026-09-15), so the backend asked for is `torch`, which
+    `forward_backward` has no row for; the message and the function are the same.
     """
     with pytest.raises(ValueError) as excinfo:
-        hmm_backends._resolve("forward_backward", "cython")
-    assert "no 'cython' backend" in str(excinfo.value)
-    assert "['python']" in str(excinfo.value)
+        hmm_backends._resolve("forward_backward", "torch")
+    assert "no 'torch' backend" in str(excinfo.value)
+    assert "['python', 'cython', 'cpu_parallel', 'cuda']" in str(excinfo.value)
     assert not isinstance(excinfo.value, BackendUnavailableError)
 
 

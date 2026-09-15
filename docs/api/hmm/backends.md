@@ -15,12 +15,15 @@ The decode has up to four implementations, one per lifecycle phase
 | `"cpu_parallel"` | Numba, parallel over the states of one timestep | the `cpu-parallel` extra |
 | `"cuda"` | Numba CUDA | the `gpu` extra and a CUDA device |
 
-Training has two, and they are not lifecycle phases of each other
-([baum_welch.md](baum_welch.md)):
+Training has five ([baum_welch.md](baum_welch.md)). The first four are lifecycle phases
+of one another and agree bit for bit; `torch` is not a phase, and agrees within a tolerance:
 
 | Name | Implementation | Needs |
 |---|---|---|
 | `"python"` | explicit forward and backward passes, numpy, the reference | nothing |
+| `"cython"` | the same passes as a compiled Cython extension | a platform wheel, or a source build |
+| `"cpu_parallel"` | the same passes in Numba, parallel over each timestep's (record, state) cells | the `cpu-parallel` extra |
+| `"cuda"` | the same passes in Numba CUDA, one device thread per cell | the `gpu` extra and a CUDA device |
 | `"torch"` | the forward pass, with counts as reverse-mode gradients | the `torch` extra |
 
 Every example on this page runs against the same model and record:
@@ -130,7 +133,7 @@ Every backend the public call `name` has, **available or not**, in lifecycle-pha
 >>> [s.name for s in backends("viterbi")]
 ['python', 'cython', 'cpu_parallel', 'cuda']
 >>> [s.name for s in backends("baum_welch")]
-['python', 'torch']
+['python', 'cython', 'cpu_parallel', 'cuda', 'torch']
 >>> backends("viterbi")[0]
 BackendStatus(name='python', available=True, reason=None)
 ```

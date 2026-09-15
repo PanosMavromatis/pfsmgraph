@@ -174,16 +174,39 @@ valid. Any row maximises the objective for such a state, so no information is lo
 
 ## Backends
 
-`baum_welch` has two backends, which differ in how the E-step is computed; the M-step and
+`baum_welch` has five backends, which differ in how the E-step is computed; the M-step and
 the stopping rule are shared.
 
 | Name | E-step | Needs |
 |---|---|---|
 | `"python"` | explicit forward and backward passes, numpy, the reference | nothing |
+| `"cython"` | the same passes, compiled; **bit-identical** to `"python"` | a platform wheel, or a source build |
+| `"cpu_parallel"` | the same passes in Numba, parallel over each timestep's (record, state) cells; **bit-identical** to `"python"` | the `cpu-parallel` extra |
+| `"cuda"` | the same passes in Numba CUDA, one device thread per cell; **bit-identical** to `"python"` | the `gpu` extra and a CUDA device |
 | `"torch"` | the forward pass only; the counts are reverse-mode gradients | the `torch` extra |
 
-`torch` derives the counts rather than writing them out, which is why the two are worth
-comparing: they share no code. **They agree within a tolerance, not bit for bit**, because
+`"cython"`, `"cpu_parallel"` and `"cuda"` are lifecycle phases of the reference ([ADR 0016](../../design/adr/0016-numba-cpu-parallel-phase.md)):
+they perform the same sums in the same order with no fused multiply-add
+([ADR 0020](../../design/adr/0020-scaled-probability-domain-forward-backward.md)), so a
+training run on any of them is the reference's run, to the bit, on the same machine: on
+`"cpu_parallel"` at any thread count, and on `"cuda"` on the device, where the kernel is
+built so that no multiply-add is fused. The example runs the two that every checkout of
+this repository can; `"cuda"` is held to the same equality by the test suite wherever a
+device is present:
+
+```python
+>>> for name in ("cython", "cpu_parallel"):
+...     compiled = baum_welch(params, ds, backend=name)
+...     print(name, compiled.description_lengths == result.description_lengths and all(
+...         bool(np.array_equal(a, b)) for a, b in zip(
+...             (compiled.params.init_state_p, compiled.params.transition_p, compiled.params.output_p),
+...             (result.params.init_state_p, result.params.transition_p, result.params.output_p))))
+cython True
+cpu_parallel True
+```
+
+`torch` derives the counts rather than writing them out, which is why it and the reference
+are worth comparing: they share no code. **They agree within a tolerance, not bit for bit**, because
 torch chooses its own order for the sums over states. Measured against the reference, each
 expected count agrees within `N · eps · max(1, count)`, where `N` is the record's length and
 `eps` float64's machine epsilon, and each description length within
@@ -207,13 +230,8 @@ the CPU unless `device=` names a torch device such as `"cuda:0"`, which is probe
 training starts and never falls back; nothing picks a device for you. Only `torch` takes a
 device other than `"cpu"`, and the tolerance above holds there too.
 
-Neither backend is a lifecycle phase of the other, so `"cython"` and the rest are not
-`baum_welch` backends:
-
-```python
->>> baum_welch(params, ds, backend="cython")
-ValueError: baum_welch has no 'cython' backend: that lifecycle phase is not implemented for it. It has ['python', 'torch']
-```
+Every lifecycle phase trains, so `backend=` accepts every name `backends("baum_welch")`
+lists; which of them can run depends on the machine, as [backends.md](backends.md) shows.
 
 ## Errors
 
@@ -230,8 +248,10 @@ Code 1 is `UNK`, whose fibres are zero in every model, so no path emits it. A co
 the model's symbol axis, a corpus with no symbols, and a stopping rule that cannot stop
 raise `ValueError`.
 
-So do a `batch_size` below 1 and a device the backend cannot use. Only `"torch"` runs
-anywhere but the CPU, and a device name must be a string:
+So do a `batch_size` below 1 and a device the backend cannot use. `device=` names a torch
+device, so only `"torch"` takes one other than the CPU; `"cuda"` runs on numba-cuda's current
+device and takes none at all, so `backend="cuda", device="cuda"` raises `ValueError` where a
+device exists and `BackendUnavailableError` where none does. A device name must be a string:
 
 ```python
 >>> baum_welch(params, ds, batch_size=0)
