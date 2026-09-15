@@ -1,6 +1,6 @@
 # docs/hmm-api-audit
 
-**Status**: active
+**Status**: merged — PR #39 — 2026-09-15
 **Created**: 2026-09-15
 **Subgoal**: Audit `docs/api/` for gaps before the release (revision 03-hmm-v0.2.0)
 
