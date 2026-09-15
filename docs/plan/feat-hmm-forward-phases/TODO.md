@@ -30,11 +30,17 @@ once**, so kernel changes between goals should be deliberate.
 
 ## Goals
 
-- [ ] Write the phase-0 `FORMALIZATION.md` for forward-backward, recovered from `_forward_backward.py` and the batched E-step, and decide the parallel decomposition (associative scan over time, or batch/state parallelism)
-  - [ ] `/dp-compile:phase-check forward_backward` reports nominal phase 1, `formalization` absent, target `formalization` by the recovered entrance
-  - [ ] `/dp-compile:next-phase forward_backward` routes to `dp-compile:algorithm-recover`, which writes `docs/design/algorithms/forward_backward/FORMALIZATION.md` with `Derived from` naming `_forward_backward.py` and its SHA-256
-  - [ ] It names ADR 0020's evaluation order and no-fused-multiply-add rule as contract
-  - [ ] Its `Parallel decomposition` section states the chosen axis rather than "undetermined", since `cpu-parallelization` routes an open decomposition back to the document
+- [~] Write the phase-0 `FORMALIZATION.md` for forward-backward, recovered from `_forward_backward.py` and the batched E-step, and decide the parallel decomposition (associative scan over time, or batch/state parallelism)
+  > **Q:** Which axis should the formalization's Parallel decomposition name for phases 3–4?
+  > **A:** Each timestep's (record, state) cells, t serial, reductions serial and ascending (as the Viterbi batch). Whole records and an associative scan are recorded as not taken.
+  > **Q:** Which kernel signature are phases 2–4 held to?
+  > **A:** Both: per-record `_forward_backward` and batched `_e_step_batch`, as Viterbi.
+  > **Q:** At N = 0 the kernel returns 0 bits where −log2(Σ init) is exact. What does the formalization specify?
+  > **A:** 0 bits, recording the Lush trailing term and the docstring overclaim as a finding; no kernel or docstring change in this recovery.
+  - [x] `/dp-compile:phase-check forward_backward` reports nominal phase 1, `formalization` absent, target `formalization` by the recovered entrance
+  - [x] `/dp-compile:next-phase forward_backward` routes to `dp-compile:algorithm-recover`, which writes `docs/design/algorithms/forward_backward/FORMALIZATION.md` with `Derived from` naming `_forward_backward.py` and its SHA-256
+  - [x] It names ADR 0020's evaluation order and no-fused-multiply-add rule as contract
+  - [x] Its `Parallel decomposition` section states the chosen axis rather than "undetermined", since `cpu-parallelization` routes an open decomposition back to the document
   - [ ] Reviewed and approved; `/dp-compile:phase-check forward_backward` reports it `fresh`, target `cython`
 - [ ] Implement phase 2 (Cython) and register it, held bit-exact to the numpy reference
   - [ ] `/dp-compile:next-phase forward_backward` passes the step-3 oracle gate. Decide whether `[algorithms.forward_backward]` should declare an `oracles` entry, since `tests/test_hmmlearn_oracle.py` exercises the kernel but the manifest names none
