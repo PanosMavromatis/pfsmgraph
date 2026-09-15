@@ -270,6 +270,8 @@ A stored copy could disagree with the model it came from; this cannot.
 
 ## `ImpossibleSequenceError`
 
-A subclass of `ValueError`, raised by `viterbi` when no path over the record has finite
-description length. It carries no attributes beyond its message. See
-[Errors](#errors) above.
+A subclass of `ValueError`, raised when no path over a record has finite description
+length: by `viterbi`, by `viterbi_batch` under `on_impossible="raise"`, and by
+`baum_welch` for a record of its corpus under the starting model
+([baum_welch.md](baum_welch.md#errors)). It carries no attributes beyond its message; the
+batched calls put the record's index at the front of it. See [Errors](#errors) above.

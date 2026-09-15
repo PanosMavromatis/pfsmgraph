@@ -277,10 +277,11 @@ def baum_welch(
     under the starting model, since nothing can then be re-estimated from it.
 
     :param backend: which implementation computes each record's expected counts
-        -- ``"python"`` (the numpy reference, and the default) or ``"torch"``,
-        which derives them as gradients, float64 on CPU, within ADR 0020's
-        tolerance of the reference. Validated before any work (ADR 0021); see
-        :func:`~pfsmgraph.hmm.backends`.
+        -- ``"python"`` (the numpy reference, and the default); ``"cython"``,
+        ``"cpu_parallel"`` or ``"cuda"``, its ADR 0002 lifecycle phases, each
+        bit-identical to it on one host; or ``"torch"``, which derives the counts
+        as gradients, in float64, within ADR 0020's tolerance of the reference.
+        Validated before any work (ADR 0021); see :func:`~pfsmgraph.hmm.backends`.
     :param batch_size: how many records each E-step kernel call receives, padded
         together; ``None`` passes the whole corpus at once. It bounds memory, which
         grows as ``batch_size · S² · A``, and changes nothing else: counts come back

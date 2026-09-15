@@ -150,7 +150,17 @@ per accepted split or merge and belongs with topology search.
 BaumWelchResult(params: HMMParams, description_lengths: tuple[float, ...], cycles: int, converged: bool, degenerate_states: tuple[int, ...])
 ```
 
-A frozen dataclass. `description_lengths[c]` is the corpus description length of the
+A frozen dataclass.
+
+| Field | Meaning |
+|---|---|
+| `params` | the trained `HMMParams`, a new value; the one passed in is untouched |
+| `description_lengths` | the corpus description length in bits after each cycle, `cycles + 1` entries, the starting model's first |
+| `cycles` | how many re-estimation cycles ran |
+| `converged` | `True` when the stopping rule fired, `False` when `max_cycles` was reached first |
+| `degenerate_states` | the states the last cycle could not re-estimate, ascending; `()` when there are none |
+
+`description_lengths[c]` is the corpus description length of the
 model after `c` cycles, so it has `cycles + 1` entries, the first being the starting
 model's:
 
@@ -235,8 +245,10 @@ lists; which of them can run depends on the machine, as [backends.md](backends.m
 
 ## Errors
 
-Validation happens before any cycle runs. A record with no path of finite description
-length under the starting model cannot be trained on, since all of its counts are zero:
+Every error is raised before the starting model is re-estimated, so no partial result is
+lost. Arguments and codes are checked before any E-step runs; a record with no path of
+finite description length under the starting model is found by the first E-step, and
+cannot be trained on, since all of its counts are zero:
 
 ```python
 >>> impossible = SequenceRecord(np.array([USER_BASE, 1]))
@@ -246,9 +258,9 @@ ImpossibleSequenceError: record 0 has no path of finite description length under
 
 Code 1 is `UNK`, whose fibres are zero in every model, so no path emits it. A code outside
 the model's symbol axis, a corpus with no symbols, and a stopping rule that cannot stop
-raise `ValueError`.
+(`batch_cycles` or `patience` below 1, `change_bits` not positive) raise `ValueError`.
 
-So do a `batch_size` below 1 and a device the backend cannot use. `device=` names a torch
+So do a negative `max_cycles`, a `batch_size` below 1 and a device the backend cannot use. `device=` names a torch
 device, so only `"torch"` takes one other than the CPU; `"cuda"` runs on numba-cuda's current
 device and takes none at all, so `backend="cuda", device="cuda"` raises `ValueError` where a
 device exists and `BackendUnavailableError` where none does. A device name must be a string:
