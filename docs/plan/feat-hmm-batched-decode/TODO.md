@@ -1,6 +1,6 @@
 # feat/hmm-batched-decode
 
-**Status**: active
+**Status**: merged — PR #36 — 2026-09-15
 **Created**: 2026-09-14
 **Subgoal**: Batch the decode across all four ADR 0016 phases (revision 03-hmm-v0.2.0)
 
