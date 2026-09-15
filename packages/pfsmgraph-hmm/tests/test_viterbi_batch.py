@@ -24,6 +24,8 @@ lifecycle phase that batches is added by a row in `_backends.py`, not by a test.
 
 from __future__ import annotations
 
+import importlib
+
 import numpy as np
 import pytest
 from pfsmgraph.dataseq import PAD, UNK, USER_BASE, SequenceRecord, SymbolTable, pad_collate
@@ -337,3 +339,57 @@ def test_padding_stays_inert_where_pad_is_emittable(kernel):
         alone_states, alone_bits = _viterbi(init_state_p, transition_p, output_p, record.codes)
         assert np.array_equal(states[row, : record.length + 1], alone_states)
         assert np.float64(total_bits[row]).tobytes() == np.float64(alone_bits).tobytes()
+
+
+# --- phase 3 only: the CPU-parallel batch under real threads -----------------------
+#
+# A race is a property of the interleaving, so these run the batch at one thread and
+# at the most this process has. `test_viterbi.py` holds the same pair for the
+# per-record kernel; the batch parallelises a different loop, so it needs its own.
+
+
+@pytest.fixture
+def numba_threads():
+    """`(max_threads, set_num_threads)`, restoring the thread count afterwards."""
+    status = {s.name: s for s in backends("viterbi_batch")}["cpu_parallel"]
+    if not status.available:
+        pytest.skip(f"backend 'cpu_parallel' unavailable: {status.reason}")
+    numba = importlib.import_module("numba")
+    original = numba.get_num_threads()
+    yield numba.config.NUMBA_NUM_THREADS, numba.set_num_threads
+    numba.set_num_threads(original)
+
+
+def test_the_cpu_parallel_batch_is_invariant_to_thread_count(numba_threads):
+    """One answer at every thread count, over 40 ragged batches; two would be a race."""
+    max_threads, set_num_threads = numba_threads
+    if max_threads < 2:
+        pytest.skip(f"needs >= 2 threads to compare; this process has {max_threads}")
+
+    rng = np.random.default_rng(20260915)
+    cases = []
+    for _ in range(40):
+        n_symbols = int(rng.integers(1, 6))
+        params = _random_model(rng, int(rng.integers(1, 17)), n_symbols)
+        cases.append((params, _random_records(rng, n_symbols, int(rng.integers(0, 12)), max_length=60)))
+    results = {}
+    for threads in (1, max_threads):
+        set_num_threads(threads)
+        results[threads] = [viterbi_batch(p, recs, backend="cpu_parallel") for p, recs in cases]
+    for one, many in zip(results[1], results[max_threads]):
+        for a, b in zip(one, many):
+            _assert_same_path(a, b)
+
+
+def test_the_cpu_parallel_batch_breaks_ties_to_the_smallest_index_at_every_thread_count(
+    numba_threads,
+):
+    """A uniform model ties at every cell; lifting the `i` reduction into the
+    parallel loop would resolve those ties in whatever order threads combined."""
+    max_threads, set_num_threads = numba_threads
+    params = _uniform_model(5, 3)
+    records = [_record([i % 3 for i in range(n)]) for n in (24, 0, 1, 17, 24, 9)]
+    for threads in {1, max_threads}:
+        set_num_threads(threads)
+        for path in viterbi_batch(params, records, backend="cpu_parallel"):
+            assert not path.states.any(), f"at {threads} thread(s)"
