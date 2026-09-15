@@ -1,6 +1,6 @@
 # feat/hmm-training-log
 
-**Status**: active
+**Status**: merged — PR #37 — 2026-09-15
 **Created**: 2026-09-15
 **Subgoal**: Migrate the training log as standard-output reporting only (revision 03-hmm-v0.2.0)
 
