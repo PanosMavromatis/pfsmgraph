@@ -190,7 +190,10 @@ reached is absent, as it is from the test matrix.
   `feat/hmm-batched-training`: the rows are batched E-steps, `_e_step_batch`, over
   `pad_collate`'s padded records, and each returns counts **per record**. Summing inside the
   kernel would regroup a float sum by batch and move the last bits, so the loop adds them in
-  record order and a result does not depend on `batch_size`.)*
+  record order and a result does not depend on `batch_size`. Amended 2026-09-15 on
+  `feat/hmm-batched-decode`: `viterbi_batch` is a public key of its own beside `viterbi`,
+  because a phase can reach a per-record kernel before a batched one and the enumeration must
+  be able to say so.)*
 - **It probes, once per process.** Checking `cuda` imports numba-cuda and asks for a device,
   which is the cost the lazy rule in §2 avoids on ordinary calls. The result is cached, so a
   later `backend=` call that names an unavailable backend raises from the cache without
@@ -280,16 +283,26 @@ explicitly should be able to see the choices, with reasons, without writing a
 
 ## Open
 
-- **A batched `viterbi`.** Phase 4's speed case is a batch, and the decode still takes one
-  record. Deferred on `feat/hmm-batched-training` to revision 03-hmm-v0.2.0's "Batch the
-  decode across all four ADR 0016 phases" subgoal in `docs/plan/TODO.md`. Min-sum performs
-  only `+` and `<`, so a batched decode can stay bit-exact across phases.
+None.
 
 ## Resolved
+
+- **A batched `viterbi`.** Settled 2026-09-15 on `feat/hmm-batched-decode`, the "Batch the
+  decode across all four ADR 0016 phases" subgoal this section used to name. The batch is a
+  public call of its own, `viterbi_batch(params, records, *, backend, batch_size,
+  on_impossible)`, rather than a widened `viterbi`, so neither call's return type depends on
+  its input. It returns `list[ViterbiPath | None]` in record order, each row bit-exact with
+  `viterbi` on that record on every backend, because min-sum performs only `+` and `<`.
+  `batch_size` has §2's meaning, a memory bound that changes no result. `on_impossible`
+  (`"raise"` or `"none"`) is validated before any work, like `backend`, and `"none"` exists
+  because a search over candidate models meets impossible records as ordinary outcomes. The
+  table carries it under its own key rather than as a second function on `viterbi`'s rows,
+  since a lifecycle phase can have a per-record kernel before a batched one and §4 reports
+  per public call; all four phases have one.
 
 - **Batching and device placement for training.** Settled 2026-09-14 on
   `feat/hmm-batched-training`, the "Batch the trainer over sequences" subgoal this section
   used to name. A batch call takes `batch_size` beyond `backend`, a memory bound that changes
   no result, and `device`, which only `"torch"` accepts (§2's amendment). The `baum_welch`
   rows became batched kernels returning per-record counts (§4's amendment). Whether
-  `viterbi` batches too was deferred, as Open says.
+  `viterbi` batches too was deferred then, and is settled above.

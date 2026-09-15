@@ -5,15 +5,15 @@
 | Field | Value |
 |-------|-------|
 | Source | **Recovered from the phase-1 implementation.** `packages/pfsmgraph-hmm/src/pfsmgraph/hmm/_viterbi.py` at commit `232a207`, which was ported from `update-viterbi-path` in `.scratch/hmm-lush/Code/HMMlib/hmm-trainer.lsh:216-227`. The written account of that original is `.scratch/hmm-lush/HMMLIB-ACCOUNT.md`, §3 (the bit domain) and §7 (the two defects). |
-| Derived from | `packages/pfsmgraph-hmm/src/pfsmgraph/hmm/_viterbi.py` `sha256:6b26469bd36030a2cc2fcce8c9106deab18cf2851cf934551763d5238db2438a` |
+| Derived from | `packages/pfsmgraph-hmm/src/pfsmgraph/hmm/_viterbi.py` `sha256:094874891f07a4578eb5307da96d787bf4d5de21d385a14dccd5dad0b0725d45` (amended 2026-09-15; see Notes) |
 | Family | Hidden Markov model — **arc-emission (Mealy)**, [ADR 0015](../../adr/0015-arc-emission-mealy-formulation.md) |
 | Variant | Decode — the single most probable state path. Not forward, not posterior. |
 | Objective | **Minimise the total description length of the path, in bits: the min-plus (tropical) semiring.** Its identity is `0.0` and its absorbing element is `+inf`. |
-| Parallel decomposition | **States within one timestep** — `prange` over `j`, serial reduction over `i`. This recurrence has no anti-diagonals. See the section below. |
+| Parallel decomposition | **States within one timestep** — `prange` over `j`, serial reduction over `i`. This recurrence has no anti-diagonals. **Batched:** each timestep's `(record, state)` cells. See the section below. |
 | Time complexity | `O(N·S²)` |
 | Space complexity | `O(N·S)` |
 | Optimality | Optimal — exact minimisation over all `S^(N+1)` paths. |
-| Algorithm-specific params | None. The signature is `(params, record)` and nothing else. |
+| Algorithm-specific params | None. The signature is `(params, record)` and nothing else; the batched form is `(params, records)` with `batch_size` and `on_impossible`, neither of which reaches the recurrence. |
 
 **The direction and the semiring are the two facts a port loses first.** The accumulated
 quantity is `-log2(p)`, so it *grows* as probability falls, and the decode is a **min-sum,
@@ -161,6 +161,52 @@ silently changed the model.
 `states` has length `N + 1`. `states[t]` is the state occupied **before** symbol `t` is
 emitted.
 
+## Batched recurrence
+
+Added 2026-09-15 on `feat/hmm-batched-decode`. The same recurrence over `B` records padded
+to a common width, each row **bit-exact** with the per-record decode above.
+
+| Name | Shape | Meaning |
+|------|-------|---------|
+| `B`, `L` | scalars | records in the batch; the longest record's length |
+| `codes` | `(B, L)` | `pad_collate`'s codes, `PAD` past each record's end |
+| `n` | `(B,)` | each record's length, `n[b] <= L` |
+| `live(b, t)` | — | `t <= n[b]`. **Derived from `n`, never taken as a mask**, so the two cannot disagree |
+| `delta`, `psi` | `(B, L+1, S)` | as above, one row per record |
+
+    delta[b, 0, j] = bits(init_p[j])
+
+    for t in 1 .. L:
+        if live(b, t):
+            delta[b, t, j] = min over i of ( delta[b, t-1, i] + arc_bits_b(i, j, t) )
+            psi[b, t, j]   = argmin over i of ( same ), ties to the SMALLEST i
+        else:                                    # a padded step
+            delta[b, t, j] = delta[b, t-1, j]    # carried; psi not written
+
+    states[b, n[b]] = argmin over j of delta[b, L, j]      # column L, ties to the smallest j
+    for t in n[b]-1 down to 0:
+        states[b, t] = psi[b, t+1, states[b, t+1]]
+    total_bits[b] = delta[b, L, states[b, n[b]]]
+
+**Why row `b` is the per-record decode, bit for bit.** A min-sum performs only `bits`, `+`
+and `<`, elementwise, and nothing combines values across `b`. The carry makes
+`delta[b, L] = delta[b, n[b]]` exactly, so the final argmin and total are the per-record
+ones. This is what distinguishes the decode from the E-step, whose batched counts must be
+returned per record because regrouping a float *sum* by batch moves the last bits.
+
+**Two choices here are what make the padding testable, and both are contract.**
+
+- *The final argmin reads column `L`, not column `n[b]`.* The two are equal only because
+  of the carry. A padded step taken instead of carried would cross an arc emitting `PAD`,
+  whose fibre is zero in every valid model, so `delta[b, L]` would go to `+inf` and a short
+  record would be reported impossible. Reading column `n[b]` would hide that, making the
+  carry an equivalent mutant; a compiled phase must not "optimise" towards it.
+- *ψ past `n[b]` is unread by construction*, since each backtrace starts at its own `n[b]`.
+  Whether a phase writes it is therefore unobservable, and no test claims otherwise.
+
+**Loop order is free.** Phase 1 steps every record through each `t`; phase 2 finishes one
+record before starting the next. Each row's arithmetic is the same either way.
+
 ## Parallel decomposition
 
 **States within one timestep.** Settled 2026-09-10 at phase 3, against the landed kernels,
@@ -198,13 +244,24 @@ kernel that loses on wall-clock is within what the phase is for.
 
 The two decompositions not taken:
 
-- **A batch of independent sequences.** The best speed story, and genuinely embarrassingly
-  parallel, but unavailable at this signature: `viterbi(params, record)` takes one record,
-  and batching arrives with revision 03.
+- ~~**A batch of independent sequences.**~~ *Taken 2026-09-15; see the batched phases
+  below.* Recorded as not taken while `viterbi(params, record)` took one record.
 - **An associative scan over time** in the min-plus semiring, since `(min, +)` matrix
   "multiplication" is associative. Costs `O(N·S³)` against `O(N·S²)`, does not produce
   `psi`, and re-associates the comparisons — so it forfeits bit-exactness with the other phases
   and would need its own equivalence argument rather than a differential test.
+
+**The batched phases parallelise each timestep's `(record, state)` cells.** Settled
+2026-09-15 on `feat/hmm-batched-decode`. Phase 3 keeps `t` serial and runs `prange` over
+the `B·S` cells of a step, flattened; phase 4 launches one device thread per such cell per
+timestep, with `t` on the host as a sequence of launches. Each cell reads only row `t - 1`
+of its own record, and the reduction over `i` stays serial and ascending, so the tie-break
+survives. **It is not the fastest CPU axis**: measured on a 4-vCPU Xeon with 4 threads,
+`prange` over whole records was 1.4-4x faster wherever `B` filled the threads. It was
+declined because a device thread cannot run a record's whole `L·S²` loop, so only the
+per-step cell grid is phase 4's launch geometry, and phase 3 exists to rehearse that.
+Batching pays on the device: on an NVIDIA L4 the phase-4 batch beat its own per-record loop
+7.5-53x at every `B > 1` (`.scratch/hmm-lush/measurements/viterbi_batch_speed.py`).
 
 **The logarithm is evaluated on the host, never on a device.** Settled 2026-09-13 at phase
 4. A device `log2` (libdevice, under `cuda.jit`) rounds differently from the host's in
@@ -390,6 +447,36 @@ satisfies, so a reader must be able to tell a specified behaviour from a ratifie
     Implemented 2026-09-14 as the "one logarithm for every backend" section of
     `test_viterbi.py`. Mutation-tested: see Notes.
 
+### TC-22: every batched row is the per-record decode of that record — `extracted`, exact
+    Input:  200 generated models up to S=40, each a ragged batch holding an empty and a
+            length-1 record
+    Expect: row i's states, total_bits bytes and label equal viterbi(params, records[i])
+            on the same backend. `test_every_row_is_viterbi_on_that_record_alone`
+
+### TC-23: every backend's batch is the reference batch — `extracted`, exact
+    Input:  200 generated ragged batches
+    Expect: each backend's result equals backend="python"'s, states and total bytes.
+            `test_every_backend_agrees_with_the_batched_reference`
+
+### TC-24: the result does not depend on batch_size — `extracted`, exact
+    Input:  11 ragged records; batch_size None, 1, 2, 5
+    Expect: identical rows at every size. `test_the_result_ignores_batch_size`
+
+### TC-25: padding stays inert where PAD is emittable — `constructed`, exact
+    Input:  raw arrays, not a valid model, with PAD the most probable symbol, so a padded
+            step taken would be finite rather than +inf
+    Expect: each kernel row equals the per-record kernel over the record's own codes.
+            `test_padding_stays_inert_where_pad_is_emittable`
+    Why:    on a valid model every ragged batch already catches a taken padded step; this
+            is the case where only the carry itself does.
+
+### TC-26: an exactly uniform model ties to state 0 in every row — `constructed`, exact
+    Input:  uniform S=4 model; a ragged batch including an empty and a length-1 record
+    Expect: every state of every row is 0, on every backend and, for phase 3, at 1 thread
+            and at the maximum. `test_ties_are_broken_toward_the_lower_state_in_every_row`
+
+    Implemented 2026-09-15 in `test_viterbi_batch.py`. Mutation-tested: see Notes.
+
 ## Notes
 
 - **This document was recovered from an implementation, not written before one.** The
@@ -417,3 +504,19 @@ satisfies, so a reader must be able to tell a specified behaviour from a ratifie
   split in 1 of 200. Only a constructed tie reaches the case that matters.
 - **Phase 3 must not invent a decomposition.** See *Parallel decomposition*; "undetermined"
   is the answer until a kernel that exists settles it.
+- **The hash was refreshed by amendment, not re-derivation, and that was checked rather
+  than assumed** (2026-09-15). The recorded `6b26469b` was `_viterbi.py` at `6664c3d`; the
+  file changed at `a65f500` (runtime backend selection) and `ec4a3b4` (the batch). Compared
+  with docstrings stripped, `_viterbi`, `_dead_symbol`, `ViterbiPath` and
+  `ImpossibleSequenceError` are identical to `6664c3d`; only the public wrapper changed, by
+  resolving `backend=` and moving its two messages into `_range_error` and
+  `_impossible_message`, byte-identical. Nothing the recurrence, base cases or backtrace
+  state had moved, so the rule above was honoured by checking the diff rather than by
+  regenerating unchanged sections. The batched recurrence and TC-22 to TC-26 are additions.
+- **TC-25's carry was mutation-tested on every phase**, each mutant swapped in ahead of the
+  backend table's probe: a kernel that steps padded cells over `PAD` fails 11 of 28 batch
+  tests on phase 1, 12 of 21 on phase 2, 14 of 23 on phase 3 and 15 of 25 on phase 4. A
+  phase-1 mutant writing ψ at padded steps fails none, as it must. A phase-3 race mutant
+  sharing the `i` reduction's accumulator across threads also failed none and was **not
+  observable**, differing from the reference in 0 of 20 runs; the compiler keeps that
+  accumulator in a register, so no mutant yet shows TC-26's thread half catching a race.
