@@ -33,9 +33,17 @@
     > **Note:** contract 10's training half claims more than one test shows. `test_training_is_bit_identical_at_every_batch_size` runs only the reference. The compiled phases are covered by `test_every_kernel_matches_the_reference_row_by_row_on_a_ragged_batch`, which gives equal per-record counts, and those counts are summed in record order. So the claim for the phases rests on two tests combined, not on a direct one.
   - [x] The example still runs and still represents the package
     > **Done:** the decode example is unchanged and still passes. The new training block trains in 50 cycles, from 13.4368 bits to 10.4047, and decodes with the trained model. It asserts that the starting model is untouched. `tests/test_api_docs.py` passes, 11 of 11.
-- [ ] Audit the two top-level surfaces
-  - [ ] `docs/api/README.md` mentions `baum_welch` and backends
-  - [ ] `packages/pfsmgraph-hmm/README.md` describes what 0.2.0 ships, since it becomes an immutable PyPI long description
+- [x] Audit the two top-level surfaces
+  > **Note:** worked unattended at the user's request, like the previous goal. Questions were answered with the recommendation.
+  > **Q:** The package README opened "Version 0.1.0 carries …". Name 0.2.0 in its place?
+  > **A (recommendation, adopted):** name no version in the prose. The wheel's metadata already states the version, and a number in immutable text is one more thing to keep in step at every release. The introduction lists what the package contains and calls topology search forthcoming, which stays true of the version it ships with.
+  > **Q:** Fix `pyproject.toml`'s `description` as well, though the plan names only the README?
+  > **A (recommendation, adopted):** yes. It is the one-line summary PyPI shows above the README, it is just as immutable once published, and it said "Baum-Welch training … forthcoming".
+  - [x] `docs/api/README.md` mentions `baum_welch` and backends
+    > **Done:** the distribution table's `Status` column became `Covers`, naming each documented member's surfaces, including `baum_welch`, `backend=` and `backends`. Two paragraphs were added. One names `tests/test_api_docs.py` as the mechanism behind the executed-examples rule, which the page had stated as a habit. The other says why backend examples are chosen to print the same output on every machine, and that the bit-exact promise is per machine.
+  - [x] `packages/pfsmgraph-hmm/README.md` describes what 0.2.0 ships, since it becomes an immutable PyPI long description
+    > **Done:** the introduction lists parameters, single and batched decode, training and backends. A new `## Training` section runs the same training-then-`viterbi_batch` example as the hmm index and states that `batch_size` does not change a result. `## Backends` now covers every call, `torch` included; its executed block lists `backends("baum_welch")`; the extras list adds `torch` and marks `gpu` as not on macOS. `tests/test_api_docs.py` passes, 11 of 11, and it reads this README too.
+    > **Note:** the README says nothing about what kind of wheel ships. 0.1.0 was published as a pure `py3-none-any` wheel (`docs/ops/release.md`). If 0.2.0 is pure again, `backend="cython"` raises `BackendUnavailableError` for every pip user, and `backends.md`'s "a platform wheel, or a source build" becomes the remedy nobody can take from PyPI. The release subgoal owns that decision. Whatever it decides, `backends.md` should be checked against it, since that page can still be corrected after publishing and the README cannot.
 - [ ] Audit the `dataseq` pages revision 03 leans on
   - [ ] `pad_collate` and the container pages agree with how the batched trainer and decode use them
   - [ ] `uv run pytest tests/test_api_docs.py` is green
