@@ -5,7 +5,7 @@
 | Field | Value |
 |-------|-------|
 | Source | **Recovered from the phase-1 implementation.** `packages/pfsmgraph-hmm/src/pfsmgraph/hmm/_forward_backward.py` at commit `e9593db`, which was ported from three methods in `.scratch/hmm-lush/Code/HMMlib/hmm-trainer.lsh`: `update-data-p` (`:126-184`), its clone `update-data-dl` (`:346-399`), and stages 1-4 of `run-add` (`:483-617`). The written account of those methods is `.scratch/hmm-lush/HMMLIB-ACCOUNT.md` §3 (the bit domain), §6 (the forward pass), §8 (the MDL apparatus), §9 (`run-add`) and §10 (the flat stream). The numeric contract is [ADR 0020](../../adr/0020-scaled-probability-domain-forward-backward.md). |
-| Derived from | `packages/pfsmgraph-hmm/src/pfsmgraph/hmm/_forward_backward.py` `sha256:54735d9bfb7261d95506a64bc64ec67cd4b52daa4b17eca393829825fa9343d2` |
+| Derived from | `packages/pfsmgraph-hmm/src/pfsmgraph/hmm/_forward_backward.py` `sha256:e0d40910d14697f3b3da3aeddb1a1f9f72f03cd76c9e5659690b80dbcce1eb72` (amended 2026-09-15; see Notes) |
 | Family | Hidden Markov model, **arc-emission (Mealy)**, [ADR 0015](../../adr/0015-arc-emission-mealy-formulation.md) |
 | Variant | Forward-backward: the total probability of a record over every state path, reported as a description length in bits, and the expected arc and emission counts that Baum-Welch re-estimates from. It is not the decode, and it returns no path. |
 | Objective | **Nothing is optimised.** The recurrences evaluate a sum over all `S^(N+1)` paths in the **sum-product semiring over the non-negative reals, with per-step renormalisation**. The additive identity is `0.0`, the multiplicative identity `1.0`, and `0.0` absorbs under multiplication, which is how an impossible arc removes every path through it. The description length sums `bits` of the scale factors, where `+∞` absorbs under addition. |
@@ -71,7 +71,7 @@ leaves no trace in a diff, in the code or in the tests, which is why it is recor
      difference is at most `1.44e-5` bits per empty record; measured `-1.44e-6` bits at a
      seed summing to `1 + 1e-6`. **Decided 2026-09-15 on `feat/hmm-forward-phases` to
      specify `0` and record the difference rather than change the kernel** (TC-20). The
-     kernel's docstring claims the opposite; see Notes.
+     kernel's docstring claimed the opposite until it was corrected; see Notes.
 6. **`*factor*` is not reproduced.** `data-p` and `data-dl` are multiplied by `(*factor*)`,
    fixed at `1.0` with four alternatives commented out (`:10-15`). Whatever experiment that
    was, it is switched off, so omitting it changes nothing.
@@ -475,7 +475,7 @@ the wavefront for this family.
   re-associates exactly the sums ADR 0020 §2 fixes, and computes scale factors of prefix
   products rather than of single columns, so it forfeits bit-exactness with the reference.
   It costs `O(N·S³)` against `O(N·S²)`, and it would need its own equivalence argument rather
-  than a differential test. This answers the item ADR 0020 leaves under `Open`.
+  than a differential test. This answers the item ADR 0020 listed under `Open`, now under its `Resolved`.
 
 **No implementation fuses multiply-add** (ADR 0020 §4). `c ← c + α × w` is exactly the shape a
 contracting compiler turns into one fused instruction, which rounds differently. The Cython
@@ -693,14 +693,21 @@ behaviour.** Tests are in `packages/pfsmgraph-hmm/tests/`.
   this document is stale and must be re-derived rather than patched. The compiled phases
   derive from the same file, so an edit there makes this document and every compiled phase
   stale at once.
-- **Finding: the kernel's docstring overclaims at `N = 0`.** `_forward_backward`'s docstring
-  says `Σ bits(scale)` is `-log2 P(codes)` "including when `init_state_p` sums to 1 only
+- **Finding: the kernel's docstring overclaimed at `N = 0`, and is corrected.** `_forward_backward`'s
+  docstring said `Σ bits(scale)` is `-log2 P(codes)` "including when `init_state_p` sums to 1 only
   within `HMMParams`'s tolerance". That holds for `N ≥ 1`, since the unnormalised seed is
   absorbed into `Q[1]`. At `N = 0` the kernel returns `-0.0` where the claim requires
-  `-log2 Σ init_p`, measured `-1.44e-6` bits at `1 + 1e-6`. No test sees it: the enumeration
-  cases all have `N ≥ 4`, and TC-11's seed sums to 1 within rounding. **Not corrected here.**
-  The specification follows the kernel (deviation 5, TC-20), and the docstring's wording is a
-  separate change.
+  `-log2 Σ init_p`, measured `-1.44e-6` bits at `1 + 1e-6`. No test saw it: the enumeration
+  cases all have `N ≥ 4`, and TC-11's seed sums to 1 within rounding. The specification follows
+  the kernel (deviation 5, TC-20), and on 2026-09-15, after the merge of
+  `feat/hmm-forward-phases`, the docstring was changed to state the `N ≥ 1` condition and the
+  empty-record value.
+- **The hash was refreshed by amendment, not re-derivation, and that was checked rather
+  than assumed** (2026-09-15). The recorded `54735d9b` was `_forward_backward.py` before that
+  docstring correction. Compared as ASTs with docstrings stripped, the module is identical to
+  it, so nothing the recurrences, base cases, batched contract or counts state had moved. The
+  Cython phase's provenance header was amended to the same hash for the same reason; its own
+  hash excludes that line, so the CPU-parallel and CUDA phases stay fresh.
 - **Finding: ADR 0020 §1's association argument covers only two-factor terms.** It reasons that
   "IEEE multiplication is commutative, so how a longer product associates never enters the
   contract". That is true of every forward and backward term, and false of ξ and γ, which have
@@ -715,7 +722,8 @@ behaviour.** Tests are in `packages/pfsmgraph-hmm/tests/`.
   `oracles` entry. `hmmlearn` is a library, not a file, and does not fit the manifest's `oracles`
   shape.
 - **ADR 0020's `Open` item on an associative scan is answered in *Parallel decomposition*.**
-  Moving it to that ADR's `Resolved` section is a separate change to the ADR.
+  It was moved to that ADR's `Resolved` section on 2026-09-15, with the contraction and
+  `-ffp-contract=off` items that phases 2 and 4 settled.
 - **No tie case was constructed, and none is missing.** A sum has no argmin. The decode's tie
   case exists because learned parameters never tie. Here the analogous blind spot, a reordered
   sum that no tolerance can see, is already covered by TC-15, which this suite had before the

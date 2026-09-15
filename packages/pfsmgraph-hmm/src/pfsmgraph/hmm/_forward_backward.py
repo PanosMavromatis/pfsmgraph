@@ -82,11 +82,15 @@ def _forward_backward(init_state_p, transition_p, output_p, codes):
       with no division by the likelihood, and ``alpha[t] * beta[t] * scale[t]``
       the state posterior γ.
     - ``scale``, ``(N + 1,)``. ``scale[t]`` for ``t >= 1`` is the sum of the
-      unscaled column, and ``scale[0]`` is ``1.0``. ``Σ bits(scale)`` is
-      ``-log2 P(codes)`` under the parameters as given, including when
-      ``init_state_p`` sums to 1 only within ``HMMParams``'s tolerance, since
-      row 0 is not renormalised. That is also what exact enumeration over every
-      state path computes.
+      unscaled column, and ``scale[0]`` is ``1.0``. For ``N >= 1``,
+      ``Σ bits(scale)`` is ``-log2 P(codes)`` under the parameters as given,
+      including when ``init_state_p`` sums to 1 only within ``HMMParams``'s
+      tolerance, since row 0 is not renormalised and the seed's sum is
+      absorbed into ``scale[1]``. That is also what exact enumeration over
+      every state path computes. For an empty record it is 0 bits, where
+      enumeration gives ``-log2 Σ init_state_p``: the two differ only when the
+      seed misses 1, by at most ``1.44e-5`` bits under ``HMMParams``'s
+      tolerance.
 
     **Nothing is validated here and nothing raises**, for the reason
     ``_viterbi`` gives: every later phase implements this signature, and a CUDA

@@ -203,20 +203,36 @@ most of the reference-speed cost under *Negative / costs* moot: at `S = 160` it 
 
 ## Open
 
-- **Whether numba-cuda contracts multiply-add in device code.** Unmeasured. Settle it at
-  forward-backward's phase 4, with a constructed test in the manner of Viterbi's TC-21.
-- **The platform-conditional `-ffp-contract=off`.** It is not needed on the x86-64 host
-  where the Cython phase will first build. Add it when a non-x86 build is first
-  exercised, or pre-emptively at forward-backward's phase 2 if the constructed test
-  would not run on such a host anyway.
 - **The float32 `torch` tolerance.** A float32 `torch` run needs its own figure; float64's
   is resolved below.
-- **An associative scan over time.** Sum-product with renormalisation is associative up
-  to the scale factors, so a parallel prefix is possible in principle. Whether it is
-  worth it, or whether batch parallelism alone is the phase-3 answer, is still the phases
-  2-4 subgoal's question. That subgoal now knows which semiring it is asking about.
 
 ## Resolved
+
+- **Whether numba-cuda contracts multiply-add in device code.** It does, by default.
+  Settled 2026-09-15 at forward-backward's phase 4 on `feat/hmm-forward-phases`: on an
+  NVIDIA L4 with numba-cuda 0.30.4, a `c + a*b` kernel returned the exactly rounded `fma`
+  in 20,000 of 20,000 cases, without `fastmath` and still at `opt=False`, and differed
+  from the host in 24,081 of 200,000. `cuda.jit` exposes no switch to turn contraction
+  off, so §4 is met structurally: no launch both multiplies and adds a product, and
+  products reach device memory in one launch and are summed in the next. A kernel fused
+  back into one launch failed 38 of the 55 bit-exact tests in
+  `packages/pfsmgraph-hmm/tests/test_forward_backward_backends.py`, the constructed
+  contraction test (the formalization's TC-21) among them.
+- **The platform-conditional `-ffp-contract=off`.** Added pre-emptively at phase 2
+  (2026-09-15), unconditionally rather than per platform, through meson's
+  `cc.get_supported_arguments`, so a compiler that does not know the flag drops it
+  rather than failing the build. It applies to the forward-backward extension only. A
+  `-march=native -ffp-contract=fast` build of that extension failed 36 bit-exact tests on
+  the x86-64 host, so the flag guards a failure that does occur there, not only on other
+  architectures.
+- **An associative scan over time.** Rejected 2026-09-15, in the *Parallel decomposition*
+  section of
+  [`forward_backward/FORMALIZATION.md`](../algorithms/forward_backward/FORMALIZATION.md),
+  before phase 3 was written. It re-associates exactly the sums §2 fixes, and it computes
+  scale factors of prefix products rather than of single columns, so it gives up
+  bit-exactness with the reference. It also costs `O(N·S³)` against `O(N·S²)`. Phases 3
+  and 4 parallelise each timestep's `(record, state)` cells instead, with `t` and every
+  reduction serial.
 
 - **The float64 `torch` tolerance.** Settled 2026-09-14, as the amendment to the Decision
   states, and pinned by `packages/pfsmgraph-hmm/tests/test_baum_welch_backends.py`. Two

@@ -1,4 +1,4 @@
-# dp-compile: derived-from packages/pfsmgraph-hmm/src/pfsmgraph/hmm/_forward_backward.py sha256:54735d9bfb7261d95506a64bc64ec67cd4b52daa4b17eca393829825fa9343d2
+# dp-compile: derived-from packages/pfsmgraph-hmm/src/pfsmgraph/hmm/_forward_backward.py sha256:e0d40910d14697f3b3da3aeddb1a1f9f72f03cd76c9e5659690b80dbcce1eb72
 """Forward-backward and the batched E-step, ADR 0002 phase 2: compiled, single-threaded Cython.
 
 A **mechanical** translation of ``_forward_backward.py``, held to it **bit for bit**, not
