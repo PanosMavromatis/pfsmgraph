@@ -393,3 +393,51 @@ def test_the_cpu_parallel_batch_breaks_ties_to_the_smallest_index_at_every_threa
         set_num_threads(threads)
         for path in viterbi_batch(params, records, backend="cpu_parallel"):
             assert not path.states.any(), f"at {threads} thread(s)"
+
+
+# --- phase 4 only: the CUDA batch's launch geometry --------------------------------
+#
+# Only this backend partitions a step's cells into blocks, so only it can be wrong
+# about them. The module refuses to import without a device, so it is reached after
+# a skip naming the reason.
+
+
+@pytest.fixture
+def cuda_module():
+    status = {s.name: s for s in backends("viterbi_batch")}["cuda"]
+    if not status.available:
+        pytest.skip(f"backend 'cuda' unavailable: {status.reason}")
+    return importlib.import_module("pfsmgraph.hmm._viterbi_cuda")
+
+
+@pytest.mark.parametrize("threads_per_block", [1, 7, 64])
+def test_the_cuda_batch_is_invariant_to_block_size(monkeypatch, cuda_module, threads_per_block):
+    """One answer however a step's `B·S` cells are split into blocks.
+
+    One thread per block makes every cell its own block, 7 leaves a ragged last
+    block for most batches, and 64 is the default. A wrong bounds check, or a cell
+    reading another record's row, shows up as a disagreement with the reference.
+    """
+    monkeypatch.setattr(cuda_module, "_THREADS_PER_BLOCK", threads_per_block)
+    rng = np.random.default_rng(20260916)
+    for _ in range(40):
+        n_symbols = int(rng.integers(1, 6))
+        params = _random_model(rng, int(rng.integers(1, 13)), n_symbols)
+        records = _random_records(rng, n_symbols, int(rng.integers(0, 10)))
+        reference = viterbi_batch(params, records, backend="python")
+        for path, expected in zip(viterbi_batch(params, records, backend="cuda"), reference):
+            _assert_same_path(path, expected)
+
+
+def test_the_cuda_batch_of_empty_records_makes_no_launch(monkeypatch, cuda_module):
+    """A batch of width 0 crosses no arc, so no kernel is launched.
+
+    The step function is replaced with one that cannot be indexed, so a decode that
+    reached the device would raise.
+    """
+    monkeypatch.setattr(cuda_module, "_step_batch", None)
+    params = _params(np.array([0.25, 0.75]), np.full((2, 2), 0.5), np.full((2, 2, 2), 0.5))
+    paths = viterbi_batch(params, [_record([]), _record([], label="e")], backend="cuda")
+    assert [p.states.tolist() for p in paths] == [[1], [1]]
+    assert all(p.total_bits == paths[0].total_bits for p in paths)
+    assert paths[1].label == "e"

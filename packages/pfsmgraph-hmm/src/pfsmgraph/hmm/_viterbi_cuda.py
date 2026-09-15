@@ -1,4 +1,4 @@
-# dp-compile: derived-from packages/pfsmgraph-hmm/src/pfsmgraph/hmm/_viterbi_cpu_parallel.py sha256:7d9613675425d21c901b690300fd54066661469be4fae3b2b63c1f9264be3f9b
+# dp-compile: derived-from packages/pfsmgraph-hmm/src/pfsmgraph/hmm/_viterbi_cpu_parallel.py sha256:e4941f7aa7a0ee874c34b14649df6bc5b82f36f8818839ae6a6d75251dbaad17
 """The Viterbi decode, ADR 0002 phase 4: Numba CUDA.
 
 The decomposition is ``_viterbi_cpu_parallel.py``'s, re-expressed in the CUDA
@@ -80,8 +80,17 @@ silently matches nothing.
 
 **No performance tuning yet.** The block size is a placeholder, and one launch
 per timestep is the same fixed overhead phase 3 diagnosed: ``t`` is strictly
-sequential, so every exact single-record decomposition pays it, and only
-revision 03's batch removes it.
+sequential, so every exact single-record decomposition pays it; the batch below
+shares it across records rather than removing it.
+
+**The batch launches one thread per ``(record, state)`` cell of a timestep.**
+``_step_batch`` is ``_viterbi_cpu_parallel.py``'s batched ``prange`` body, one
+device thread per flattened cell, re-expressed rather than chosen again: ``t`` stays
+on the host as a sequence of launches, a live cell takes the step with the serial
+``i`` reduction, and a padded cell carries δ and writes no ψ. The final argmin over
+column ``L`` and each record's backtrace run on the host, as the per-record
+wrapper's do. The fixed cost per timestep is the same launch; what changes is that
+``B`` records share it.
 """
 
 from __future__ import annotations
@@ -129,6 +138,35 @@ def _step(t, arc_bits, sym, delta, psi):
             best_i = i
     delta[t, j] = best
     psi[t, j] = best_i
+
+
+@cuda.jit
+def _step_batch(t, arc_bits, sym, lengths, delta, psi):
+    """One timestep of a batch. Each thread owns one ``(record, state)`` cell."""
+    cell = cuda.grid(1)
+    size = delta.shape[2]
+    # The rounded-up last block has threads past the last cell. Unchecked, they
+    # would write outside delta and psi.
+    if cell >= sym.shape[0] * size:
+        return
+    b = cell // size
+    j = cell % size
+
+    if t <= lengths[b]:
+        k = sym[b, t - 1]
+        best = math.inf
+        best_i = 0
+        # Serial, ascending, strict `<`: the tie-break, as in _step.
+        for i in range(size):
+            cand = delta[b, t - 1, i] + arc_bits[i, j, k]
+            if cand < best:
+                best = cand
+                best_i = i
+        delta[b, t, j] = best
+        psi[b, t, j] = best_i
+    else:
+        # A padded step: δ carried, ψ not written. Never a step over PAD.
+        delta[b, t, j] = delta[b, t - 1, j]
 
 
 def _viterbi(init_state_p, transition_p, output_p, codes):
@@ -202,3 +240,72 @@ def _viterbi(init_state_p, transition_p, output_p, codes):
         states[t] = psi[t + 1, states[t + 1]]
 
     return states, float(last[states[n]])
+
+
+def _viterbi_batch(init_state_p, transition_p, output_p, codes, lengths):
+    """The recurrence over a padded batch: ``codes`` ``(B, L)``, ``lengths`` ``(B,)``.
+
+    Signature and result are ``_viterbi.py``'s ``_viterbi_batch``: ``(states,
+    total_bits)``, shapes ``(B, L + 1)`` and ``(B,)``, row ``b`` bit-exact with the
+    per-record decode. The host takes the logarithms as every batch wrapper does,
+    uploads once, launches one step per timestep over ``B·S`` cells, and runs the
+    final argmin and the backtraces. A batch of width 0 launches nothing.
+    """
+    init_c = np.ascontiguousarray(init_state_p, dtype=np.float64)
+    trans_c = np.ascontiguousarray(transition_p, dtype=np.float64)
+    out_c = np.ascontiguousarray(output_p, dtype=np.float64)
+    codes_c = np.ascontiguousarray(codes, dtype=np.int64)
+    lengths_c = np.ascontiguousarray(lengths, dtype=np.int64)
+
+    batch, width = codes_c.shape
+    size = trans_c.shape[0]
+    seed = bits(init_c)
+
+    psi = np.zeros((batch, width + 1, size), dtype=np.int64)
+    if width > 0:
+        present, sym = np.unique(codes_c, return_inverse=True)
+        arc_bits = np.ascontiguousarray(bits(trans_c[:, :, None] * out_c[:, :, present]))
+
+        d_arc_bits = cuda.to_device(arc_bits)
+        d_sym = cuda.to_device(np.ascontiguousarray(sym.reshape(codes_c.shape), dtype=np.int64))
+        d_lengths = cuda.to_device(lengths_c)
+        delta0 = np.empty((batch, width + 1, size), dtype=np.float64)
+        delta0[:, 0] = seed
+        d_delta = cuda.to_device(delta0)
+        d_psi = cuda.to_device(psi)
+
+        cells = batch * size
+        blocks = (cells + _THREADS_PER_BLOCK - 1) // _THREADS_PER_BLOCK
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="Grid size .* low occupancy",
+                category=NumbaPerformanceWarning,
+            )
+            launch = _step_batch[blocks, _THREADS_PER_BLOCK]
+
+        for t in range(1, width + 1):
+            launch(t, d_arc_bits, d_sym, d_lengths, d_delta, d_psi)
+
+        last = np.ascontiguousarray(d_delta[:, width].copy_to_host())
+        psi = d_psi.copy_to_host()
+    else:
+        last = np.broadcast_to(seed, (batch, size))
+
+    # The final argmin over column L, strict `<`, and each record's backtrace from
+    # its own length -- on the host, as the per-record wrapper's are.
+    states = np.zeros((batch, width + 1), dtype=np.int64)
+    total_bits = np.empty(batch, dtype=np.float64)
+    for b in range(batch):
+        best = math.inf
+        best_j = 0
+        for j in range(size):
+            if last[b, j] < best:
+                best = last[b, j]
+                best_j = j
+        n = int(lengths_c[b])
+        states[b, n] = best_j
+        for t in range(n - 1, -1, -1):
+            states[b, t] = psi[b, t + 1, states[b, t + 1]]
+        total_bits[b] = last[b, best_j]
+    return states, total_bits

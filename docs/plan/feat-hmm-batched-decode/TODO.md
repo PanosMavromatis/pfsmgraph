@@ -40,5 +40,23 @@
   > **Note:** measured three decompositions on a 4-vCPU Intel Xeon @ 2.20 GHz (numba 0.67, 4 threads), best of 3 post-compile, all bit-exact with the Cython batch. `prange` over records: 1.6 / 6.2 / 51.0 ms at `B=64, L=400, S=5/16/64` against Cython's 3.0 / 10.8 / 120.7, and 30.7 against 30.6 at `B=1, S=160`. `prange` over `(b, j)` per timestep: 6.9 / 11.4 / 71.0, and 12.1 at `B=1, S=160`. `prange` over `j` per `(b, t)`, the per-record kernel's axis nested per record: 8.3 at `B=4, S=64`, 11.9 at `B=1, S=160`, and too slow to run at `B=64`. Records win on this CPU wherever `B` fills the threads, and lose once it does not.
   > **Q:** Which axis should the batched `cpu_parallel` kernel's `prange` take?
   > **A:** The flattened `(record, state)` cells of each timestep, with `t` outer and serial and the reduction over `i` serial and ascending. It is phase 4's launch geometry, so phase 3 rehearses the decomposition CUDA reuses, which is what ADR 0016 scopes the phase to; the faster records axis cannot be reused on a device, and a shape-chosen pair of kernels would add a host-specific threshold and a second test surface.
-- [ ] Batch the `cuda` kernel, bit-exact with the batched reference, and measure the batch against the per-record decode with the host named
+- [x] Batch the `cuda` kernel, bit-exact with the batched reference, and measure the batch against the per-record decode with the host named
+  > **Done:** `_step_batch` and `_viterbi_batch` in `_viterbi_cuda.py`, the `cuda` row, the phase-4 geometry tests, and the header hash refreshed to `_viterbi_cpu_parallel.py`'s current `sha256:e4941f7a…`. Measured with `.scratch/hmm-lush/measurements/viterbi_batch_speed.py`.
+  > **Result:** 2026-09-15, Intel Xeon @ 2.20 GHz with 4 logical CPUs and 4 numba threads, NVIDIA L4; numpy 2.4.6, numba 0.67.0, numba-cuda 0.30.4. Records ragged in [200, 400], 8 user symbols, best of 3, each cell asserted bit-exact batch against loop first. Batch / per-record loop, in ms:
+  >
+  > | `S` | `B` | python | cython | cpu_parallel | cuda |
+  > |---:|---:|---:|---:|---:|---:|
+  > | 5 | 1 | 13.2 / 5.2 | 0.2 / 0.1 | 1.3 / 1.2 | 19.1 / 16.2 |
+  > | 5 | 16 | 26.4 / 92.6 | 0.8 / 1.7 | 2.3 / 22.3 | 27.6 / 286.0 |
+  > | 5 | 256 | 138 / 1430 | 18.5 / 26.8 | 21.9 / 319 | 82.3 / 4360 |
+  > | 64 | 1 | 29.6 / 17.4 | 2.5 / 2.4 | 2.7 / 2.5 | 20.9 / 18.6 |
+  > | 64 | 16 | 236 / 278 | 30.2 / 37.2 | 18.3 / 39.1 | 35.1 / 289 |
+  > | 64 | 256 | 3906 / 4115 | 466 / 572 | 262 / 600 | 147 / 4454 |
+  > | 160 | 1 | 105 / 83.4 | 25.0 / 25.3 | 19.7 / 9.3 | 21.0 / 18.7 |
+  > | 160 | 16 | 1443 / 1395 | 416 / 445 | 169 / 164 | 43.5 / 326 |
+  > | 160 | 256 | 35780 / 20977 | 5477 / 6717 | 2182 / 2469 | 264 / 4964 |
+  > **Note:** what the table says. **CUDA is where batching pays**: the per-timestep launch is shared by `B` records, so the batch beats its own loop 7.5-53x at every `B > 1`, and it is the fastest backend of all from `S = 64, B = 256` (147 ms against Cython's 466) and `S = 160, B = 16` (43.5 against 416); at `S = 160, B = 256` it is 21x faster than the Cython batch. It still loses at `S = 5` to Cython by 4.4x, so phase 4's crossover moved down from the per-record decode's `S ≈ 64` rather than disappearing. Cython's batch gains only its per-call overhead, 1.1-2.1x. `cpu_parallel` gains most at small `S` (9.6-14.6x at `S = 5`), where its loop paid a fork/join per timestep per record, and nothing at `S = 160, B = 16`, where the work per cell already dwarfs it. **The numpy batch is slower than its loop at `S = 160, B = 256`** (35.8 s against 21.0 s): one call allocates `(256, 401, 160)` δ and ψ, about 131 MB each, plus ~50 MB of temporaries per step, so it is memory-bound. That is the case `batch_size` exists for, and not a defect. At `B = 1` every batch is slightly slower than `viterbi`, which is `pad_collate` and the extra bookkeeping.
+  > **Note:** the kernel half is written. `_step_batch` launches one device thread per `(record, state)` cell of a timestep, phase 3's batched `prange` body re-expressed, with `t` on the host as a sequence of launches and the final argmin and backtraces on the host; registered as `viterbi_batch`'s `cuda` row. All 25 `cuda` batch tests ran on the NVIDIA L4 here, including block sizes 1, 7 and 64 and a width-0 batch with the launch stubbed out; the padding mutant fails 15 of them. Suite 1000.
+  > **Q:** Where should the per-phase batch benchmark script live?
+  > **A:** Tracked beside ADR 0020's evidence, as `.scratch/hmm-lush/measurements/viterbi_batch_speed.py`, so the figures can be re-run from a clone; outside `tests/` and imported by nothing under `packages/`.
 - [ ] Document the batched decode and amend `FORMALIZATION.md` and ADR 0021 where the decisions land

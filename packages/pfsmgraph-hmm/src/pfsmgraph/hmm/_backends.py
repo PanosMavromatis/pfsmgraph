@@ -115,6 +115,7 @@ _TABLE: Final[dict[str, tuple[_Row, ...]]] = {
             needs="numba",
             extra="cpu-parallel",
         ),
+        _Row("cuda", "pfsmgraph.hmm._viterbi_cuda", "_viterbi_batch", needs="CUDA device", extra="gpu"),
     ),
     # Phase 1 only. Private, so it is here for the session header and absent
     # from _PUBLIC; baum_welch reaches it through its python row's E-step.
