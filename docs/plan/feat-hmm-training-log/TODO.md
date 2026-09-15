@@ -19,8 +19,14 @@
   > **Q:** Are the lines also retained on `BaumWelchResult`?
   > **A:** No. The result is unchanged; every printed number is derivable from `description_lengths`, `cycles` and `converged`, and a caller wanting the text passes an `io.StringIO`. The per-topology history Lush kept on the model is revision 04's to design, with persistence.
   > **Done:** surface settled as `baum_welch(..., log: TextIO | None = None)`, writing and flushing a header, a cycle-0 line, one line per convergence check (cycle, bits, change, quiet/patience) and a closing stop line; nothing retained on the result. The original seven-field per-topology line moves to revision 04, `test-data-dl` is dropped as dead.
-- [ ] Implement the line formatter and its emission from `baum_welch`
-  - [ ] The format stays aligned and readable over hundreds of lines, including `inf` and very large or small values
-  - [ ] Logging changes no result: training is bit-identical with the log on and off, on every backend
+- [x] Implement the line formatter and its emission from `baum_welch`
+  > **Q:** Which number format: fixed-point bits with scientific change, fixed point for both, or scientific for both?
+  > **A:** Bits in fixed point to 6 decimals, the column sized from cycle 0's value, which is the widest it can be since EM never raises the description length; change in `%.6e`, a constant 13 characters, so a change far below `change_bits` still shows its magnitude rather than `-0.000000`. `inf` right-aligns in either field with no special case.
+  > **Note:** on the reference, a check's forward pass equals that cycle's E-step total bit for bit, 0 mismatches in 2935 cycles over 20 random multi-record runs, so a check row prints exactly `description_lengths[k]` and the tests compare whole lines as strings rather than parsing floats. On `torch` only the cycle-0 row, which is torch's own E-step, can differ from the reference.
+  > **Note:** a `max_cycles` stop between checks writes one extra row with no unchanged count (none was taken); a stop on a check adds only the stop line; `max_cycles=0` writes the header, cycle 0 and the stop line. The cycle-0 row is written after the impossibility check, so an impossible corpus raises having printed nothing.
+  - [x] The format stays aligned and readable over hundreds of lines, including `inf` and very large or small values
+    > **Note:** pinned by calling `_log_start` and `_log_row` directly with a 12,345,678-bit start, a change of `-1.1e-7`, `±inf` and a five-digit cycle, asserting every field ends at its header's column; the saddle run's rows are asserted line for line, unchanged counts included.
+  - [x] Logging changes no result: training is bit-identical with the log on and off, on every backend
+    > **Note:** `test_the_progress_log_changes_no_result_on_any_backend` compares params, `description_lengths`, cycles, `converged` and degenerate states with `==` on `python` and `torch`, converged and `max_cycles`-stopped. Torch on a CUDA device is not in that fixture's table; the log reads only host floats after the E-step, so `device=` has no path into it.
 - [ ] Decide what `save-training-log` becomes while model persistence is deferred
 - [ ] Document the log under `docs/api/hmm/`, with executed output, and update `core.md`

@@ -57,6 +57,7 @@ choosing ``d`` belongs with the model description length in revision 04.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TextIO
 
 import numpy as np
 
@@ -251,6 +252,7 @@ def baum_welch(
     change_bits: float = CHANGE_BITS,
     patience: int = PATIENCE,
     max_cycles: int | None = None,
+    log: TextIO | None = None,
 ) -> BaumWelchResult:
     """Baum-Welch from ``params`` over ``records`` until ``run-converge`` stops.
 
@@ -287,6 +289,13 @@ def baum_welch(
     :param device: where the E-step runs, as a torch device name such as
         ``"cuda:0"``; ``None`` is the CPU. Only ``"torch"`` runs anywhere else,
         and the device is probed before any work: nothing falls back to the CPU.
+    :param log: a text stream to report progress on, such as ``sys.stdout``;
+        ``None``, the default, writes nothing. A header and cycle 0's bits, then
+        a row at each convergence check -- cycle, bits, change since the previous
+        row, and unchanged checks out of ``patience`` -- and a line naming how the
+        run stopped. Each line is flushed as it is written, so a notebook cell
+        shows the run while it continues. Only already-computed values are
+        formatted, so the result is the same with or without it.
     :raises ValueError: if ``backend`` is not a backend name, or names one
         ``baum_welch`` does not have; if ``device`` names anything but the CPU
         on a backend other than ``"torch"``, or is not a torch device name.
@@ -328,17 +337,23 @@ def baum_welch(
     degenerate = ()
     unchanged = 0
     old_bits = None
+    width = None
     cycles = 0
     while unchanged < patience:
         for _ in range(batch_cycles):
             if max_cycles is not None and cycles >= max_cycles:
-                return _finish(params, history, records, cycles, False, degenerate)
+                result = _finish(params, history, records, cycles, False, degenerate)
+                if log is not None:
+                    _log_budget_stop(log, width, result, old_bits, batch_cycles)
+                return result
             counts, bits_per_record, total = _corpus_step(
                 params, records, e_step, batch_size, device
             )
             if cycles == 0:
                 _raise_if_impossible(params, records, bits_per_record)
                 old_bits = total
+                if log is not None:
+                    width = _log_start(log, total)
             history.append(total)
             params, degenerate = _re_estimate(params, counts)
             cycles += 1
@@ -349,8 +364,12 @@ def baum_welch(
             unchanged += 1
         else:
             unchanged = 0
+        if log is not None:
+            _log_row(log, width, cycles, new_bits, new_bits - old_bits, unchanged, patience)
         old_bits = new_bits
     history.append(new_bits)
+    if log is not None:
+        _write(log, f"  converged after {cycles} cycles")
     return BaumWelchResult(params, tuple(history), cycles, True, degenerate)
 
 
@@ -371,6 +390,41 @@ def _raise_if_impossible(params, records, bits_per_record):
                 f"the starting model of {params.n_states} state(s), so every one "
                 f"of its expected counts is zero and it cannot be trained on"
             )
+
+
+def _log_start(log, bits):
+    """Write the header and cycle 0's row, and return the bits column's width.
+
+    Cycle 0's value is the widest the column gets, since EM never raises the
+    description length, so sizing from it keeps every later row aligned. Change
+    is scientific at a fixed 13 characters, so a change far below ``change_bits``
+    still shows its magnitude.
+    """
+    width = max(len(f"{bits:.6f}"), len("bits"))
+    _write(log, f"  {'cycle':>5}  {'bits':>{width}}  {'change':>13}  quiet")
+    _write(log, f"  {0:>5}  {bits:>{width}.6f}")
+    return width
+
+
+def _log_row(log, width, cycle, bits, change, unchanged=None, patience=None):
+    tail = "" if patience is None else f"  {unchanged}/{patience}"
+    _write(log, f"  {cycle:>5}  {bits:>{width}.6f}  {change:>13.6e}{tail}")
+
+
+def _log_budget_stop(log, width, result, last_bits, batch_cycles):
+    """The rows for a run ``max_cycles`` stopped: a final row if it fell between
+    checks, which has no unchanged count, and the stop line."""
+    bits = result.description_lengths[-1]
+    if width is None:
+        _log_start(log, bits)
+    elif result.cycles % batch_cycles:
+        _log_row(log, width, result.cycles, bits, bits - last_bits)
+    _write(log, f"  stopped at max_cycles after {result.cycles} cycles")
+
+
+def _write(log, line):
+    log.write(line + "\n")
+    log.flush()
 
 
 def _re_estimate(params, counts):

@@ -24,12 +24,17 @@ Six sections:
 - **The EM loop**: the description length never rises, a fixed point stays
   fixed bit for bit, the stopping rule is `run-converge`'s read back from the
   trace, and a degenerate state tracks the original's zero-row likelihood.
+- **The progress log**: its rows are the returned trace's check values, its
+  columns stay aligned at extreme values, a budget stop says so, and every
+  line is flushed as written.
 - **The data description length at precision `d`**, against the `data-dl` each
   tracked model's own training log recorded.
 """
 
 from __future__ import annotations
 
+import io
+import re
 from fractions import Fraction
 
 import numpy as np
@@ -43,6 +48,8 @@ from pfsmgraph.hmm._baum_welch import (
     PATIENCE,
     _corpus_description_length,
     _data_description_length,
+    _log_row,
+    _log_start,
     _m_step,
     _quantize,
 )
@@ -595,6 +602,96 @@ def test_training_is_bit_identical_at_every_batch_size(size, n_user, lengths):
         np.testing.assert_array_equal(run.params.init_state_p, first.params.init_state_p)
         np.testing.assert_array_equal(run.params.transition_p, first.params.transition_p)
         np.testing.assert_array_equal(run.params.output_p, first.params.output_p)
+
+
+# === the progress log =============================================================
+
+
+class _FlushRecorder(io.StringIO):
+    """A stream that records how many lines it held at each flush."""
+
+    def __init__(self):
+        super().__init__()
+        self.lines_at_flush = []
+
+    def flush(self):
+        self.lines_at_flush.append(self.getvalue().count("\n"))
+        super().flush()
+
+
+def test_no_log_writes_nothing(capsys):
+    rng = np.random.default_rng(SEED + 40)
+    baum_welch(_random_params(rng, 3, 3), _random_corpus(rng, 3, (30, 20)))
+    assert capsys.readouterr() == ("", "")
+
+
+def test_the_log_rows_are_the_results_check_values_and_count_unchanged_checks():
+    # On the reference, a check's forward pass equals that cycle's E-step total
+    # bit for bit (0 mismatches in 2935 cycles, measured 2026-09-15), so each row
+    # is predictable from the returned trace. The saddle run's flags are
+    # 110000000111, so the unchanged count also shows its reset.
+    params, records = _near_saddle(1e-4)
+    log = io.StringIO()
+    result = baum_welch(params, records, batch_cycles=2, change_bits=1e-3, patience=3, log=log)
+
+    h = result.description_lengths
+    width = len(f"{h[0]:.6f}")
+    unchanged = [1, 2, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3]
+    expected = [f"  cycle  {'bits':>{width}}         change  quiet", f"      0  {h[0]:.6f}"]
+    for cycle, count in zip(range(2, 25, 2), unchanged):
+        change = h[cycle] - h[cycle - 2]
+        expected.append(f"  {cycle:>5}  {h[cycle]:>{width}.6f}  {change:>13.6e}  {count}/3")
+    expected.append("  converged after 24 cycles")
+
+    assert result.cycles == 24
+    assert log.getvalue().splitlines() == expected
+
+
+def test_the_columns_stay_aligned_from_a_huge_start_to_tiny_and_infinite_changes():
+    # EM never raises the description length, so a width taken from cycle 0
+    # holds for every later bits value; change is fixed-width scientific.
+    log = io.StringIO()
+    width = _log_start(log, 12345678.901234)
+    _log_row(log, width, 10, 9876543.21, -2469135.69, 0, 3)
+    _log_row(log, width, 20, 9876543.2099, -1.1e-7, 1, 3)
+    _log_row(log, width, 990, 0.0, -np.inf, 3, 3)
+    _log_row(log, width, 12345, 1.5, np.inf)
+    header, *rows = log.getvalue().splitlines()
+
+    ends = [match.end() for match in re.finditer(r"\S+", header)]
+    for row in rows:
+        row_ends = [match.end() for match in re.finditer(r"\S+", row)]
+        assert row_ends[:3] == ends[: len(row_ends[:3])]
+    assert "-1.100000e-07" in rows[2]
+    assert rows[3].split()[2] == "-inf" and rows[4].split()[2] == "inf"
+
+
+@pytest.mark.parametrize("max_cycles", [0, 7, 10])
+def test_a_budget_stop_logs_the_last_bits_and_says_why_it_stopped(max_cycles):
+    # 7 stops between checks, so its row has no unchanged count; 10 stops on a
+    # check, whose row is already written; 0 stops before any cycle runs.
+    rng = np.random.default_rng(SEED + 41)
+    params, records = _random_params(rng, 3, 3), _random_corpus(rng, 3, (60, 40))
+    log = io.StringIO()
+    result = baum_welch(params, records, max_cycles=max_cycles, change_bits=1e-12, log=log)
+    lines = log.getvalue().splitlines()
+    h = result.description_lengths
+
+    assert not result.converged
+    assert lines[-1] == f"  stopped at max_cycles after {max_cycles} cycles"
+    last = lines[-2].split()
+    assert int(last[0]) == max_cycles and last[1] == f"{h[-1]:.6f}"
+    assert len(last) == {0: 2, 7: 3, 10: 4}[max_cycles]
+    if max_cycles == 7:
+        assert last[2] == f"{h[7] - h[0]:.6e}"
+
+
+def test_every_line_is_flushed_as_it_is_written():
+    rng = np.random.default_rng(SEED + 42)
+    log = _FlushRecorder()
+    baum_welch(_random_params(rng, 3, 3), _random_corpus(rng, 3, (40,)), log=log)
+    written = log.getvalue().count("\n")
+    assert written > 3 and log.lines_at_flush == list(range(1, written + 1))
 
 
 # === the data description length at precision d ================================

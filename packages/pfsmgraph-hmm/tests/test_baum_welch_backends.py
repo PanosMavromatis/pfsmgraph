@@ -38,6 +38,7 @@ green run means every kernel's counts make a valid model where it matters.
 from __future__ import annotations
 
 import functools
+import io
 
 import numpy as np
 import pytest
@@ -171,6 +172,25 @@ def test_every_backend_refuses_an_impossible_record_before_training(backend):
     records = [SequenceRecord(np.array([USER_BASE, UNK]))]
     with pytest.raises(ImpossibleSequenceError, match="record 0"):
         baum_welch(params, records, backend=backend)
+
+
+@pytest.mark.parametrize("max_cycles", [None, 7])
+def test_the_progress_log_changes_no_result_on_any_backend(max_cycles, backend):
+    # Compared with ==, not within a tolerance: the log only formats values the
+    # loop has already computed, so any difference at all is a defect.
+    params, records = _trainings(SEED + 1, 1)[0]
+    silent = baum_welch(params, records, backend=backend, max_cycles=max_cycles)
+    log = io.StringIO()
+    logged = baum_welch(params, records, backend=backend, max_cycles=max_cycles, log=log)
+
+    assert (logged.cycles, logged.converged, logged.degenerate_states) == (
+        silent.cycles, silent.converged, silent.degenerate_states,
+    )
+    assert logged.description_lengths == silent.description_lengths
+    for logged_array, silent_array in zip(_arrays(logged.params), _arrays(silent.params)):
+        assert np.array_equal(logged_array, silent_array)
+    stop = "converged after" if max_cycles is None else "stopped at max_cycles after"
+    assert log.getvalue().endswith(f"  {stop} {silent.cycles} cycles\n")
 
 
 # --- kernel-level: deliberately NOT public-API -------------------------------
