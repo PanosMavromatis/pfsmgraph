@@ -20,10 +20,19 @@
     > **Q:** `ViterbiPath` has a field table, but `BaumWelchResult`'s fields appear only in examples and `BackendStatus` gets one sentence. Add tables for both?
     > **A:** Write both.
     > **Done:** both dataclasses now have field tables in `ViterbiPath`'s layout. `degenerate_states` is documented as ascending, since `_re_estimate` builds it with `np.flatnonzero`. Every `raise` in `_viterbi.py`, `_baum_welch.py`, `_backends.py` and `_baum_welch_torch.py` that a public call can reach is on a page; subgoal 2's fixes supplied the two that were missing, `max_cycles` and the stopping rule.
-- [ ] Bring `docs/api/hmm/README.md` up to a package that trains
-  - [ ] The index lists every page
-  - [ ] The contracts section covers training, batching, `backend=` and `device=`, not only the decode and parameters
-  - [ ] The example still runs and still represents the package
+- [x] Bring `docs/api/hmm/README.md` up to a package that trains
+  > **Note:** this goal ran unattended at the user's request. Its questions were answered with the recommendation and are logged here so they can be revisited.
+  > **Q:** The introduction said training was "on `main` for 0.2.0". Describe 0.2.0's contents plainly, although it is not released yet, or keep the hedge?
+  > **A (recommendation, adopted):** plainly. The release is the next master-plan subgoal, and this page should be right on release day. "On `main`" would go stale at exactly that moment, while "0.2.0 adds" is only a few days early.
+  > **Q:** Replace the decode-only example with a training one, or extend it?
+  > **A (recommendation, adopted):** extend it. The decode example carries the three differences from a textbook HMM, which no training example shows as directly. A `### Training it` block on the same model trains on `baum_welch.md`'s corpus, then decodes it with `viterbi_batch`, so all three calls appear.
+  - [x] The index lists every page
+    > **Note:** all four pages were already listed. The Decode entry was missing `viterbi_batch` and now names it. The Backends section below was a worse defect than the index: it still said `baum_welch` "has two" backends, and now says five, and that the compiled four agree to the bit.
+  - [x] The contracts section covers training, batching, `backend=` and `device=`, not only the decode and parameters
+    > **Done:** contracts 5 and 7 now name `viterbi_batch` and `baum_welch`. New contracts cover what the package now does: 8 training keeps the topology, 9 counts are kept per record, 10 batching bounds memory and changes no result, 11 a backend is chosen and never inferred, with the bit-exact and `torch` tolerance promises, and 12 `device=`. Related records gained `forward_backward/FORMALIZATION.md`.
+    > **Note:** contract 10's training half claims more than one test shows. `test_training_is_bit_identical_at_every_batch_size` runs only the reference. The compiled phases are covered by `test_every_kernel_matches_the_reference_row_by_row_on_a_ragged_batch`, which gives equal per-record counts, and those counts are summed in record order. So the claim for the phases rests on two tests combined, not on a direct one.
+  - [x] The example still runs and still represents the package
+    > **Done:** the decode example is unchanged and still passes. The new training block trains in 50 cycles, from 13.4368 bits to 10.4047, and decodes with the trained model. It asserts that the starting model is untouched. `tests/test_api_docs.py` passes, 11 of 11.
 - [ ] Audit the two top-level surfaces
   - [ ] `docs/api/README.md` mentions `baum_welch` and backends
   - [ ] `packages/pfsmgraph-hmm/README.md` describes what 0.2.0 ships, since it becomes an immutable PyPI long description
