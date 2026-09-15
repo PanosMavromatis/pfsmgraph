@@ -167,6 +167,40 @@ array([[ True,  True,  True],
        [ True,  True, False]])
 ```
 
+### `mask` and `lengths` always agree
+
+`mask[i, t]` is `True` exactly when `t < lengths[i]`, and every row's real positions come
+first. So either array can be rebuilt from the other, and a consumer may read whichever
+suits it:
+
+```python
+>>> import numpy as np
+>>> width = batch["codes"].shape[1]
+>>> bool((batch["mask"] == (np.arange(width) < batch["lengths"][:, None])).all())
+True
+```
+
+This is a contract, not a coincidence of the implementation. `pfsmgraph.hmm`'s batched
+calls, `viterbi_batch` and `baum_welch`, pad through `pad_collate` and hand their kernels
+`codes` and `lengths` only, deriving liveness from `lengths`: one input rather than two,
+so a kernel has no pair of arrays that could disagree.
+
+### Empty records collate to zero width
+
+A record of length 0 is a valid item, and a batch of nothing but them has `L == 0`:
+
+```python
+>>> from pfsmgraph.dataseq import SequenceRecord
+>>> empty = SequenceRecord(vocab.encode([]))
+>>> pad_collate([empty, empty])["codes"].shape
+(2, 0)
+>>> pad_collate([empty, ds[1]])["mask"]
+array([[False, False],
+       [ True,  True]])
+```
+
+Only a batch with no records at all raises; see below.
+
 ### The mask is not optional
 
 It is returned unconditionally rather than offered behind a flag. Padding that cannot be

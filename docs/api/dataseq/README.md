@@ -66,8 +66,9 @@ repeated here because together they are the package.
    mask with it. Padding is a property of a batch, never of the container.
 
 Encoding happens once, at the boundary — `SequenceDataset.from_symbols` — and everything
-downstream is integer-only. That is what will make the Cython and CUDA backends in the
-other packages mechanical to write: they never touch a string type.
+downstream is integer-only. That is what makes the compiled backends in the other packages
+mechanical to write: `pfsmgraph.hmm`'s Cython, Numba and CUDA kernels take code arrays and
+never touch a string type.
 ([ADR 0001](../../design/adr/0001-encode-at-the-boundary.md))
 
 ## The public surface
@@ -124,8 +125,9 @@ from pfsmgraph.dataseq import pad_collate
 loader = DataLoader(ds, batch_size=32, collate_fn=pad_collate)
 ```
 
-Keeping torch out is what lets `align`, `hseg`, and `hmm` — none of which have anything to
-do with deep learning — depend on this package. If you have code that gates on
+Keeping torch out is what lets `align`, `hseg`, and `hmm` — none of which needs torch to
+run — depend on this package. `hmm`'s one torch backend is behind an optional extra, and
+installing it adds nothing to this package's imports. If you have code that gates on
 `isinstance`, gate on the two methods instead.
 
 ### `default_collate` raises `TypeError` on these items
