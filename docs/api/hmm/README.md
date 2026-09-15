@@ -95,20 +95,21 @@ These hold for every caller and are not configurable.
 
 ## The public surface
 
-`pfsmgraph.hmm.__all__` is exactly nine names. Anything underscore-prefixed — the
+`pfsmgraph.hmm.__all__` is exactly ten names. Anything underscore-prefixed — the
 `_params`, `_viterbi`, `_baum_welch`, `_forward_backward`, `_backends` and `_numeric` modules, the backend kernels, and every
 attribute beginning with `_` — is private, out of contract, and may change without notice.
 
 ```python
 >>> import pfsmgraph.hmm
 >>> pfsmgraph.hmm.__all__
-['BackendStatus', 'BackendUnavailableError', 'BaumWelchResult', 'HMMParams', 'ImpossibleSequenceError', 'ViterbiPath', 'backends', 'baum_welch', 'viterbi']
+['BackendStatus', 'BackendUnavailableError', 'BaumWelchResult', 'HMMParams', 'ImpossibleSequenceError', 'ViterbiPath', 'backends', 'baum_welch', 'viterbi', 'viterbi_batch']
 ```
 
 | Name | Kind | Documented in |
 |---|---|---|
 | `HMMParams` | frozen dataclass | [params.md](params.md) |
 | `viterbi` | function | [viterbi.md](viterbi.md) |
+| `viterbi_batch` | function | [viterbi.md](viterbi.md) |
 | `ViterbiPath` | frozen dataclass | [viterbi.md](viterbi.md) |
 | `ImpossibleSequenceError` | exception | [viterbi.md](viterbi.md) |
 | `baum_welch` | function | [baum_welch.md](baum_welch.md) |

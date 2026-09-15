@@ -152,7 +152,7 @@ imports no backend.
 
 ```python
 >>> backends("forward_backward")
-ValueError: no public call 'forward_backward' has backends; known: ['baum_welch', 'viterbi']
+ValueError: no public call 'forward_backward' has backends; known: ['baum_welch', 'viterbi', 'viterbi_batch']
 ```
 
 ## `BackendStatus`

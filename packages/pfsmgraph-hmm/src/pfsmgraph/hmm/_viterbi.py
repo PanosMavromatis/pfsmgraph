@@ -41,13 +41,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-from pfsmgraph.dataseq import SequenceRecord
+from pfsmgraph.dataseq import SequenceRecord, pad_collate
 
 from ._backends import BackendName, _resolve
 from ._numeric import bits
 from ._params import HMMParams
 
-__all__ = ["ImpossibleSequenceError", "ViterbiPath", "viterbi"]
+__all__ = ["ImpossibleSequenceError", "ViterbiPath", "viterbi", "viterbi_batch"]
 
 #: The dtype of a decoded state path. ``int64`` rather than the original's float
 #: matrix: ``HMMLIB-ACCOUNT.md`` section 7's second defect is ``psi`` declared
@@ -115,6 +115,58 @@ def _viterbi(init_state_p, transition_p, output_p, codes):
         states[position] = psi[position + 1, states[position + 1]]
 
     return states, float(delta[n, states[n]])
+
+
+def _viterbi_batch(init_state_p, transition_p, output_p, codes, lengths):
+    """The recurrence over a padded batch: ``codes`` ``(B, L)``, ``lengths`` ``(B,)``.
+
+    Returns ``(states, total_bits)``, shapes ``(B, L + 1)`` and ``(B,)``. Row ``b`` is
+    :func:`_viterbi` on record ``b`` alone, **bit for bit**: ``states[b, : n_b + 1]``
+    is its path, zeros follow it, and ``total_bits[b]`` is its total. A min-sum
+    performs only ``bits``, ``+`` and ``<``, elementwise, and none of them regroups
+    across the batch axis, so batching cannot move a bit the way regrouping a sum
+    does in ``_e_step_batch``:
+
+    - at a padded step δ is carried unchanged and ψ is not written, so
+      ``delta[b, L]`` equals ``delta[b, n_b]`` and one final column serves every row;
+    - each backtrace starts at the record's own ``n_b``, so no padded ψ is read;
+    - ``argmin`` over the source axis keeps the first-wins tie-break in every row.
+
+    **The carry is load-bearing.** ``PAD``'s fibre is zero in every valid model, so a
+    padded step taken would make ``delta[b, L]`` infinite and report every record
+    shorter than the batch impossible. Liveness is derived from ``lengths`` rather
+    than taken as a mask, so the two cannot disagree. As in :func:`_viterbi`,
+    nothing is validated and nothing raises: an impossible row comes back with
+    ``total_bits[b] == inf``.
+    """
+    codes = np.asarray(codes)
+    lengths = np.asarray(lengths, dtype=np.int64)
+    batch, width = codes.shape
+    size = int(transition_p.shape[0])
+
+    delta = np.empty((batch, width + 1, size), dtype=np.float64)
+    psi = np.zeros((batch, width + 1, size), dtype=STATE_DTYPE)
+    delta[:, 0] = bits(init_state_p)
+
+    for position in range(1, width + 1):
+        delta[:, position] = delta[:, position - 1]
+        rows = np.flatnonzero(lengths >= position)
+        # (R, S, S): each live record's arc costs, the per-record (S, S) with a
+        # leading axis. Still formed per position, for the reason _viterbi gives.
+        emit = np.moveaxis(output_p[:, :, codes[rows, position - 1]], 2, 0)
+        candidates = delta[rows, position - 1][:, :, np.newaxis] + bits(transition_p * emit)
+        psi[rows, position] = np.argmin(candidates, axis=1)
+        delta[rows, position] = candidates.min(axis=1)
+
+    states = np.zeros((batch, width + 1), dtype=STATE_DTYPE)
+    last = np.argmin(delta[:, width], axis=1)
+    total_bits = delta[np.arange(batch), width, last]
+    for row in range(batch):
+        n = int(lengths[row])
+        states[row, n] = last[row]
+        for position in range(n - 1, -1, -1):
+            states[row, position] = psi[row, position + 1, states[row, position + 1]]
+    return states, total_bits
 
 
 class ImpossibleSequenceError(ValueError):
@@ -218,6 +270,34 @@ def _dead_symbol(init_state_p, transition_p, output_p, codes) -> int:
     )
 
 
+def _range_error(params, codes) -> str | None:
+    """Why ``codes`` do not fit ``params``' symbol axis, or ``None`` when they do."""
+    if codes.size:
+        lowest, highest = int(codes.min()), int(codes.max())
+        if lowest < 0 or highest >= params.n_symbols:
+            return (
+                f"record holds code(s) outside the model's symbol axis "
+                f"[0, {params.n_symbols}): observed [{lowest}, {highest}]. The "
+                f"usual cause is a record encoded against a different vocabulary "
+                f"than the one output_p was sized against"
+            )
+    return None
+
+
+def _impossible_message(params, record) -> str:
+    """What :class:`ImpossibleSequenceError` says about ``record``: its dead symbol."""
+    codes = record.codes
+    index = _dead_symbol(params.init_state_p, params.transition_p, params.output_p, codes)
+    return (
+        f"no path over these {record.length} symbols has finite description "
+        f"length under a model of {params.n_states} state(s): every state "
+        f"became unreachable emitting symbol {index} of the record, code "
+        f"{int(codes[index])}, which reaches path position {index + 1}. No "
+        f"arc carrying that code leaves a reachable state with positive "
+        f"probability, and bits(0) is +inf, which absorbs under addition"
+    )
+
+
 def viterbi(
     params: HMMParams, record: SequenceRecord, *, backend: BackendName = "python"
 ) -> ViterbiPath:
@@ -231,8 +311,8 @@ def viterbi(
     :param params: the model. Only its three arrays, ``n_symbols`` and
         ``n_states`` are read, the last for an error message.
     :param record: one ``dataseq`` ``SequenceRecord``. A record never holds
-        padding, so there is no mask to consult; ``pad_collate`` batches are out
-        of scope until revision 03.
+        padding, so there is no mask to consult. To decode many records at once,
+        padded together, use :func:`viterbi_batch`.
     :param backend: which ADR 0002 lifecycle phase runs the decode -- ``"python"``
         (the reference, and the default), ``"cython"``, ``"cpu_parallel"`` or
         ``"cuda"``. All four are bit-exact with one another on a given host.
@@ -252,31 +332,103 @@ def viterbi(
     """
     kernel = _resolve("viterbi", backend)
     codes = record.codes
-    if codes.size:
-        lowest, highest = int(codes.min()), int(codes.max())
-        if lowest < 0 or highest >= params.n_symbols:
-            raise ValueError(
-                f"record holds code(s) outside the model's symbol axis "
-                f"[0, {params.n_symbols}): observed [{lowest}, {highest}]. The "
-                f"usual cause is a record encoded against a different vocabulary "
-                f"than the one output_p was sized against"
-            )
+    message = _range_error(params, codes)
+    if message is not None:
+        raise ValueError(message)
 
     states, total_bits = kernel(
         params.init_state_p, params.transition_p, params.output_p, codes
     )
 
     if np.isinf(total_bits):
-        index = _dead_symbol(
-            params.init_state_p, params.transition_p, params.output_p, codes
-        )
-        raise ImpossibleSequenceError(
-            f"no path over these {record.length} symbols has finite description "
-            f"length under a model of {params.n_states} state(s): every state "
-            f"became unreachable emitting symbol {index} of the record, code "
-            f"{int(codes[index])}, which reaches path position {index + 1}. No "
-            f"arc carrying that code leaves a reachable state with positive "
-            f"probability, and bits(0) is +inf, which absorbs under addition"
-        )
+        raise ImpossibleSequenceError(_impossible_message(params, record))
 
     return ViterbiPath(states=states, total_bits=total_bits, label=record.label)
+
+
+#: The values :func:`viterbi_batch`'s ``on_impossible`` accepts.
+ON_IMPOSSIBLE = ("raise", "none")
+
+
+def viterbi_batch(
+    params: HMMParams,
+    records,
+    *,
+    backend: BackendName = "python",
+    batch_size: int | None = None,
+    on_impossible: str = "raise",
+) -> list[ViterbiPath | None]:
+    """Decode every record in ``records`` under ``params``, one path per record.
+
+    The result is :func:`viterbi` on each record in turn, in record order, **bit for
+    bit** and at every ``batch_size``: the kernel decodes ``pad_collate``'s padded
+    batch as one array rather than record by record, and a min-sum performs only
+    ``+`` and ``<``, so batching moves no bit.
+
+    :param params: the model, as for :func:`viterbi`.
+    :param records: any iterable of ``dataseq`` ``SequenceRecord``, a
+        ``SequenceDataset`` included. An empty record decodes to one state, as it
+        does alone; no records decode to ``[]``, without a kernel call.
+    :param backend: which ADR 0002 lifecycle phase runs the decode. Validated before
+        any work (ADR 0021); see :func:`~pfsmgraph.hmm.backends`.
+    :param batch_size: how many records each kernel call pads together; ``None``
+        passes them all at once. It bounds memory, which grows as
+        ``batch_size · L · S`` for the longest record ``L`` in a batch, and changes
+        no result.
+    :param on_impossible: ``"raise"``, the default, raises
+        :class:`ImpossibleSequenceError` for the first record in record order that
+        has no path of finite description length; ``"none"`` puts ``None`` in that
+        record's place and decodes the rest. A search that decodes against many
+        candidate models, where an impossible record is an ordinary outcome, wants
+        the second.
+    :raises ValueError: if ``backend`` is not a backend name or names a phase this
+        call has not reached, if ``batch_size`` is below 1, if ``on_impossible`` is
+        not one of :data:`ON_IMPOSSIBLE`, or if any record holds a code outside the
+        model's symbol axis, naming the record's index. All are raised before any
+        record is decoded.
+    :raises BackendUnavailableError: if ``backend`` cannot run in this environment.
+        Nothing falls back.
+    :raises ImpossibleSequenceError: under ``on_impossible="raise"``, naming the
+        record's index and the symbol at which every state became unreachable.
+    """
+    kernel = _resolve("viterbi_batch", backend)
+    if on_impossible not in ON_IMPOSSIBLE:
+        raise ValueError(
+            f"on_impossible must be one of {list(ON_IMPOSSIBLE)}, got {on_impossible!r}"
+        )
+    if batch_size is not None and batch_size < 1:
+        raise ValueError(f"batch_size must be at least 1 or None, got {batch_size}")
+    records = list(records)
+    for index, record in enumerate(records):
+        message = _range_error(params, record.codes)
+        if message is not None:
+            raise ValueError(f"record {index}: {message}")
+
+    step = batch_size or max(len(records), 1)
+    paths: list[ViterbiPath | None] = []
+    for start in range(0, len(records), step):
+        chunk = records[start : start + step]
+        batch = pad_collate(chunk)
+        states, total_bits = kernel(
+            params.init_state_p,
+            params.transition_p,
+            params.output_p,
+            batch["codes"],
+            batch["lengths"],
+        )
+        for offset, record in enumerate(chunk):
+            if np.isinf(total_bits[offset]):
+                if on_impossible == "raise":
+                    raise ImpossibleSequenceError(
+                        f"record {start + offset}: {_impossible_message(params, record)}"
+                    )
+                paths.append(None)
+            else:
+                paths.append(
+                    ViterbiPath(
+                        states=states[offset, : record.length + 1],
+                        total_bits=total_bits[offset],
+                        label=record.label,
+                    )
+                )
+    return paths

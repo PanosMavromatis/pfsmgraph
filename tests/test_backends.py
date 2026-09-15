@@ -88,6 +88,7 @@ def test_viterbi_has_all_four_phases_in_lifecycle_order_and_forward_backward_one
     # E-steps: the reference and torch's gradients.
     assert {a: [r.name for r in rows] for a, rows in hmm_backends._TABLE.items()} == {
         "viterbi": ["python", "cython", "cpu_parallel", "cuda"],
+        "viterbi_batch": ["python", "cython", "cpu_parallel", "cuda"],
         "forward_backward": ["python"],
         "baum_welch": ["python", "torch"],
     }
@@ -103,6 +104,12 @@ def test_only_the_numba_and_cuda_rows_may_be_skipped():
     # a row into ESCALATED_NEEDS would silently turn a legitimate skip into a
     # startup failure for every lean install.
     assert [(r.name, r.needs) for r in hmm_backends._TABLE["viterbi"]] == [
+        ("python", None),
+        ("cython", "compiled extension"),
+        ("cpu_parallel", "numba"),
+        ("cuda", "CUDA device"),
+    ]
+    assert [(r.name, r.needs) for r in hmm_backends._TABLE["viterbi_batch"]] == [
         ("python", None),
         ("cython", "compiled extension"),
         ("cpu_parallel", "numba"),
@@ -126,6 +133,10 @@ def test_every_registered_module_is_a_kernel_not_a_package():
         "_viterbi_cython",
         "_viterbi_cpu_parallel",
         "_viterbi_cuda",
+        "_viterbi",
+        "_viterbi_cython",
+        "_viterbi_cpu_parallel",
+        "_viterbi_cuda",
         "_forward_backward",
         "_forward_backward",
         "_baum_welch_torch",
@@ -144,6 +155,10 @@ def test_the_registered_backends_actually_resolve():
         Availability("viterbi", "cython", True, None),
         Availability("viterbi", "cpu_parallel", True, None),
         Availability("viterbi", "cuda", _CUDA_REASON is None, _CUDA_REASON),
+        Availability("viterbi_batch", "python", True, None),
+        Availability("viterbi_batch", "cython", True, None),
+        Availability("viterbi_batch", "cpu_parallel", True, None),
+        Availability("viterbi_batch", "cuda", _CUDA_REASON is None, _CUDA_REASON),
         Availability("forward_backward", "python", True, None),
         Availability("baum_welch", "python", True, None),
         Availability("baum_welch", "torch", True, None),
@@ -154,6 +169,8 @@ def test_the_header_names_every_registered_backend():
     cuda_cell = "cuda ✓" if _CUDA_REASON is None else f"cuda ✗ ({_CUDA_REASON})"
     assert format_header(detect()) == (
         "backends: viterbi python ✓ · cython ✓ · cpu_parallel ✓ · "
+        + cuda_cell
+        + " | viterbi_batch python ✓ · cython ✓ · cpu_parallel ✓ · "
         + cuda_cell
         + " | forward_backward python ✓ | baum_welch python ✓ · torch ✓"
     )

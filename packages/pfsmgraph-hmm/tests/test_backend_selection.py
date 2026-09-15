@@ -94,7 +94,7 @@ def test_backends_refuses_a_private_kernel_name():
     ADR 0021 section 4 keys enumeration by the public call so revision 04 can
     rename or split kernels; accepting this name would publish it.
     """
-    with pytest.raises(ValueError, match="known: \\['baum_welch', 'viterbi'\\]"):
+    with pytest.raises(ValueError, match="known: \\['baum_welch', 'viterbi', 'viterbi_batch'\\]"):
         backends("forward_backward")
 
 

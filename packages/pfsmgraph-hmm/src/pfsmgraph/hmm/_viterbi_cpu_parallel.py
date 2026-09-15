@@ -1,4 +1,4 @@
-# dp-compile: derived-from packages/pfsmgraph-hmm/src/pfsmgraph/hmm/_viterbi_cython.pyx sha256:923163bbef4f0f09411732d0cff4a13bad3696fe3c06c95deeb5685b8c0d6b6d
+# dp-compile: derived-from packages/pfsmgraph-hmm/src/pfsmgraph/hmm/_viterbi_cython.pyx sha256:8eca3097407fc1556ce2d2254f2747188be5a0440f7d3736880f8403c0fd382c
 """The Viterbi decode, ADR 0002 phase 3: Numba CPU-parallel, ``prange``.
 
 A **mechanical** translation of ``_viterbi_cython.pyx``, which is itself a
@@ -69,6 +69,19 @@ phase 1's rule already satisfies it. An impossible sequence comes back as
 ``total_bits == inf``; ``viterbi()`` in ``_viterbi.py`` turns that into
 ``ImpossibleSequenceError``, once, for every backend.
 
+**The batch parallelises each timestep's ``(record, state)`` cells.** ``_decode_batch``
+keeps ``t`` outer and serial and runs ``prange`` over the ``B·S`` cells of a step,
+flattened; each cell reads only row ``t - 1`` of its own record and writes only its own
+``delta`` and ``psi`` entries, and the reduction over ``i`` stays serial and ascending.
+That is phase 4's launch geometry, which is the reason for it: ADR 0016 scopes this
+phase to proving the decomposition CUDA reuses. **It is not the fastest axis on a CPU.**
+Measured 2026-09-15 on a 4-vCPU Xeon with 4 threads, ``prange`` over whole records was
+1.4-4x faster wherever ``B`` filled the threads (1.6 against 6.9 ms at ``B = 64``,
+``L = 400``, ``S = 5``), and lost only at ``B = 1``; but a device thread cannot run a
+record's whole ``L·S²`` loop, so that decomposition would reach phase 4 unrehearsed.
+Padded cells carry δ and write no ψ, and the final argmin reads column ``L``, as in
+phases 1 and 2.
+
 **No ``cache=True``.** It interacts badly with ``parallel=True`` while the source
 is still moving -- the cache key does not track everything that can change, and a
 stale entry reproduces the previous kernel's behaviour with no warning. The cost
@@ -135,6 +148,60 @@ def _decode(seed, arc_bits, sym, delta, psi, states):
         states[t] = psi[t + 1, states[t + 1]]
 
 
+@njit(parallel=True)
+def _decode_batch(seed, arc_bits, sym, lengths, delta, psi, states):
+    """The batched recurrence over ``(B, L)`` ``sym``. The caller owns every buffer.
+
+    ``psi`` and ``states`` arrive zeroed, so ψ at padded cells and states past a
+    record's end stay zero, as in phases 1 and 2.
+    """
+    batch = sym.shape[0]
+    width = sym.shape[1]
+    size = seed.shape[0]
+
+    for b in range(batch):
+        for j in range(size):
+            delta[b, 0, j] = seed[j]
+
+    for t in range(1, width + 1):
+        # THE parallel loop, over every (record, state) cell of step t. A cell
+        # reads only delta[b, t - 1] and writes only delta[b, t, j] and
+        # psi[b, t, j], so no two iterations touch the same element. Do not lift
+        # the `i` loop into it: see the module docstring.
+        for cell in prange(batch * size):
+            b = cell // size
+            j = cell % size
+            if t <= lengths[b]:
+                k = sym[b, t - 1]
+                best = np.inf
+                best_i = 0
+                # Serial, ascending, strict `<`. This is the tie-break.
+                for i in range(size):
+                    cand = delta[b, t - 1, i] + arc_bits[i, j, k]
+                    if cand < best:
+                        best = cand
+                        best_i = i
+                delta[b, t, j] = best
+                psi[b, t, j] = best_i
+            else:
+                # A padded step: δ carried, ψ not written. Never a step over PAD.
+                delta[b, t, j] = delta[b, t - 1, j]
+
+    # Per record and serial: the final argmin over column L, which the carry
+    # makes equal to column lengths[b], then the backtrace from the record's end.
+    for b in range(batch):
+        n = lengths[b]
+        best = np.inf
+        best_i = 0
+        for j in range(size):
+            if delta[b, width, j] < best:
+                best = delta[b, width, j]
+                best_i = j
+        states[b, n] = best_i
+        for t in range(n - 1, -1, -1):
+            states[b, t] = psi[b, t + 1, states[b, t + 1]]
+
+
 def _viterbi(init_state_p, transition_p, output_p, codes):
     """The recurrence itself: ``(S,)``, ``(S, S)``, ``(S, S, A)``, ``(N,)`` in.
 
@@ -171,3 +238,34 @@ def _viterbi(init_state_p, transition_p, output_p, codes):
     _decode(seed, arc_bits, sym_c, delta, psi, states)
 
     return states, float(delta[n, states[n]])
+
+
+def _viterbi_batch(init_state_p, transition_p, output_p, codes, lengths):
+    """The recurrence over a padded batch: ``codes`` ``(B, L)``, ``lengths`` ``(B,)``.
+
+    Signature and result are ``_viterbi.py``'s ``_viterbi_batch``: ``(states,
+    total_bits)``, shapes ``(B, L + 1)`` and ``(B,)``, row ``b`` bit-exact with the
+    per-record decode. The host work is phase 2's batch wrapper's, line for line.
+    """
+    init_c = np.ascontiguousarray(init_state_p, dtype=np.float64)
+    trans_c = np.ascontiguousarray(transition_p, dtype=np.float64)
+    out_c = np.ascontiguousarray(output_p, dtype=np.float64)
+    codes_c = np.ascontiguousarray(codes, dtype=np.int64)
+    lengths_c = np.ascontiguousarray(lengths, dtype=np.int64)
+
+    seed = np.ascontiguousarray(bits(init_c))
+    present, sym = np.unique(codes_c, return_inverse=True)
+    arc_bits = np.ascontiguousarray(bits(trans_c[:, :, None] * out_c[:, :, present]))
+    sym_c = np.ascontiguousarray(sym.reshape(codes_c.shape), dtype=np.int64)
+
+    batch, width = codes_c.shape
+    size = seed.shape[0]
+
+    delta = np.empty((batch, width + 1, size), dtype=np.float64)
+    psi = np.zeros((batch, width + 1, size), dtype=np.int64)
+    states = np.zeros((batch, width + 1), dtype=np.int64)
+
+    _decode_batch(seed, arc_bits, sym_c, lengths_c, delta, psi, states)
+
+    rows = np.arange(batch)
+    return states, delta[rows, width, states[rows, lengths_c]]

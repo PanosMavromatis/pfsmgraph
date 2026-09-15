@@ -1,6 +1,7 @@
 # Decode
 
-`viterbi`, the `ViterbiPath` it returns, and the `ImpossibleSequenceError` it raises. See
+`viterbi` and its batched form `viterbi_batch`, the `ViterbiPath` they return, and the
+`ImpossibleSequenceError` they raise. See
 [README.md](README.md) for the contracts, and [params.md](params.md) for the model it
 reads.
 
@@ -9,7 +10,7 @@ Every example on this page runs against the same model and record:
 ```python
 import numpy as np
 from pfsmgraph.dataseq import USER_BASE, SequenceDataset, SequenceRecord, SymbolTable
-from pfsmgraph.hmm import HMMParams, ImpossibleSequenceError, ViterbiPath, viterbi
+from pfsmgraph.hmm import HMMParams, ImpossibleSequenceError, ViterbiPath, viterbi, viterbi_batch
 
 vocab = SymbolTable(["a", "b"])
 
@@ -45,7 +46,7 @@ ViterbiPath(n_symbols=4, total_bits=5.0180, label='s1')
 
 A free function, not a method: the model is a frozen value, and the decode reads it
 without owning it. It takes **one record**, which never holds padding, so there is no mask
-to consult. A batched decode over `pad_collate` output is not part of 0.1.0.
+to consult. To decode many records padded together, see [`viterbi_batch`](#viterbi_batch).
 
 ### It minimises bits
 
@@ -147,6 +148,82 @@ The original seeded the recurrence with raw initial probabilities where it neede
 bit costs. Here the start is costed in bits like every arc, as above. So a decode here can
 differ from a path the original saved at the first position, where the choice of start
 state is decided; the rest of the recurrence is unchanged.
+
+## `viterbi_batch`
+
+```python
+viterbi_batch(params: HMMParams, records, *, backend: BackendName = "python", batch_size: int | None = None, on_impossible: str = "raise") -> list[ViterbiPath | None]
+```
+
+Many records decoded as one padded array, one result per record in record order. `records`
+is any iterable of `SequenceRecord`, a `SequenceDataset` included.
+
+```python
+>>> corpus = SequenceDataset.from_symbols([["a", "a", "b", "b"], [], ["b"], ["b", "a", "a", "b", "a"]], vocab, labels=["s1", "empty", "one", "s4"])
+>>> paths = viterbi_batch(params, corpus)
+>>> paths
+[ViterbiPath(n_symbols=4, total_bits=5.0180, label='s1'), ViterbiPath(n_symbols=0, total_bits=0.7370, label='empty'), ViterbiPath(n_symbols=1, total_bits=2.2109, label='one'), ViterbiPath(n_symbols=5, total_bits=9.3578, label='s4')]
+>>> paths[3].states
+array([1, 0, 0, 0, 1, 0])
+```
+
+### Each result is `viterbi` on that record alone
+
+Not approximately: the same states and the same `total_bits`, bit for bit, on every backend
+and at every `batch_size`. The decode performs only `+` and `<`, and padding never enters
+the arithmetic, so there is no tolerance to state.
+
+```python
+>>> all(np.array_equal(p.states, viterbi(params, r).states) and p.total_bits == viterbi(params, r).total_bits for p, r in zip(paths, corpus))
+True
+```
+
+### `batch_size` bounds memory and nothing else
+
+`None` pads every record into one call; an integer pads that many at a time. A call holds
+`δ` and `ψ` of shape `(B, L + 1, S)` for the longest record `L` in it, so a large corpus of
+long records wants a bound. Measured on a CPU, one unbounded call over 256 records at
+`S = 160` was slower than decoding them one at a time; on a GPU the batch is the fast path.
+
+```python
+>>> [p.total_bits for p in viterbi_batch(params, corpus, batch_size=1)] == [p.total_bits for p in paths]
+True
+>>> viterbi_batch(params, [])
+[]
+```
+
+### An impossible record
+
+By default it raises, naming the record's index ahead of `viterbi`'s own diagnosis. The
+first impossible record in record order is the one reported:
+
+```python
+>>> viterbi_batch(params, [record, unk_record])
+ImpossibleSequenceError: record 1: no path over these 3 symbols has finite description length under a model of 2 state(s): every state became unreachable emitting symbol 1 of the record, code 1, which reaches path position 2. No arc carrying that code leaves a reachable state with positive probability, and bits(0) is +inf, which absorbs under addition
+```
+
+`on_impossible="none"` puts `None` in that record's place and decodes the rest. That is the
+setting for decoding a corpus against candidate models, where an impossible record says
+something about the model rather than being an error:
+
+```python
+>>> viterbi_batch(params, [record, unk_record], on_impossible="none")
+[ViterbiPath(n_symbols=4, total_bits=5.0180, label='s1'), None]
+```
+
+### Errors before any work
+
+Every argument and every record's codes are checked before the first record is decoded, so
+a malformed call fails the same way whatever its records hold:
+
+```python
+>>> viterbi_batch(params, [record, SequenceRecord(other.encode(["c"]))])
+ValueError: record 1: record holds code(s) outside the model's symbol axis [0, 8): observed [8, 8]. The usual cause is a record encoded against a different vocabulary than the one output_p was sized against
+>>> viterbi_batch(params, [record], on_impossible="skip")
+ValueError: on_impossible must be one of ['raise', 'none'], got 'skip'
+>>> viterbi_batch(params, [record], backend="torch")
+ValueError: viterbi_batch has no 'torch' backend: that lifecycle phase is not implemented for it. It has ['python', 'cython', 'cpu_parallel', 'cuda']
+```
 
 ## `ViterbiPath`
 
