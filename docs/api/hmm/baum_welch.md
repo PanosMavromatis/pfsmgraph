@@ -150,7 +150,17 @@ per accepted split or merge and belongs with topology search.
 BaumWelchResult(params: HMMParams, description_lengths: tuple[float, ...], cycles: int, converged: bool, degenerate_states: tuple[int, ...])
 ```
 
-A frozen dataclass. `description_lengths[c]` is the corpus description length of the
+A frozen dataclass.
+
+| Field | Meaning |
+|---|---|
+| `params` | the trained `HMMParams`, a new value; the one passed in is untouched |
+| `description_lengths` | the corpus description length in bits after each cycle, `cycles + 1` entries, the starting model's first |
+| `cycles` | how many re-estimation cycles ran |
+| `converged` | `True` when the stopping rule fired, `False` when `max_cycles` was reached first |
+| `degenerate_states` | the states the last cycle could not re-estimate, ascending; `()` when there are none |
+
+`description_lengths[c]` is the corpus description length of the
 model after `c` cycles, so it has `cycles + 1` entries, the first being the starting
 model's:
 

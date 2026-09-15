@@ -170,8 +170,13 @@ ValueError: no public call 'forward_backward' has backends; known: ['baum_welch'
 BackendStatus(name: str, available: bool, reason: str | None = None)
 ```
 
-A frozen dataclass: the value to pass as `backend=`, whether that call would run here, and
-why not when it would not.
+A frozen dataclass.
+
+| Field | Meaning |
+|---|---|
+| `name` | the value to pass as `backend=` |
+| `available` | whether a call naming it would run here |
+| `reason` | `None` when available; otherwise the text `BackendUnavailableError` would carry |
 
 ## Extras
 
