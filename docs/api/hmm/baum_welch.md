@@ -8,6 +8,8 @@ parameters over a fixed topology. See [README.md](README.md) for the contracts,
 Every example on this page runs against the same starting model and corpus:
 
 ```python
+import sys
+
 import numpy as np
 from pfsmgraph.dataseq import USER_BASE, SequenceDataset, SequenceRecord, SymbolTable
 from pfsmgraph.hmm import BaumWelchResult, HMMParams, ImpossibleSequenceError, baum_welch
@@ -33,7 +35,7 @@ result = baum_welch(params, ds)
 ## `baum_welch`
 
 ```python
-baum_welch(params: HMMParams, records, *, backend: BackendName = "python", batch_size: int | None = None, device: str | None = None, batch_cycles: int = 10, change_bits: float = 0.1, patience: int = 3, max_cycles: int | None = None) -> BaumWelchResult
+baum_welch(params: HMMParams, records, *, backend: BackendName = "python", batch_size: int | None = None, device: str | None = None, batch_cycles: int = 10, change_bits: float = 0.1, patience: int = 3, max_cycles: int | None = None, log: TextIO | None = None) -> BaumWelchResult
 ```
 
 Alternates an E-step, the expected counts of every start, arc crossing and emission under
@@ -99,6 +101,48 @@ that want one; reaching it returns with `converged` false:
 **The rule can stop on a symmetric saddle**, since it watches only how much each batch
 moves. An exactly uniform starting model is one, and it stays uniform. Break symmetry when
 initialising.
+
+### It reports progress on a stream, if given one
+
+`log` is a text stream to report on; `None`, the default, writes nothing. Given
+`sys.stdout`, it writes a header and the starting model's bits, a row at every
+convergence check, and a line naming how the run stopped. Each line is flushed as it is
+written, so a notebook cell shows a long run while it continues:
+
+```python
+>>> logged = baum_welch(params, ds, log=sys.stdout)
+  cycle       bits         change  quiet
+      0  13.436774
+     10  11.072166  -2.364608e+00  0/3
+     20  10.438376  -6.337892e-01  0/3
+     30  10.414882  -2.349393e-02  1/3
+     40  10.407574  -7.308038e-03  2/3
+     50  10.404659  -2.915515e-03  3/3
+  converged after 50 cycles
+```
+
+`change` is the row's bits minus the previous row's, and `quiet` counts unchanged checks
+out of `patience`, so a reader sees a run approaching its stop. Bits are fixed-point, in a
+column sized from cycle 0, which is the widest it gets since the description length never
+rises; `change` is scientific, so a change far below `change_bits` still shows its size.
+A `max_cycles` stop between checks writes one last row, with no `quiet` count because no
+check was taken:
+
+```python
+>>> budget = baum_welch(params, ds, max_cycles=25, log=sys.stdout)
+  cycle       bits         change  quiet
+      0  13.436774
+     10  11.072166  -2.364608e+00  0/3
+     20  10.438376  -6.337892e-01  0/3
+     25  10.422821  -1.555547e-02
+  stopped at max_cycles after 25 cycles
+```
+
+The log only formats values already computed, so a run is identical with it and without
+it, on every backend. Nothing is kept on the result; every number printed is already in
+`description_lengths`. For a file, pass one: `log=open(path, "w")`. This is the Lush
+original's `run-converge` made observable, not its training log, which recorded one line
+per accepted split or merge and belongs with topology search.
 
 ## `BaumWelchResult`
 

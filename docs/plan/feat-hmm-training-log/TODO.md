@@ -28,5 +28,11 @@
     > **Note:** pinned by calling `_log_start` and `_log_row` directly with a 12,345,678-bit start, a change of `-1.1e-7`, `±inf` and a five-digit cycle, asserting every field ends at its header's column; the saddle run's rows are asserted line for line, unchanged counts included.
   - [x] Logging changes no result: training is bit-identical with the log on and off, on every backend
     > **Note:** `test_the_progress_log_changes_no_result_on_any_backend` compares params, `description_lengths`, cycles, `converged` and degenerate states with `==` on `python` and `torch`, converged and `max_cycles`-stopped. Torch on a CUDA device is not in that fixture's table; the log reads only host floats after the E-step, so `device=` has no path into it.
-- [ ] Decide what `save-training-log` becomes while model persistence is deferred
-- [ ] Document the log under `docs/api/hmm/`, with executed output, and update `core.md`
+- [x] Decide what `save-training-log` becomes while model persistence is deferred
+  > **Note:** `save-training-log` is persistence, not reporting. Its only caller is `save-model` (`hmm.lsh:125`), which always overwrites, so the `append` flag is unused by any caller; `load-model` reads `_training_log` back into the model (`hmm.lsh:207`), making the file part of a saved model's format.
+  > **Q:** Given that, does revision 03 port it as a small save helper, or port nothing and defer it with model persistence?
+  > **A:** Port nothing. The progress log reaches a file through `log=open(path, "w")`; the saved model's `_training_log`, holding revision 04's per-topology history, is recorded under `DEFERRED.md`'s model-persistence entry (trigger: a vocabulary outliving the process that built it).
+- [x] Document the log under `docs/api/hmm/`, with executed output, and update `core.md`
+  > **Note:** `tests/test_api_docs.py` compares after collapsing whitespace, so it checks the logged values but **not the column alignment**; alignment is guarded only by `test_the_columns_stay_aligned_from_a_huge_start_to_tiny_and_infinite_changes`. It does catch a wrong value: a copy of the page with one bit changed in the last decimal (`10.407574` to `10.407575`) reported 1 problem of 22 examples.
+  > **Note:** the examples are assignments (`>>> logged = baum_welch(..., log=sys.stdout)`) because the runner appends the `repr` of an expression's value to its stdout, and `sys.stdout` is read at call time inside the runner's `redirect_stdout`, which is what captures the log.
+  > **Done:** `docs/api/hmm/baum_welch.md` gains `log` in the signature and a subsection with the converged and `max_cycles` logs pasted from the run; `core.md`'s `hmm` paragraph names `log=` and why it is not the Lush training log.

@@ -38,7 +38,11 @@ single cycle whenever a state is occupied only at the last position; the functio
 row maximises and which leaves the likelihood bit-identical to the original's zero row.
 Beside it is `baum_welch(params, records, *, backend="python", batch_size=None, ...)`, the EM loop, public
 since 2026-09-14 (the private `_em` until `feat/hmm-torch-backend`), whose `backend=` selects
-the E-step and whose result is `BaumWelchResult`. Each backend row names a **batched** kernel,
+the E-step and whose result is `BaumWelchResult`. **Its `log=` takes a text stream**
+(`feat/hmm-training-log`), writing a header, a row per convergence check and a stop line,
+flushed per line; it is `run-converge` made observable, not the Lush training log, which is
+per-topology history for revision 04, and whose `save-training-log` is model persistence
+(`DEFERRED.md`). Each backend row names a **batched** kernel,
 `_e_step_batch`, fed `pad_collate`'s padded `(B, L)` codes `batch_size` records at a time
 (`feat/hmm-batched-training`); **it returns counts per record, never summed**, because
 `(c₀ + c₁) + c₂` differs from `c₀ + (c₁ + c₂)` in about a fifth of random triples, and the
