@@ -1,6 +1,6 @@
 # feat/hmm-forward-phases
 
-**Status**: active
+**Status**: merged — PR #38 — 2026-09-15
 **Created**: 2026-09-15
 **Subgoal**: Carry the forward recurrence through ADR 0002 phases 2 through 4 (revision 03-hmm-v0.2.0)
 
