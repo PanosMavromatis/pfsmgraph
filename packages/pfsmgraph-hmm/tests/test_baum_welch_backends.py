@@ -236,10 +236,10 @@ def _cuda_for_torch():
 #: are CPU-only. The phases also meet the far tighter bit-exact bar of
 #: `test_forward_backward_backends.py`; they run here too so the EM-trajectory and
 #: subnormal-arc cases, which only this module constructs, reach them.
-KERNEL_TARGETS = [("python", None), ("cython", None), ("torch", None), ("torch", "cuda")]
+KERNEL_TARGETS = [("python", None), ("cython", None), ("cpu_parallel", None), ("torch", None), ("torch", "cuda")]
 
 
-@pytest.fixture(scope="module", params=KERNEL_TARGETS, ids=["python", "cython", "torch", "torch-cuda"])
+@pytest.fixture(scope="module", params=KERNEL_TARGETS, ids=["python", "cython", "cpu_parallel", "torch", "torch-cuda"])
 def target(request):
     name, device = request.param
     status = {s.name: s for s in backends("baum_welch")}[name]

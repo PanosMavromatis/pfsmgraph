@@ -174,28 +174,31 @@ valid. Any row maximises the objective for such a state, so no information is lo
 
 ## Backends
 
-`baum_welch` has three backends, which differ in how the E-step is computed; the M-step and
+`baum_welch` has four backends, which differ in how the E-step is computed; the M-step and
 the stopping rule are shared.
 
 | Name | E-step | Needs |
 |---|---|---|
 | `"python"` | explicit forward and backward passes, numpy, the reference | nothing |
 | `"cython"` | the same passes, compiled; **bit-identical** to `"python"` | a platform wheel, or a source build |
+| `"cpu_parallel"` | the same passes in Numba, parallel over each timestep's (record, state) cells; **bit-identical** to `"python"` | the `cpu-parallel` extra |
 | `"torch"` | the forward pass only; the counts are reverse-mode gradients | the `torch` extra |
 
-`"cython"` is a lifecycle phase of the reference ([ADR 0016](../../design/adr/0016-numba-cpu-parallel-phase.md)):
-it performs the same sums in the same order with no fused multiply-add
+`"cython"` and `"cpu_parallel"` are lifecycle phases of the reference ([ADR 0016](../../design/adr/0016-numba-cpu-parallel-phase.md)):
+they perform the same sums in the same order with no fused multiply-add
 ([ADR 0020](../../design/adr/0020-scaled-probability-domain-forward-backward.md)), so a
-training run on it is the reference's run, to the bit, on the same machine:
+training run on either is the reference's run, to the bit, on the same machine, and on
+`"cpu_parallel"` at any thread count:
 
 ```python
->>> compiled = baum_welch(params, ds, backend="cython")
->>> compiled.description_lengths == result.description_lengths
-True
->>> all(bool(np.array_equal(a, b)) for a, b in zip(
-...     (compiled.params.init_state_p, compiled.params.transition_p, compiled.params.output_p),
-...     (result.params.init_state_p, result.params.transition_p, result.params.output_p)))
-True
+>>> for name in ("cython", "cpu_parallel"):
+...     compiled = baum_welch(params, ds, backend=name)
+...     print(name, compiled.description_lengths == result.description_lengths and all(
+...         bool(np.array_equal(a, b)) for a, b in zip(
+...             (compiled.params.init_state_p, compiled.params.transition_p, compiled.params.output_p),
+...             (result.params.init_state_p, result.params.transition_p, result.params.output_p))))
+cython True
+cpu_parallel True
 ```
 
 `torch` derives the counts rather than writing them out, which is why it and the reference
@@ -223,12 +226,12 @@ the CPU unless `device=` names a torch device such as `"cuda:0"`, which is probe
 training starts and never falls back; nothing picks a device for you. Only `torch` takes a
 device other than `"cpu"`, and the tolerance above holds there too.
 
-The later lifecycle phases are not written for training yet, so `"cpu_parallel"` and
-`"cuda"` are not `baum_welch` backends:
+The last lifecycle phase is not written for training yet, so `"cuda"` is not a
+`baum_welch` backend:
 
 ```python
->>> baum_welch(params, ds, backend="cpu_parallel")
-ValueError: baum_welch has no 'cpu_parallel' backend: that lifecycle phase is not implemented for it. It has ['python', 'cython', 'torch']
+>>> baum_welch(params, ds, backend="cuda")
+ValueError: baum_welch has no 'cuda' backend: that lifecycle phase is not implemented for it. It has ['python', 'cython', 'cpu_parallel', 'torch']
 ```
 
 ## Errors

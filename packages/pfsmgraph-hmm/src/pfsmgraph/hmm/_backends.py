@@ -127,6 +127,13 @@ _TABLE: Final[dict[str, tuple[_Row, ...]]] = {
             "_forward_backward",
             needs="compiled extension",
         ),
+        _Row(
+            "cpu_parallel",
+            "pfsmgraph.hmm._forward_backward_cpu_parallel",
+            "_forward_backward",
+            needs="numba",
+            extra="cpu-parallel",
+        ),
     ),
     # Keyed by the public call (ADR 0021 section 4), and its rows are E-steps,
     # not forward-backward kernels: torch derives the counts as gradients and
@@ -140,6 +147,13 @@ _TABLE: Final[dict[str, tuple[_Row, ...]]] = {
             "pfsmgraph.hmm._forward_backward_cython",
             "_e_step_batch",
             needs="compiled extension",
+        ),
+        _Row(
+            "cpu_parallel",
+            "pfsmgraph.hmm._forward_backward_cpu_parallel",
+            "_e_step_batch",
+            needs="numba",
+            extra="cpu-parallel",
         ),
         _Row("torch", "pfsmgraph.hmm._baum_welch_torch", "_e_step_batch", needs="torch", extra="torch"),
     ),

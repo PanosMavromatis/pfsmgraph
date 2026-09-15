@@ -22,6 +22,10 @@ The cases are the formalization's (`docs/design/algorithms/forward_backward/`):
 - **TC-21**, an input on which a fused multiply-add rounds differently, found at test
   time, so a contracting build fails here rather than passing every other case;
 - **TC-23**, no result depends on the memory layout of the parameters.
+
+Phase 3 adds one section of its own at the end: its kernels at one thread and at the
+most this process has, which is the check that sees a race or a sum numba turned into a
+parallel reduction.
 """
 
 from __future__ import annotations
@@ -290,3 +294,104 @@ def test_no_phase_depends_on_the_memory_layout_of_the_parameters(recurrences, e_
         for name, ours, theirs in zip(("init", "transition", "emission"), ours_counts, their_counts):
             _assert_same_bytes(ours, theirs, f"S={size} fortran {name} counts")
         _assert_same_bytes(ours_bits, their_bits, f"S={size} fortran bits")
+
+
+# --- phase 3 only: the CPU-parallel kernels under real threads ----------------------
+#
+# A race, or a sum numba turned into a parallel reduction, is a property of the
+# interleaving, so these run the cpu_parallel kernels at one thread and at the most this
+# process has, and require one answer, the reference's. The shared cases above run at
+# whatever thread count the session has, which cannot tell one thread from many.
+
+
+@pytest.fixture
+def numba_threads():
+    """`(max_threads, set_num_threads)`, restoring the thread count afterwards."""
+    status = {s.name: s for s in _status("baum_welch")}["cpu_parallel"]
+    if not status.available:
+        pytest.skip(f"backend 'cpu_parallel' unavailable: {status.reason}")
+    numba = pytest.importorskip("numba")
+    original = numba.get_num_threads()
+    yield numba.config.NUMBA_NUM_THREADS, numba.set_num_threads
+    numba.set_num_threads(original)
+
+
+def _at_each_thread_count(numba_threads, run):
+    max_threads, set_num_threads = numba_threads
+    if max_threads < 2:
+        pytest.skip(f"needs >= 2 threads to compare; this process has {max_threads}")
+    results = {}
+    for threads in (1, max_threads):
+        set_num_threads(threads)
+        results[threads] = run()
+    return results[1], results[max_threads]
+
+
+def test_the_cpu_parallel_kernels_are_invariant_to_thread_count(numba_threads):
+    """One answer at every thread count, and it is the reference's; two would be a race."""
+    recurrences = _resolve("forward_backward", "cpu_parallel")
+    e_step = _resolve("baum_welch", "cpu_parallel")
+    rng = np.random.default_rng(SEED + 6)
+    cases = []
+    for _ in range(40):
+        size = int(rng.integers(1, 24))
+        init, transition, output = _random_model(rng, size, 5, 0.3)
+        codes = rng.integers(USER_BASE, USER_BASE + 5, int(rng.integers(0, 150)))
+        lengths = [int(n) for n in rng.integers(0, 150, int(rng.integers(1, 12)))] + [0, 1]
+        batch = pad_collate(_ragged(rng, 5, lengths))
+        cases.append((init, transition, output, codes, batch["codes"], batch["lengths"]))
+
+    def run():
+        return [
+            (recurrences(i, t, o, c), e_step(i, t, o, bc, bl)) for i, t, o, c, bc, bl in cases
+        ]
+
+    one, many = _at_each_thread_count(numba_threads, run)
+    for index, ((r1, (c1, b1)), (rn, (cn, bn)), case) in enumerate(zip(one, many, cases)):
+        init, transition, output, codes, batch_codes, batch_lengths = case
+        reference_recurrences = _reference("forward_backward")(init, transition, output, codes)
+        reference_counts, reference_bits = _reference("baum_welch")(
+            init, transition, output, batch_codes, batch_lengths
+        )
+        for name, a, b, want in zip(("alpha", "beta", "scale"), r1, rn, reference_recurrences):
+            _assert_same_bytes(a, b, f"case {index} {name}, 1 thread against many")
+            _assert_same_bytes(b, want, f"case {index} {name}, many threads against python")
+        for name, a, b, want in zip(("init", "transition", "emission"), c1, cn, reference_counts):
+            _assert_same_bytes(a, b, f"case {index} {name} counts, 1 thread against many")
+            _assert_same_bytes(b, want, f"case {index} {name} counts, many threads against python")
+        _assert_same_bytes(b1, bn, f"case {index} bits, 1 thread against many")
+        _assert_same_bytes(bn, reference_bits, f"case {index} bits, many threads against python")
+
+
+@pytest.mark.parametrize("length", [1, 7, 40])
+def test_the_cpu_parallel_kernels_compute_a_uniform_model_exactly_at_every_thread_count(
+    length, numba_threads
+):
+    """A sum has no tie to break, so this is the constructed case in its place.
+
+    Every probability is 1/4 and every intermediate dyadic, so nothing rounds and the
+    answer is known in closed form: Q = 1/4 at every step, 2 bits per symbol, a quarter of
+    each count. Any thread count must produce exactly that, record by record.
+    """
+    e_step = _resolve("baum_welch", "cpu_parallel")
+    size = n_user = 4
+    init = np.full(size, 0.25)
+    transition = np.full((size, size), 0.25)
+    output = np.zeros((size, size, USER_BASE + n_user))
+    output[:, :, USER_BASE:] = 0.25
+    rng = np.random.default_rng(SEED + 7)
+    records = _ragged(rng, n_user, [length, 0, 1, length])
+    batch = pad_collate(records)
+
+    one, many = _at_each_thread_count(
+        numba_threads, lambda: e_step(init, transition, output, batch["codes"], batch["lengths"])
+    )
+    for (counts, bits) in (one, many):
+        for b, record in enumerate(records):
+            n = record.length
+            np.testing.assert_array_equal(bits[b], 2.0 * n)
+            np.testing.assert_array_equal(counts[0][b], 0.25 if n else 0.0)
+            np.testing.assert_array_equal(counts[1][b], n / 16)
+            for symbol in range(n_user):
+                expected = np.count_nonzero(record.codes == USER_BASE + symbol) / 16
+                np.testing.assert_array_equal(counts[2][b][:, :, USER_BASE + symbol], expected)

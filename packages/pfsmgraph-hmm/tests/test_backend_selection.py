@@ -117,13 +117,13 @@ def test_an_unimplemented_phase_is_a_valueerror_naming_what_exists():
     """ADR 0003's "contributes no parameter", seen from the API: the same everywhere.
 
     Reached through `_resolve` on the private algorithm, whose next missing phase is
-    `cpu_parallel` since phase 2 landed (2026-09-15); `baum_welch` goes through the
-    same function, and `docs/api/hmm/baum_welch.md` shows it refusing the same phase.
+    `cuda` since phase 3 landed (2026-09-15); `baum_welch` goes through the same
+    function, and `docs/api/hmm/baum_welch.md` shows it refusing the same phase.
     """
     with pytest.raises(ValueError) as excinfo:
-        hmm_backends._resolve("forward_backward", "cpu_parallel")
-    assert "no 'cpu_parallel' backend" in str(excinfo.value)
-    assert "['python', 'cython']" in str(excinfo.value)
+        hmm_backends._resolve("forward_backward", "cuda")
+    assert "no 'cuda' backend" in str(excinfo.value)
+    assert "['python', 'cython', 'cpu_parallel']" in str(excinfo.value)
     assert not isinstance(excinfo.value, BackendUnavailableError)
 
 

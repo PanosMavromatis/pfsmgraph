@@ -50,6 +50,10 @@ py.install_sources(
     # probability domain (ADR 0020). No apostrophes in these comments: the
     # source test reads entries as single-quoted strings.
     'src/pfsmgraph/hmm/_forward_backward.py',
+    # ADR 0002 phase 3 of forward-backward. Pure Python compiled by numba at
+    # runtime, listed for the reason phase 3 of the decode is: unlisted, it is
+    # invisible to the editable finder and absent from the wheel.
+    'src/pfsmgraph/hmm/_forward_backward_cpu_parallel.py',
     'src/pfsmgraph/hmm/_numeric.py',
     'src/pfsmgraph/hmm/_params.py',
     'src/pfsmgraph/hmm/_viterbi.py',
