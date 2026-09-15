@@ -80,12 +80,23 @@ oracles = [
 # Registered 2026-09-14 with phase 1 alone, and deliberately before any
 # FORMALIZATION.md: every later backend, the M-step and the torch comparison are
 # checked against this reference, so it is gated from its first commit. The
-# formalization arrives with revision 03's phases 2-4 subgoal. Its numeric
-# contract, including the evaluation order a sum reduction makes load-bearing,
-# is already stated in ADR 0020, which a phase skill must read.
+# formalization arrived 2026-09-15 on feat/hmm-forward-phases, recovered from
+# the kernel. Its numeric contract, including the evaluation order a sum
+# reduction makes load-bearing, is stated in ADR 0020, which a phase skill must read.
 #
-# No `oracles` key yet. The tracked models' `_total_dl` values are candidates,
-# but they were scored with quantized parameters, so they are not a direct check
-# of this kernel (docs/plan: feat-hmm-forward-backward, goal 2).
+# The oracles are the original's own training logs: each last row's `data-dl`,
+# printed by update-data-dl at the model's stored `d`. That value is this kernel's
+# forward pass over quantized parameters, so it checks the forward recurrence and
+# the description length, and never beta or the counts. Not an equality check:
+# the log prints six significant figures and the parameters were saved to four
+# decimals, so it holds to 0.02 bits (worst measured 0.009, m001_0001_001 at
+# d = 29), while the unrounded value misses by more than a bit. The comparison is
+# FORMALIZATION.md's TC-01, test_baum_welch.py's
+# test_the_data_description_length_is_the_originals_logged_value.
 [algorithms.forward_backward]
 package = "hmm"
+oracles = [
+  ".scratch/hmm-lush/Training/set02a/set02a_200/m001_0001_001.hmm/_training_log",
+  ".scratch/hmm-lush/Training/set02a/set02a_200/m001_0005_005.hmm/_training_log",
+  ".scratch/hmm-lush/Training/set02a/set02a_200/m008_0001_008.hmm/_training_log",
+]

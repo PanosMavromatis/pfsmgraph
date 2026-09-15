@@ -44,8 +44,11 @@ once**, so kernel changes between goals should be deliberate.
   - [x] Its `Parallel decomposition` section states the chosen axis rather than "undetermined", since `cpu-parallelization` routes an open decomposition back to the document
   - [x] Reviewed and approved; `/dp-compile:phase-check forward_backward` reports it `fresh`, target `cython`
     > **Note:** Approved 2026-09-15. `phase-check` then read the recorded hash `54735d9b…` equal to the kernel's, all 12 sections filled, `python` 129/129 passed, target `cython`.
-- [ ] Implement phase 2 (Cython) and register it, held bit-exact to the numpy reference
-  - [ ] `/dp-compile:next-phase forward_backward` passes the step-3 oracle gate. Decide whether `[algorithms.forward_backward]` should declare an `oracles` entry, since `tests/test_hmmlearn_oracle.py` exercises the kernel but the manifest names none
+- [~] Implement phase 2 (Cython) and register it, held bit-exact to the numpy reference
+  > **Q:** Should `[algorithms.forward_backward]` declare an `oracles` entry before phase 2?
+  > **A:** Yes: the three tracked `_training_log` files, whose `data-dl` checks the forward pass and DL to 0.02 bits through quantised parameters (TC-01). The comment calling them "not a direct check" is corrected.
+  - [x] `/dp-compile:next-phase forward_backward` passes the step-3 oracle gate. Decide whether `[algorithms.forward_backward]` should declare an `oracles` entry, since `tests/test_hmmlearn_oracle.py` exercises the kernel but the manifest names none
+    > **Note:** Passed 2026-09-15. All three declared `_training_log` files are read by `test_the_data_description_length_is_the_originals_logged_value` (3/3 passed). `hmmlearn` was not declared: it is a library, and the manifest's `oracles` takes file paths.
   - [ ] Routes to `dp-compile:cython-translation`: `_forward_backward_cython.pyx` with a `# dp-compile: derived-from` header, listed in `meson.build`, rows in `_backends.py` in ADR 0021's `_Row` shape (not the skill's `Backend` template)
   - [ ] `/dp-compile:phase-check forward_backward` reports `cython` fresh, target `cpu_parallel`; committed through `/workflow-claude:smart-commit`, with the gate's build and test green
 - [ ] Implement phase 3 (Numba CPU-parallel) on the decomposition goal 1 chose, held bit-exact
