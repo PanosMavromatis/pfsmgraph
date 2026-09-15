@@ -64,6 +64,12 @@ an extra or plugging in a GPU never changes what an unqualified call runs.
 ViterbiPath(n_symbols=4, total_bits=5.0180, label='s1')
 ```
 
+`BackendName` in the signature is `Literal["python", "cython", "cpu_parallel", "cuda",
+"torch"]`, a type for annotations rather than a name `pfsmgraph.hmm` exports: pass a plain
+string. It lists every backend any call has, so a type checker accepts
+`viterbi(..., backend="torch")`, which raises `ValueError` when run; `backends(name)` lists
+the backends one call has.
+
 **Every decode backend computes the same function.** All four take their logarithms on the host with
 numpy and then only add and compare, so on one machine they return identical states and
 identical `total_bits`, not merely close ones:
