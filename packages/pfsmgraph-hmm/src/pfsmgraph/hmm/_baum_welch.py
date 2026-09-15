@@ -287,8 +287,10 @@ def baum_welch(
         per record and are summed in record order, so the result is bit-identical
         at every batch size on ``"python"``.
     :param device: where the E-step runs, as a torch device name such as
-        ``"cuda:0"``; ``None`` is the CPU. Only ``"torch"`` runs anywhere else,
-        and the device is probed before any work: nothing falls back to the CPU.
+        ``"cuda:0"``; ``None`` is the backend's own place. Only ``"torch"`` takes a
+        device other than the CPU, and it is probed before any work: nothing falls
+        back to the CPU. ``"cuda"`` runs on numba-cuda's current device, which
+        ``device`` does not select, so it takes only ``None``.
     :param log: a text stream to report progress on, such as ``sys.stdout``;
         ``None``, the default, writes nothing. A header and cycle 0's bits, then
         a row at each convergence check -- cycle, bits, change since the previous
@@ -298,7 +300,8 @@ def baum_welch(
         formatted, so the result is the same with or without it.
     :raises ValueError: if ``backend`` is not a backend name, or names one
         ``baum_welch`` does not have; if ``device`` names anything but the CPU
-        on a backend other than ``"torch"``, or is not a torch device name.
+        on a CPU backend, anything at all on ``"cuda"``, or is not a torch device
+        name on ``"torch"``.
     :raises BackendUnavailableError: if ``backend`` cannot run in this
         environment, or ``device`` cannot hold a tensor. Nothing falls back.
     :raises TypeError: if ``device`` is not a string or ``None``.
@@ -325,6 +328,12 @@ def baum_welch(
         from ._baum_welch_torch import _device
 
         device = _device(device)
+    elif backend == "cuda":
+        if device is not None:
+            raise ValueError(
+                f"backend 'cuda' runs on numba-cuda's current device; device={device!r} "
+                f"names a torch device and applies only to backend='torch'"
+            )
     elif device not in (None, "cpu"):
         raise ValueError(
             f"backend {backend!r} runs on the CPU only; device={device!r} needs backend='torch'"

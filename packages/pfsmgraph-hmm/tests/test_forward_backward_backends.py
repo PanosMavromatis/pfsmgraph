@@ -23,9 +23,11 @@ The cases are the formalization's (`docs/design/algorithms/forward_backward/`):
   time, so a contracting build fails here rather than passing every other case;
 - **TC-23**, no result depends on the memory layout of the parameters.
 
-Phase 3 adds one section of its own at the end: its kernels at one thread and at the
+Phases 3 and 4 add a section each at the end: phase 3's kernels at one thread and at the
 most this process has, which is the check that sees a race or a sum numba turned into a
-parallel reduction.
+parallel reduction, and phase 4's at several block sizes, which is the check that sees a
+launch geometry wrong past the first block. TC-21 above is where phase 4's contraction
+is seen: NVVM fuses multiply-add by default, and only its kernel structure prevents it.
 """
 
 from __future__ import annotations
@@ -395,3 +397,66 @@ def test_the_cpu_parallel_kernels_compute_a_uniform_model_exactly_at_every_threa
             for symbol in range(n_user):
                 expected = np.count_nonzero(record.codes == USER_BASE + symbol) / 16
                 np.testing.assert_array_equal(counts[2][b][:, :, USER_BASE + symbol], expected)
+
+
+# --- phase 4 only: the CUDA kernels' launch geometry -------------------------------
+#
+# Only this backend partitions a step's cells into blocks, so only it can be wrong about
+# them: a missing bounds check writes past an array, and a cell reading another record's
+# row still passes whenever the grid fits in one block. The module refuses to import
+# without a device, so it is reached after a skip naming the reason.
+
+
+@pytest.fixture
+def cuda_module():
+    status = {s.name: s for s in _status("baum_welch")}["cuda"]
+    if not status.available:
+        pytest.skip(f"backend 'cuda' unavailable: {status.reason}")
+    import importlib
+
+    return importlib.import_module("pfsmgraph.hmm._forward_backward_cuda")
+
+
+@pytest.mark.parametrize("threads_per_block", [1, 7, 64])
+def test_the_cuda_kernels_are_invariant_to_block_size(monkeypatch, cuda_module, threads_per_block):
+    """One answer however a step's cells are split into blocks, and it is the reference's.
+
+    One thread per block makes every cell its own block, 7 leaves a ragged last block for
+    most shapes, and 64 is the default, under which most of these grids fit in one block.
+    """
+    monkeypatch.setattr(cuda_module, "_THREADS_PER_BLOCK", threads_per_block)
+    rng = np.random.default_rng(SEED + 8)
+    for trial in range(12):
+        size = int(rng.integers(1, 13))
+        init, transition, output = _random_model(rng, size, 4, 0.3)
+        codes = rng.integers(USER_BASE, USER_BASE + 4, int(rng.integers(0, 40)))
+        _assert_recurrences_match(
+            cuda_module._forward_backward, init, transition, output, codes, f"trial {trial}"
+        )
+        lengths = [int(n) for n in rng.integers(0, 40, int(rng.integers(1, 12)))] + [0, 1]
+        batch = pad_collate(_ragged(rng, 4, lengths))
+        _assert_e_step_matches(
+            cuda_module._e_step_batch, init, transition, output, batch["codes"], batch["lengths"],
+            f"trial {trial}",
+        )
+
+
+def test_a_cuda_batch_of_empty_records_makes_no_launch(monkeypatch, cuda_module):
+    """A batch of width 0 crosses no arc, so nothing reaches the device.
+
+    Every kernel is replaced with one that cannot be indexed, so a launch would raise; the
+    result must still be the reference's, seeds included.
+    """
+    for name in ("_seed_alpha", "_forward_terms", "_forward_fold", "_scale", "_normalise",
+                 "_seed_beta", "_backward_terms", "_backward_fold", "_xi", "_add_counts"):
+        monkeypatch.setattr(cuda_module, name, None)
+    rng = np.random.default_rng(SEED + 9)
+    init, transition, output = _random_model(rng, 3, 4, 0.0)
+    _assert_recurrences_match(
+        cuda_module._forward_backward, init * (1.0 + 1e-6), transition, output,
+        np.array([], dtype=np.int64), "empty record",
+    )
+    _assert_e_step_matches(
+        cuda_module._e_step_batch, init, transition, output,
+        np.zeros((3, 0), dtype=np.int64), np.zeros(3, dtype=np.int64), "empty batch",
+    )

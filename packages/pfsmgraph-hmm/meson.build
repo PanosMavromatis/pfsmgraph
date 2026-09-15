@@ -54,6 +54,9 @@ py.install_sources(
     # runtime, listed for the reason phase 3 of the decode is: unlisted, it is
     # invisible to the editable finder and absent from the wheel.
     'src/pfsmgraph/hmm/_forward_backward_cpu_parallel.py',
+    # ADR 0002 phase 4 of forward-backward, the CUDA backend. Pure Python for the
+    # same reason as phase 3, and listed for the same reason.
+    'src/pfsmgraph/hmm/_forward_backward_cuda.py',
     'src/pfsmgraph/hmm/_numeric.py',
     'src/pfsmgraph/hmm/_params.py',
     'src/pfsmgraph/hmm/_viterbi.py',

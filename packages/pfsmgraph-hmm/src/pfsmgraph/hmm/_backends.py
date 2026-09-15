@@ -134,6 +134,7 @@ _TABLE: Final[dict[str, tuple[_Row, ...]]] = {
             needs="numba",
             extra="cpu-parallel",
         ),
+        _Row("cuda", "pfsmgraph.hmm._forward_backward_cuda", "_forward_backward", needs="CUDA device", extra="gpu"),
     ),
     # Keyed by the public call (ADR 0021 section 4), and its rows are E-steps,
     # not forward-backward kernels: torch derives the counts as gradients and
@@ -155,6 +156,7 @@ _TABLE: Final[dict[str, tuple[_Row, ...]]] = {
             needs="numba",
             extra="cpu-parallel",
         ),
+        _Row("cuda", "pfsmgraph.hmm._forward_backward_cuda", "_e_step_batch", needs="CUDA device", extra="gpu"),
         _Row("torch", "pfsmgraph.hmm._baum_welch_torch", "_e_step_batch", needs="torch", extra="torch"),
     ),
 }
