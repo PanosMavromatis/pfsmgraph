@@ -232,11 +232,14 @@ def _cuda_for_torch():
     return None if torch.cuda.is_available() else "no CUDA device for torch"
 
 
-#: Every (backend, device) a kernel runs on. The reference is CPU-only.
-KERNEL_TARGETS = [("python", None), ("torch", None), ("torch", "cuda")]
+#: Every (backend, device) a kernel runs on. The reference and its compiled phases
+#: are CPU-only. The phases also meet the far tighter bit-exact bar of
+#: `test_forward_backward_backends.py`; they run here too so the EM-trajectory and
+#: subnormal-arc cases, which only this module constructs, reach them.
+KERNEL_TARGETS = [("python", None), ("cython", None), ("torch", None), ("torch", "cuda")]
 
 
-@pytest.fixture(scope="module", params=KERNEL_TARGETS, ids=["python", "torch", "torch-cuda"])
+@pytest.fixture(scope="module", params=KERNEL_TARGETS, ids=["python", "cython", "torch", "torch-cuda"])
 def target(request):
     name, device = request.param
     status = {s.name: s for s in backends("baum_welch")}[name]

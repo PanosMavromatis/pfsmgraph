@@ -117,16 +117,30 @@ _TABLE: Final[dict[str, tuple[_Row, ...]]] = {
         ),
         _Row("cuda", "pfsmgraph.hmm._viterbi_cuda", "_viterbi_batch", needs="CUDA device", extra="gpu"),
     ),
-    # Phase 1 only. Private, so it is here for the session header and absent
-    # from _PUBLIC; baum_welch reaches it through its python row's E-step.
+    # Private, so it is here for the session header and absent from _PUBLIC;
+    # baum_welch reaches each phase through that phase's E-step row below.
     "forward_backward": (
         _Row("python", "pfsmgraph.hmm._forward_backward", "_forward_backward"),
+        _Row(
+            "cython",
+            "pfsmgraph.hmm._forward_backward_cython",
+            "_forward_backward",
+            needs="compiled extension",
+        ),
     ),
     # Keyed by the public call (ADR 0021 section 4), and its rows are E-steps,
     # not forward-backward kernels: torch derives the counts as gradients and
-    # builds no beta, so the step is the one signature both share.
+    # builds no beta, so the step is the one signature all share. The lifecycle
+    # phases come first and are bit-exact with python; torch, last, is held to a
+    # tolerance.
     "baum_welch": (
         _Row("python", "pfsmgraph.hmm._forward_backward", "_e_step_batch"),
+        _Row(
+            "cython",
+            "pfsmgraph.hmm._forward_backward_cython",
+            "_e_step_batch",
+            needs="compiled extension",
+        ),
         _Row("torch", "pfsmgraph.hmm._baum_welch_torch", "_e_step_batch", needs="torch", extra="torch"),
     ),
 }

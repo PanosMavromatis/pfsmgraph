@@ -49,7 +49,13 @@ once**, so kernel changes between goals should be deliberate.
   > **A:** Yes: the three tracked `_training_log` files, whose `data-dl` checks the forward pass and DL to 0.02 bits through quantised parameters (TC-01). The comment calling them "not a direct check" is corrected.
   - [x] `/dp-compile:next-phase forward_backward` passes the step-3 oracle gate. Decide whether `[algorithms.forward_backward]` should declare an `oracles` entry, since `tests/test_hmmlearn_oracle.py` exercises the kernel but the manifest names none
     > **Note:** Passed 2026-09-15. All three declared `_training_log` files are read by `test_the_data_description_length_is_the_originals_logged_value` (3/3 passed). `hmmlearn` was not declared: it is a library, and the manifest's `oracles` takes file paths.
-  - [ ] Routes to `dp-compile:cython-translation`: `_forward_backward_cython.pyx` with a `# dp-compile: derived-from` header, listed in `meson.build`, rows in `_backends.py` in ADR 0021's `_Row` shape (not the skill's `Backend` template)
+  > **Q:** Build the new extension with `-ffp-contract=off` now (ADR 0020 Open), rather than relying on baseline x86-64 having no FMA?
+  > **A:** Yes, via `cc.get_supported_arguments`, on `_forward_backward_cython` only; TC-21 still gets a constructed test.
+  > **Q:** Where do phase 2's equivalence tests go?
+  > **A:** A new bit-exact module, `tests/test_forward_backward_backends.py` (TC-20 to TC-23), plus `("cython", None)` in `test_baum_welch_backends.py`'s `KERNEL_TARGETS`.
+  - [x] Routes to `dp-compile:cython-translation`: `_forward_backward_cython.pyx` with a `# dp-compile: derived-from` header, listed in `meson.build`, rows in `_backends.py` in ADR 0021's `_Row` shape (not the skill's `Backend` template)
+    > **Done:** phase 2 `cython` — `packages/pfsmgraph-hmm/src/pfsmgraph/hmm/_forward_backward_cython.pyx`, derived-from `packages/pfsmgraph-hmm/src/pfsmgraph/hmm/_forward_backward.py` `sha256:54735d9bfb7261d95506a64bc64ec67cd4b52daa4b17eca393829825fa9343d2`, suite green at 1178.
+    > **Note:** Mutation-tested 2026-09-15. A `-march=native -ffp-contract=fast` build failed 36 bit-exact tests (TC-21 among them) and a reversed forward sum failed 29, while all 64 `cython` cases in the tolerance-based `test_baum_welch_backends.py` passed both: only `tobytes()` comparison sees ADR 0020's order. `cdivision` removed an unreachable zero-check that reacquired the GIL; 0 of 45 kernel lines touch the C-API.
   - [ ] `/dp-compile:phase-check forward_backward` reports `cython` fresh, target `cpu_parallel`; committed through `/workflow-claude:smart-commit`, with the gate's build and test green
 - [ ] Implement phase 3 (Numba CPU-parallel) on the decomposition goal 1 chose, held bit-exact
   - [ ] `/dp-compile:next-phase forward_backward` routes to `dp-compile:cpu-parallelization`: `_forward_backward_cpu_parallel.py` derived from the `.pyx`, `numba` optional under the `cpu-parallel` extra
