@@ -24,3 +24,5 @@ Settle how `pfsmgraph.hmm` stores model parameters before state split and merge 
 - An edge list would reopen eight `dp-compile`-gated kernel files and both specifications; the dense options touch none
 
 ## Notes
+
+**2026-09-16 — what a move costs.** Building a candidate (new arrays, `HMMParams`, the `state_p` solve) is 0.17 ms at S=5 and 1.2 ms at S=50. Scoring it (`_suggest_d` plus a `baum_welch` re-convergence) takes 6.5–21 s, so building is **about 0.005% of a move** on `python`, and still negligible on Cython, where one EM cycle costs 32–102 builds. Reallocate and over-allocate-and-slice therefore can't be told apart on cost. The numpy forward pass is nearly flat in S (35 ms at S=5, 79 ms at S=50), so on the default backend an edge list attacks the cheaper part; on Cython the per-arc work starts to count at large S (speedup over numpy falls to 1.8× at S=150), which leaves the edge list as a question of kernel speed, not storage. Also found: `_suggest_d` always runs the numpy forward pass, about 0.8 s per call at S=5 whatever the training backend. Evidence: `.scratch/hmm-lush/measurements/param_representation_move_cost.py`.
