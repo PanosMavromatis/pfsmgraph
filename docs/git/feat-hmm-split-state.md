@@ -54,3 +54,5 @@ Port `split-state` (`hmm-param.lsh:142-215`), the first of revision 04's two top
 - the same seed gives byte-identical arrays.
 
 The tests follow.
+
+**2026-09-16 — the invariant tests.** `tests/test_topology.py` has 528 tests. It splits every state of three random models and the three fixtures, and checks each array, the model properties, the likelihood (unchanged without the seed, and bounded with it), and the argument domain. Five mutants were caught, including the `:172` defect. The suite is now at 2041 tests.
