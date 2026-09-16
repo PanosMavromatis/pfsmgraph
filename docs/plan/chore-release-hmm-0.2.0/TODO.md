@@ -472,7 +472,24 @@
     > table quotes `_backends.py`'s actual message string, so editing the prose without
     > editing the module would silently desync the document from the code it documents. A
     > remedy that happens to be correct is not a reason to treat the text as free to edit.
-- [~] Verify what a consumer installs
+- [x] Verify what a consumer installs
+  > **Done:** a consumer's install was exercised three ways and all three hold, and the goal
+  > found a defect in the artifact it was verifying, which is the outcome that justifies
+  > having it. The shipping wheel carries **all four release files** — the README as long
+  > description, `dist-info/licenses/LICENSE` at 1077 bytes with a `License-File:` field,
+  > the `Typing :: Typed` classifier, and `py.typed` inside the package — plus both
+  > extensions, no namespace `__init__.py`, and all ten classifiers including the restored
+  > `Programming Language :: Cython`. It resolves `pfsmgraph-dataseq` from PyPI, reports
+  > `cython ✓` on all three public calls, and runs its own README's examples. Its kernels are
+  > **bit-exact** with the numpy reference: 748 passed / 523 skipped — the same figure CI's
+  > Linux wheels produced, and produced a third time against the final artifact — plus an
+  > explicit `tobytes()` comparison over a 210-cycle EM run with `max|diff| = 0.0`. The sdist
+  > builds to the same result in 15.7s, and `-Dcompiled=false` yields a working pure install
+  > that reports `cython ✗` accurately.
+  > **Note:** the only thing not verified here is the other three platforms, which this host
+  > cannot build. CI checked those on its own hardware and reached the same 748, which is
+  > stronger evidence about `-ffp-contract=off` than either run alone: two independent
+  > toolchains, one manylinux container and one host compiler, agreeing bit for bit.
   > **Reopened 2026-09-16, same day:** the goal's own verification found a defect in the
   > artifact it was verifying, so the artifacts that were checked are no longer the ones that
   > will ship. The `.so` files, `py.typed`, the namespace invariant and the bit-exactness
