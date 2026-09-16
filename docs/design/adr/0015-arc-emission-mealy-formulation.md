@@ -170,12 +170,6 @@ Esposito before an MDL score is published on its authority.
 
 ## Open
 
-- **Dense array versus edge list.** This record fixes the semantics and not the storage.
-  A dense `(S, S, A)` tensor is what the imported code uses and is mostly empty for any
-  sparse topology; an edge-list representation is the natural fit for a model whose shape
-  changes under search. Left to revision `04-hmm-v0.3.0`, whose resize subgoal is where
-  the cost is actually paid — noting that this ADR adds a third option to the two that
-  subgoal currently names, and it is the option in which resizing is not the problem.
 - **Whether the reduced case is public.** An arc-emission model whose emission depends
   only on the destination state is a state-emission model. That reduction is wanted as a
   test oracle in revision 03; whether it is also exposed as a constructor for callers who
@@ -213,5 +207,34 @@ Esposito before an MDL score is published on its authority.
 
   The oracle therefore cannot see `_m_step`'s per-arc emission division or `_em`'s
   zero-count restore; exact enumeration in `test_baum_welch.py` still covers both. None
-  of this settles the second **Open** item: the reduction is still test-only, in
+  of this settles the **Open** item on whether the reduced case is public: the reduction is still test-only, in
   `packages/pfsmgraph-hmm/tests/test_hmmlearn_oracle.py`.
+
+- **Dense array versus edge list** (2026-09-16, `exp/hmm-param-representation`). **Dense
+  storage stays; the edge list's saving belongs to kernel iteration, not to storage, and is
+  deferred.** Measured, and re-runnable from
+  `.scratch/hmm-lush/measurements/param_representation_move_cost.py`:
+
+  **Storage is not where a topology move costs.** Building a split- or merge-shaped
+  candidate -- new arrays, `HMMParams` validation and freezing, the stationary solve -- is
+  0.17 ms at `S = 5` and 1.2 ms at `S = 50` on `set11a_dInt`, against 6.5-21 s to score it
+  with `_suggest_d` and a `baum_welch` re-convergence: about 0.005% of the move. On Cython
+  one EM cycle still costs 32-102 builds. No layout can recover more than that fraction.
+
+  **The mostly-empty tensor this record's Negative section warns of is real, and the kernels
+  are where it would pay.** A forward step on the tracked trained models touches only 8.7%
+  (`m001_0005_005`) and 12.1% (`m008_0001_008`) of arcs, against 32% and 50% of transitions
+  non-zero, because an arc is live only if it can emit that step's symbol. That sparsity
+  belongs to the per-symbol arc table [ADR 0020](0020-scaled-probability-domain-forward-backward.md)
+  already has the host build, not to parameter storage, so a kernel could iterate host-built
+  live-arc lists over dense `HMMParams`. Skipping exact zeros in ascending order was measured
+  bit-identical to the dense fold over 1268 steps on both models, so ADR 0020's ordering
+  contract would stand. Deferred because the payoff is unmeasured where it matters: per-arc
+  work dominates scoring only on Cython at large `S` (the speedup over numpy falls to 1.8x at
+  `S = 150`), and live-arc density is measured only at `S = 5` and `8`. See
+  `docs/plan/DEFERRED.md`, `## Trigger: a trained model large enough for per-arc work to
+  dominate`.
+
+  This bears on, but does not settle, the **Open** item on whether ADR 0002's phase 2 suits
+  this family: a live-arc list is the scatter/gather-over-arcs shape it describes, and it
+  suits Cython as an index list rather than as a loop over a dense matrix.
