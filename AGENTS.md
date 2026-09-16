@@ -11,8 +11,14 @@ Shared project knowledge for any coding agent working in this repository.
 
 **What `dataseq` now contains.** Six modules under `packages/pfsmgraph-dataseq/src/pfsmgraph/dataseq/` (the container landed 2026-08-31, the encoder API 2026-09-01) and 74 tests — the first tests in this repository, and 74 of the suite's 1513 today; 1387 are `hmm`'s and the remaining 52 are the repo-root backend-matrix, API-docs, release-runbook and meson-source tests. `_reserved.py` hard-codes the ADR 0011 block as module constants, with no class or parameter that could relocate it; `_vocabulary.py` holds the `Vocabulary` protocol and `SymbolTable`, a frozen first-appearance-ordered implementation that encodes strictly and decodes *totally*, reserved codes included; `_record.py` and `_dataset.py` are the ragged container, whose records carry true lengths and never padding; `_collate.py` is `pad_collate`, where padding is introduced and always returned with its mask. The container imports neither torch nor pandas — verified in a subprocess — and its one runtime dependency is `numpy`.
 
-**What `hmm` now contains.** Twelve Python modules, two Cython kernels, and 1387 tests. The
-twelfth is `_mdl.py`, the minimum description length criterion revision 04 scores topology
+**What `hmm` now contains.** Thirteen Python modules, two Cython kernels, and 1387 tests. The
+thirteenth is `_topology.py`, opened 2026-09-16 on `feat/hmm-split-state` with
+`_split_state(params, state, *, rng)`: the candidate-building half of a topology move, private and
+not a transliteration, since [ADR 0022](../design/adr/0022-state-split-initialisation.md) fixes the
+Lush `:172` initial-distribution defect and replaces the original's outbound emission redraw with a
+per-predecessor inbound perturbation and a 1% emission seed. It neither re-converges nor scores a
+candidate; `try-split` belongs to the scored-primitives subgoal. Its random draws follow a fixed
+contract whose count depends only on the state count. The twelfth is `_mdl.py`, the minimum description length criterion revision 04 scores topology
 moves with, opened 2026-09-16 on `feat/hmm-mdl` with its two code-length primitives:
 `_int_code_length`, Rissanen's universal prior, and `_comb_code_length`, the cost of a
 composition. **Two things the reading settled are not in `HMMLIB-ACCOUNT.md` §8 and are

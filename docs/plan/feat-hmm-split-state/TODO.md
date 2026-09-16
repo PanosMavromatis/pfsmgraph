@@ -82,8 +82,14 @@
   - [x] Decide whose `numpy.random.Generator` a split draws from and where it enters: a required argument to the split, to the search, or both
   - [x] Fix the draw order as contract, since the same seed must produce the same candidate, and decide whether it follows the original's order or array order
     > **Note:** Measured on numpy 2.4.6: `Generator.spawn(n)` children do not depend on how much the parent has drawn, but **they do depend on how many times the parent has already spawned**. Tying a trial to its identity therefore needs one of two things. Either the search spawns in a fixed structure (one call per round, one child per candidate trial, in canonical (state, trial) order, before any trial runs), or it builds each child explicitly with `SeedSequence(entropy, spawn_key=(round, state, trial))`. Which one belongs to the search loop, not the split. The split only needs a `Generator`.
-- [ ] Implement the split as a free function over `HMMParams`, with tests
-  - [ ] Write the function: fresh arrays, returning `HMMParams(init_state_p, transition_p, output_p, params.vocabulary)`
+- [~] Implement the split as a free function over `HMMParams`, with tests
+  > **Q:** Where does the split live, and is it public?
+  > **A:** A new private module, `_topology.py`, holding `_split_state(params, state, *, rng) -> HMMParams`. `_merge_states` joins it in the merge subgoal. It is not exported: the public surface for topology search arrives with the search loop. Tests go in `tests/test_topology.py`, and `meson.build` gains the entry.
+  > **Q:** Should ADR 0022's constants (`w = 0.01`, seed weight 0.01, seed noise 0.1) be keywords on the split?
+  > **A:** No, module constants (`_INBOUND_WIDTH`, `_SEED_WEIGHT`, `_SEED_NOISE`). ADR 0022 keeps exposing them as Open, and a keyword can be added later without breaking anything.
+  - [x] Write the function: fresh arrays, returning `HMMParams(init_state_p, transition_p, output_p, params.vocabulary)`
+    > **Done:** `_topology._split_state(params, state, *, rng)`, with the constants `_INBOUND_WIDTH`, `_SEED_WEIGHT` and `_SEED_NOISE`, plus the `install_sources` entry in `meson.build`. It imports under the editable finder, and `test_meson_sources.py` passes 16/16.
+    > **Note:** Checked from the scratchpad before writing, on all 14 fixture splits. Every result is a valid `HMMParams`. The inbound halves sum back to `T[j, s]` bit for bit: the fraction lies in `[0.495, 0.505]`, so by Sterbenz's lemma the subtraction is exact. The generator is left exactly `S + 2(S+1)(n_symbols − USER_BASE)` uniforms on. With the seed weight set to 0, data bits move by `0` to `1.1e-12`, which is summation rounding. The same seed gives byte-identical arrays. Goal 5's test subgoals turn these checks into tests.
   - [ ] Test the invariants that hold for any model: row sums, zero reserved fibres, inbound mass conserved across the pair, likelihood of a sequence unchanged before randomization where that holds
   - [ ] Construct the case the fixtures cannot: a state with `init_p == 0` after a split that can still emit `begin`, and decode it, so revision 02's δ-seeding fix is exercised for the first time
   - [ ] Pin reproducibility: the same `Generator` state yields a bit-identical candidate

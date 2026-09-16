@@ -45,3 +45,12 @@ Port `split-state` (`hmm-param.lsh:142-215`), the first of revision 04's two top
 **2026-09-16 — goal 4: the reproducibility contract, recorded under ADR 0022's Resolved.** The split takes a required `rng: Generator`. It draws `S` inbound perturbations, then the seed fibres for twin `s` over `j = 0..S` and twin `p` over `j = 0..S`, and discards the draws on dead arcs. The draw count depends only on `S`, so a change in which arcs are live never shifts a later draw. The search gives each trial its own generator, tied to (round, state, trial). `Generator.spawn` children depend on how many times the parent has already spawned, so the search spawns in a fixed structure or uses an explicit `spawn_key`.
 
 **2026-09-16 — goal 6: `try-split` and `suggest-split` leave this branch.** Both move to the master plan's "Port the scored primitives" subgoal, and `try-merge`/`suggest-merge` follow the same rule. `try-split` re-converges and chooses `d`, and both of those are the search loop's decisions, so porting it here would lock them in. This branch delivers the split function and its tests (goal 5) and nothing that scores or ranks candidates. The master plan's split, merge and scored-primitives items each carry a note saying so.
+
+**2026-09-16 — goal 5 opens with the function.** `packages/pfsmgraph-hmm/src/pfsmgraph/hmm/_topology.py` holds `_split_state(params, state, *, rng)`. It is private, and ADR 0022's constants are module-level. `meson.build` lists the module. Checked on all 14 fixture splits before writing:
+- every result is a valid `HMMParams`;
+- the inbound halves sum back exactly (Sterbenz);
+- the generator is left exactly `S + 2(S+1)(n_symbols − USER_BASE)` uniforms on;
+- without the seed, data bits move by at most `1.1e-12`;
+- the same seed gives byte-identical arrays.
+
+The tests follow.
