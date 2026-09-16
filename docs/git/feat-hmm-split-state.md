@@ -58,3 +58,11 @@ The tests follow.
 **2026-09-16 — the invariant tests.** `tests/test_topology.py` has 528 tests. It splits every state of three random models and the three fixtures, and checks each array, the model properties, the likelihood (unchanged without the seed, and bounded with it), and the argument domain. Five mutants were caught, including the `:172` defect. The suite is now at 2041 tests.
 
 **2026-09-16 — the zero-init `begin` case.** Twelve more tests. Every fixture split of a zero-init state that could not emit `begin` gives twins with `init == 0` that can, and the decode never starts at them. That is revision 02's predicted decoupling, confirmed. But these tests can't detect a regression: with the δ-seeding fix reverted they still pass, because the 1% seed gives the twins only about 0.17% `begin` mass. Two tests on a constructed model, whose zero-init state emits `begin` at 0.9, are what fail when the fix is reverted.
+
+**2026-09-16 — reproducibility pinned; all six goals closed.** 105 more tests, 645 in `test_topology.py`:
+- a byte-identical candidate from the same generator state;
+- the contracted draw count, checked by comparing where the generator ends up;
+- the contracted draw order, checked by rebuilding each candidate by hand from an independent generator;
+- a draw count that doesn't depend on which arcs are live.
+
+Three mutants of the contract (reordered draws, swapped twin seeds, drawing only for live predecessors) each fail 26 to 43 tests. The branch is ready for `/smart-merge`.

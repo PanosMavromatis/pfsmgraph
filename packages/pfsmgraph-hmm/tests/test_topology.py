@@ -21,6 +21,8 @@ Sections:
 - **The decode's zero initial probability**: the case revision 02's fixtures could
   not exhibit, a state with ``init_p == 0`` that can emit ``begin``, built by a
   split and decoded.
+- **Reproducibility**: the same generator state gives a bit-identical candidate,
+  and the draws follow ADR 0022's contract in count and in order.
 - **The domain**: what ``state`` may be.
 """
 
@@ -35,6 +37,7 @@ from pfsmgraph.dataseq import USER_BASE, SequenceRecord, SymbolTable
 from pfsmgraph.hmm import HMMParams, viterbi
 from pfsmgraph.hmm import _topology
 from pfsmgraph.hmm._mdl import _corpus_description_length
+from pfsmgraph.hmm._numeric import rand_p_vector
 from pfsmgraph.hmm._viterbi import _viterbi
 from pfsmgraph.hmm._topology import _INBOUND_WIDTH, _SEED_NOISE, _SEED_WEIGHT, _split_state
 
@@ -356,6 +359,79 @@ def test_the_fixed_seeding_never_starts_where_the_original_would(split_first):
     path = viterbi(params, record)
     assert int(path.states[0]) not in zero_init
     assert math.isfinite(path.total_bits)
+
+
+# --- reproducibility --------------------------------------------------------------
+#
+# ADR 0022, **Resolved**: the number of draws depends on `S` alone, and they come in
+# a fixed order. The order test rebuilds the candidate from an independent generator
+# in the contract's order, so drawing the seeds before the perturbations, the twins
+# in the other order, or only on live arcs all fail it.
+
+
+def _arrays(params):
+    return params.init_state_p.tobytes(), params.transition_p.tobytes(), params.output_p.tobytes()
+
+
+def test_the_same_generator_state_gives_a_bit_identical_candidate(split):
+    params, _, s, _ = split
+    first = _split_state(params, s, rng=np.random.default_rng([SEED, 1]))
+    second = _split_state(params, s, rng=np.random.default_rng([SEED, 1]))
+    assert _arrays(first) == _arrays(second)
+
+
+def test_a_different_generator_state_gives_a_different_candidate(split):
+    params, _, s, _ = split
+    first = _split_state(params, s, rng=np.random.default_rng([SEED, 1]))
+    second = _split_state(params, s, rng=np.random.default_rng([SEED, 2]))
+    assert first.output_p.tobytes() != second.output_p.tobytes()
+
+
+def test_a_split_consumes_exactly_the_contracted_number_of_uniforms(split):
+    """`S + 2 * (S + 1) * (n_symbols - USER_BASE)`, whatever arcs are live: the next
+    value from the split's generator is the value that many uniforms later."""
+    params, _, s, _ = split
+    size, n_user = params.n_states, params.n_symbols - USER_BASE
+    used = np.random.default_rng([SEED, 3])
+    _split_state(params, s, rng=used)
+    skipped = np.random.default_rng([SEED, 3])
+    skipped.uniform(size=size + 2 * (size + 1) * n_user)
+    assert used.uniform() == skipped.uniform()
+
+
+def test_the_draws_follow_the_contracted_order(split):
+    """Rebuilt by hand from the same generator state: perturbations first, then twin
+    `s`'s seed fibres over every destination, then twin `p`'s."""
+    params, _, s, result = split
+    size, n_user = params.n_states, params.n_symbols - USER_BASE
+    rng = np.random.default_rng([SEED, params.n_states, s])
+    u = rng.uniform(-0.5, 0.5, size=size)
+    seeds = [[rand_p_vector(n_user, _SEED_NOISE, rng) for _ in range(size + 1)] for _ in range(2)]
+
+    inbound = params.transition_p[:, s]
+    expected_s = (0.5 + _INBOUND_WIDTH * u) * inbound
+    assert np.array_equal(result.transition_p[:size, s], expected_s)
+    assert np.array_equal(result.transition_p[:size, size], inbound - expected_s)
+
+    learned = np.concatenate([params.output_p[s], params.output_p[s, s][None]], axis=0)
+    live = result.transition_p[s] > 0
+    for twin, t in enumerate((s, size)):
+        for j in np.flatnonzero(live):
+            expected = (1.0 - _SEED_WEIGHT) * learned[j, USER_BASE:] + _SEED_WEIGHT * seeds[twin][j]
+            assert np.array_equal(result.output_p[t, j, USER_BASE:], expected)
+
+
+def test_the_draw_count_does_not_depend_on_which_arcs_are_live():
+    """Two models with the same state and symbol counts but different dead arcs
+    leave their generators in the same state, so a later draw is not shifted."""
+    rng = np.random.default_rng(SEED)
+    dense = _random_params(rng, 5, 4, 0.0, 0.0)
+    sparse = _random_params(rng, 5, 4, 0.7, 0.5)
+    assert np.count_nonzero(dense.transition_p) != np.count_nonzero(sparse.transition_p)
+    after_dense, after_sparse = np.random.default_rng(SEED), np.random.default_rng(SEED)
+    _split_state(dense, 2, rng=after_dense)
+    _split_state(sparse, 2, rng=after_sparse)
+    assert after_dense.uniform() == after_sparse.uniform()
 
 
 # --- the domain -------------------------------------------------------------------
