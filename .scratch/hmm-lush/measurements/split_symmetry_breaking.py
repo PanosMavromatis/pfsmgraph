@@ -15,6 +15,9 @@ The arms differ only in how the twins are told apart:
   predecessor row -- the case the perturbation cannot inform -- the twins' outbound
   fibres become `(1 - e) * learned + e * rand_p_vector(...)`. Other splits are
   identical to `inbound(w)`.
+- `inbound(w)+seedall(e)`: the same mixture applied to every split, whatever its
+  predecessors. It is the rule the user chose, added after the first full run showed
+  the `+seed` arms never perturb an emission on a multi-predecessor split.
 - `inbound(w)+min(n)`: a control, not a candidate. As `inbound(w)`, but EM runs `n`
   cycles before `run-converge`'s stop rule may fire. An inbound split starts at exactly
   the incumbent's likelihood, so its first batches move the description length by
@@ -40,7 +43,8 @@ imports this. Run from the repo root with
 
     uv run python .scratch/hmm-lush/measurements/split_symmetry_breaking.py [--quick]
 
-`--quick` runs one seed on the `set02a_200` incumbents only.
+`--quick` runs one seed on the `set02a_200` incumbents only; `--arm NAME` (repeatable)
+restricts the run to the named arms, keeping each arm's random streams unchanged.
 """
 
 from __future__ import annotations
@@ -74,8 +78,8 @@ def split(p: HMMParams, s: int, arm: str, rng: np.random.Generator) -> HMMParams
     w = e = 0.0
     if kind.startswith("inbound"):
         w = float(rest.split(")")[0])
-        if "seed(" in arm:
-            e = float(arm.split("seed(")[1].rstrip(")"))
+        if "seed(" in arm or "seedall(" in arm:
+            e = float(arm.split("(")[-1].rstrip(")"))
 
     init = np.append(p.init_state_p, 0.5 * p.init_state_p[s])
     init[s] = init[S]
@@ -96,7 +100,7 @@ def split(p: HMMParams, s: int, arm: str, rng: np.random.Generator) -> HMMParams
         for j in range(S + 1):  # the original's draw order
             O[s, j, USER_BASE:] = rand_p_vector(U, 0.1, rng)
             O[S, j, USER_BASE:] = rand_p_vector(U, 0.1, rng)
-    elif e and distinct_predecessor_rows(p, s) == 1:
+    elif e and ("seedall(" in arm or distinct_predecessor_rows(p, s) == 1):
         for t in (s, S):
             for j in range(S + 1):
                 O[t, j, USER_BASE:] = (1 - e) * O[t, j, USER_BASE:] + e * rand_p_vector(U, 0.1, rng)
@@ -147,23 +151,33 @@ ARMS = (
     "inbound(0.01)+seed(0.01)",
     "inbound(0.1)+seed(0.01)",
     "inbound(0.1)+min(200)",
+    "inbound(0.01)+seedall(0.01)",
 )
 
 
+def selected_arms() -> tuple[str, ...]:
+    chosen = [sys.argv[i + 1] for i, a in enumerate(sys.argv) if a == "--arm"]
+    unknown = set(chosen) - set(ARMS)
+    if unknown:
+        raise SystemExit(f"unknown arm(s) {sorted(unknown)}; choose from {ARMS}")
+    return tuple(a for a in ARMS if a in chosen) or ARMS
+
+
 def main():
+    arms = selected_arms()
     record = [load_corpus_record()]
     incumbents = [(m.removesuffix(".hmm"), load_params(FIXTURES / m), record) for m in SAVED_MODELS]
     if not QUICK:
         incumbents += set11a_incumbents()
-    print(f"backend {BACKEND}; seeds {SEEDS}; arms {', '.join(ARMS)}")
+    print(f"backend {BACKEND}; seeds {SEEDS}; arms {', '.join(arms)}")
     print("dDL / dData = candidate total / data description length minus the incumbent's (negative is better)")
     for name, inc, records in incumbents:
         base, base_data = score(inc, records)
         print(f"\n{name}: S={inc.n_states}, incumbent total {base:.1f} bits, data {base_data:.1f}")
-        best = {arm: np.inf for arm in ARMS}
+        best = {arm: np.inf for arm in arms}
         for s in range(inc.n_states):
             preds = distinct_predecessor_rows(inc, s)
-            for arm in ARMS:
+            for arm in arms:
                 cells = []
                 for seed in SEEDS:
                     rng = np.random.default_rng([seed, s, ARMS.index(arm)])
@@ -178,7 +192,7 @@ def main():
                       f"{'/'.join(str(c[2]) for c in cells):>12s} | gap "
                       f"{'/'.join(f'{c[3]:.0e}' for c in cells)}", flush=True)
         print("  best split per arm (what suggest-split would adopt): "
-              + "; ".join(f"{a} {best[a]:.1f}" for a in ARMS))
+              + "; ".join(f"{a} {best[a]:.1f}" for a in arms))
 
 
 if __name__ == "__main__":

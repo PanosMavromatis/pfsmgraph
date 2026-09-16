@@ -33,6 +33,7 @@ Numbers are permanent and never reused. To add one, copy
 | [0019](0019-declared-dependencies-follow-imports.md) | A declared intra-family dependency lands with its first import | Accepted | 2026-09-13 | — |
 | [0020](0020-scaled-probability-domain-forward-backward.md) | Forward-backward runs in the scaled probability domain, in a fixed order | Accepted | 2026-09-14 | — |
 | [0021](0021-runtime-backend-selection.md) | A backend is chosen per call, defaults to `python`, and is never substituted | Accepted | 2026-09-14 | — |
+| [0022](0022-state-split-initialisation.md) | A state split preserves what was learned, and breaks symmetry on inbound arcs | Accepted | 2026-09-16 | — |
 
 † Was qualified in practice by 0012 until the first Cython kernel landed. Both are now
 superseded by 0018, which replaces the per-package backend with a family-wide one; the
@@ -89,18 +90,25 @@ release order follows what is declared, so `hmm` releases before `align`.
   It is per call, defaults to the pure-Python reference, never falls back, and lets a caller
   list what runs here. Read it before any public call that reaches a compiled kernel, and
   before touching the repo-root `_backends.py`, whose table it moves into `hmm`.
+- **0022** is the third record about the model, after 0015 and 0017: how a topology split
+  builds its candidate. It fixes a defect in the Lush original (`hmm-param.lsh:172`, repeated
+  at `:262` in the merge) and replaces the original's outbound emission redraw with a
+  per-predecessor inbound perturbation plus a light emission seed, so no learned parameter
+  is discarded. Read it before writing the split or merge, `try-split`, or the search loop,
+  which it obliges to give a split a minimum EM budget.
 
 ## Coverage of the PRD decision table
 
 Every decision D1–D11 in PRD §2 is covered: D1–D2 and D3–D4 by 0005, D5 by 0006, D6 by
 0007, D7–D8 by 0008 (both now superseded by 0018), D9 by 0009, D10 by 0010, D11 by 0011. The inherited §1.2 decisions
-are covered by 0001–0004. 0012, 0013, 0014, 0015, 0016, 0017, 0018, 0019, 0020 and 0021 have no PRD counterpart —
-all ten postdate the document; 0012 qualifies §6.1 and 0018 overrides it, 0013 settles a question §9 never
+are covered by 0001–0004. 0012, 0013, 0014, 0015, 0016, 0017, 0018, 0019, 0020, 0021 and 0022 have no PRD counterpart —
+all eleven postdate the document; 0012 qualifies §6.1 and 0018 overrides it, 0013 settles a question §9 never
 raised, 0014 covers a working-area policy the PRD does not describe at all, 0015 answers a
 question the PRD did not know it had left open: which HMM formulation `pfsmgraph-hmm`
 implements, 0016 amends the phase count §1.2/§6 originally described as three, and 0017
 settles a class-architecture question the PRD leaves to the migration — whether
 `pfsmgraph.hmm` inherits the imported source's mutable model/working-copy split, 0019
 qualifies the release order §3.4 and §11 derive from the graph, and 0020 is a numeric
-contract for a recurrence the PRD names only as "Baum-Welch", and 0021 settles the runtime
-backend-selection question that 0003 deliberately left open.
+contract for a recurrence the PRD names only as "Baum-Welch", 0021 settles the runtime
+backend-selection question that 0003 deliberately left open, and 0022 departs from the
+imported split surgery the PRD names only as "state merge and split".
