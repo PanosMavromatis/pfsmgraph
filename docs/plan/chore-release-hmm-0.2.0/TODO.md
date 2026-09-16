@@ -244,7 +244,15 @@
     > and `workflow_dispatch` unchanged, and the file parses. Goals 3 to 5 now push to this
     > branch without firing the matrix; the next run of `release.yml` will be the merge
     > commit's push to `main`, which builds and publishes nothing.
-- [ ] Settle what the release tooling means now that CI builds the artifact
+- [x] Settle what the release tooling means now that CI builds the artifact
+  > **Done:** the justfile now carries two release paths and refuses the wrong one in both
+  > directions — `release` for members shipping a pure wheel, `release-ci` for members whose
+  > artifact GitHub Actions builds, selected by a `ci_built_packages` variable rather than
+  > spelled per recipe. `build` lost `-Dcompiled=false` and became a verification tool;
+  > `meson.options`' `compiled` stays as a source-build escape hatch; `preflight`'s
+  > `py3-none-any` assertion was examined and deliberately kept; the tag-versus-version
+  > assertion exists on both sides, in `_version-matches` and in the publish job. Four guards
+  > and the workflow check were each exercised in both directions before being trusted.
   > **Note:** retitled and rewritten 2026-09-16. The old title, "Adapt the release tooling to
   > platform wheels", and its three subgoals assumed `just release` stays `pfsmgraph-hmm`'s
   > release path and needs only to be taught about new filenames. It does not. The artifact
@@ -275,7 +283,25 @@
   > any member with a compiled artifact. `docs/ops/release.md` has to say which is which in
   > as many words, because a runbook that describes one path while the repository has two is
   > worse than a runbook that describes neither.
-  - [ ] Make `release` refuse for `pfsmgraph-hmm`, as a **prerequisite** and never a body line
+  - [x] Make `release` refuse for `pfsmgraph-hmm`, as a **prerequisite** and never a body line
+    > **Done:** a `ci_built_packages` variable beside `default_package` names the members CI
+    > builds, and `_local-release-refused` is the first prerequisite of `release`. A member
+    > joins that list when its first public call reaches a compiled kernel, so the rule is
+    > stated once rather than spelled per recipe.
+    > **Note:** `_ci-release-refused` was added as its mirror, which was not in the subgoal.
+    > Without it `just release-ci 0.1.0 pfsmgraph-dataseq` pushes a tag no workflow matches
+    > and reports success, having released nothing — a guard that points one way leaves the
+    > other direction silently wrong.
+    > **Note:** `just release` with no arguments now refuses, because `default_package` is
+    > `pfsmgraph-hmm`. That reads like a regression and is the safest available default: the
+    > justfile's existing comment claims an omitted argument "can never reach a published
+    > package", and this strengthens it from *fails at preflight* to *refuses before running
+    > anything*.
+    > **Ran:** all four guards exercised directly, both directions each —
+    > `_local-release-refused` exits 1 for hmm and 0 for dataseq, `_ci-release-refused` the
+    > reverse, `_version-matches` exits 0 at 0.1.0 and 1 at 0.2.0 naming the declared
+    > version. Tested through the private recipes rather than through `release`, so no
+    > release chain could start.
     > **Note:** the justfile states this rule about itself already — "a guard must be a
     > *prerequisite* of `release`, never a body line, because every body line runs after
     > `publish`, the irreversible step". A refusal written into the body would run after the
@@ -284,20 +310,49 @@
     > `preflight` demands a `py3-none-any` filename and a local hmm build no longer produces
     > one. That is a filename check standing in for a policy, and the subgoal below on
     > `preflight` is what keeps the two from being confused.
-  - [ ] Add `release-ci <version> [package]`: assert the tree is clean and pushed **and that
+  - [x] Add `release-ci <version> [package]`: assert the tree is clean and pushed **and that
     `pyproject.toml`'s version matches `<version>`**, then tag and push, and report the run
+    > **Done:** `release-ci version package=default_package: (_ci-release-refused package)
+    > (_version-matches version package) test _tree-pushed`, with only the tag and its push
+    > in the body — everything checkable is checked before the trigger exists.
+    > **Q:** Should `release-ci` run the suite locally before tagging, and should it watch
+    > the run afterwards?
+    > **A:** Run the suite, yes — it mirrors `release` and is cheap against a tag that cannot
+    > be un-pushed cleanly. Watch, no: print `gh run watch --exit-status` and the Actions URL
+    > instead, so `gh` stays out of this file's requirements, which remain just, uv and git.
+    > **Note:** `_version-matches` reads the version with `grep -m1 '^version = ' | cut -d'"'
+    > -f2` rather than `tomllib`, because a recipe may run on a stock `python3` older than
+    > 3.11. Each member's `pyproject.toml` carries exactly one matching line, checked.
     > **Note:** this is where the justfile's own preflight assertion survives the move. Its
     > comment — "without this assertion `just release 0.2.0` would publish 0.1.0 and tag it
     > v0.2.0. Both halves of that are irreversible" — describes a hazard the tag flow has
     > too, since the tag is what triggers the upload. Local and workflow-side guards are
     > both wanted: a tag can be pushed by `git` directly, so the workflow cannot rely on
     > this recipe having been used.
-  - [ ] Drop the `build` recipe's `-C setup-args=-Dcompiled=false` for `pfsmgraph-hmm`, and
+  - [x] Drop the `build` recipe's `-C setup-args=-Dcompiled=false` for `pfsmgraph-hmm`, and
     decide whether `meson.options`' `compiled` stays as a source-build escape hatch
+    > **Done:** dropped; `build` is now one unconditional `uv build --package`, and the
+    > package-name conditional that existed only to carry that flag is gone with it.
+    > **Decided:** `compiled` **stays**, as a source-build escape hatch and never a release
+    > setting. It is the only way to install from the sdist on a machine with no C compiler,
+    > trading a pure install that reports `cython ✗` honestly for one that fails to build at
+    > all. Nothing in the release path sets it and nothing should — a release wheel is
+    > exactly the case that must not use it.
     > **Note:** under (D) this recipe's job changes rather than disappears. It stops being
     > the first step of a release and becomes the way goal 4 produces a local wheel to
     > install into a clean venv, so it should be named and commented for that.
-  - [ ] Re-examine `preflight`'s `py3-none-any` assertion rather than relaxing it
+  - [x] Re-examine `preflight`'s `py3-none-any` assertion rather than relaxing it
+    > **Done:** examined and **kept unrelaxed**, which was the point. No member publishes
+    > platform wheels from here, so the assertion stays correct for every member still on the
+    > local path, and teaching it platform tags would have deleted the last check between a
+    > local hmm release and an upload. The explicit refusal in `release` is now the policy;
+    > this filename check is a second line behind it.
+    > **Done:** the tree half — the dirty check and `git push origin HEAD` — is extracted into
+    > `_tree-pushed` and taken as a prerequisite by both `preflight` and `release-ci`.
+    > **Note:** one behaviour change, small and deliberate. As a prerequisite `_tree-pushed`
+    > now runs *before* `preflight`'s `dist/` checks rather than after, so a run whose wheel
+    > is missing pushes `HEAD` first. Pushing a clean committed tree is idempotent and
+    > harmless, and the alternative was duplicating the two lines in two recipes.
     > **Note:** this replaces "Teach `preflight` platform tags", which was the wrong task and
     > actively harmful. Under A + B + D no member publishes platform wheels locally, so the
     > assertion stays *correct* for the four pure members — and teaching it to accept
@@ -306,7 +361,15 @@
     > backstop. A check we were about to relax turns out to be load-bearing in a new way.
     > Worth splitting, though: `preflight` also asserts the tree is clean and pushes it, and
     > `release-ci` wants that half without the filename half.
-  - [ ] Restore the tag-versus-version guard that moving the release into CI dropped
+  - [x] Restore the tag-versus-version guard that moving the release into CI dropped
+    > **Done:** a step in `release.yml`'s publish job, between the artifact downloads and the
+    > upload, failing unless every file in `dist/` carries `github.ref_name` minus the
+    > `pfsmgraph-hmm-v` prefix. Deliberately redundant with `_version-matches`: a tag can be
+    > pushed with plain `git`, so CI cannot assume the recipe was used, and the recipe should
+    > not push a tag it has not checked. Either can be bypassed alone.
+    > **Ran:** the check was tested against this workflow's own artifacts before being added.
+    > Over all 21 files of run `35049292620` it passes at their real version and flags every
+    > one of them against a tag claiming another.
     > **Note (found 2026-09-16 in the dry run):** `release.yml` has no equivalent of the
     > justfile's `preflight`, and nothing in it compares the pushed tag to the version
     > actually built. The dry run made that concrete: it produced
@@ -316,8 +379,28 @@
     > released version rather than rejecting it. The fix is a step in the publish job that
     > fails unless the built version matches `github.ref_name` minus the `pfsmgraph-hmm-v`
     > prefix.
-  - [ ] Update `docs/ops/release.md` and the `justfile` comments; keep
+  - [x] Update `docs/ops/release.md` and the `justfile` comments; keep
     `tests/test_release_runbook.py` green
+    > **Done:** the runbook gains a *Two release paths* section at the head of its justfile
+    > chapter — a table of which member takes which, why a member moves between them, that
+    > `just` refuses the wrong one in both directions, and that Trusted Publishing cannot be
+    > driven from here whatever the artifacts' accessibility. Four existing passages were
+    > corrected rather than appended to: the `-Dcompiled=false` paragraph, now history plus
+    > the escape-hatch decision; what `build` is *for* once it is not a release step; why
+    > `preflight` was not relaxed; and the "suggested posture" paragraph.
+    > **Note:** that last correction is the interesting one. The posture paragraph
+    > recommended piloting Trusted Publishing "on a member where a botched release costs
+    > nothing" — and the pilot is happening on `pfsmgraph-hmm`, the most-developed member in
+    > the family, for an unrelated reason: its wheels are built by Actions, so the upload
+    > happens there. The conclusion survived its reasoning, which is worth marking rather
+    > than quietly letting the text look prescient. Its other prediction is half-wrong and
+    > marked so: "the `justfile` is what makes that a one-recipe edit" holds for the upload,
+    > since `publish` is untouched, and fails for the release, since `release` has `build` as
+    > a prerequisite and `build` runs `clean`.
+    > **Ran:** `tests/test_release_runbook.py` 2 passed, and the full suite 1418 passed in
+    > 4m14s. The count is worth writing down because goal 5's record commit has to correct
+    > the root README's stale `709`: as of 2026-09-16 it is 1418 = 74 dataseq + 1292 hmm +
+    > 52 root — but re-measure there rather than copying this, for the reason given.
     > **Note:** that test asserts every recipe `release.md` names exists, so `release-ci` has
     > to be named there rather than only in the justfile. The runbook's "Token sprawl vs.
     > Trusted Publishing" section also needs its "suggested posture" revisited: it recommends

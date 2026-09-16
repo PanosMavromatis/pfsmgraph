@@ -19,6 +19,14 @@
 # member that is already on PyPI. Move it to the next member at each release.
 default_package := "pfsmgraph-hmm"
 
+# Members whose shipped artifact this machine cannot build, so `release` must refuse
+# them. A member joins this list when its first public call reaches a compiled kernel:
+# from that point its release is platform wheels built by GitHub Actions
+# (.github/workflows/release.yml), and PyPI Trusted Publishing cannot be driven from
+# outside a workflow run at all -- it is OIDC, and the token is minted by Actions for a
+# specific repository, workflow and environment. `release-ci` is the path for these.
+ci_built_packages := "pfsmgraph-hmm"
+
 # Show available recipes.
 default:
     @just --list --unsorted
@@ -52,8 +60,7 @@ clean:
 
 # Build sdist + wheel from a clean dist/.
 build package=default_package: clean
-    SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)" uv build --package {{ package }} \
-      {{ if package == "pfsmgraph-hmm" { "-C setup-args=-Dcompiled=false" } else { "" } }}
+    SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)" uv build --package {{ package }}
 
 # Validate that artifacts will render on PyPI before uploading.
 check package=default_package:
@@ -186,6 +193,71 @@ publish-test package=default_package:
         dist/{{ replace(package, "-", "_") }}-*
 
 
+# --- release-path guards ----------------------------------------------------
+#
+# Two release paths now exist, and that is the decision rather than drift. A member
+# shipping a pure wheel releases from here through `release`; a member whose artifact
+# is platform wheels releases by pushing a tag, through `release-ci`. These guards keep
+# each path from being taken for the wrong member, in both directions -- a guard that
+# only points one way leaves the other silently wrong.
+#
+# All four are PREREQUISITES and never body lines. Every body line of `release` runs
+# after `publish`, the irreversible step, so a refusal written there would run after the
+# upload it exists to prevent; and every body line of `release-ci` runs after the tag
+# push, which is what triggers that upload.
+
+# Refuse a local release for a member CI builds.
+_local-release-refused package:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for p in {{ ci_built_packages }}; do
+      [[ "$p" != "{{ package }}" ]] || {
+        echo "{{ package }} is built by GitHub Actions, not here: its release is platform wheels this machine cannot produce, and Trusted Publishing needs an OIDC token only a workflow run can mint." >&2
+        echo "Use: just release-ci <version> {{ package }}" >&2
+        exit 1
+      }
+    done
+
+# The mirror image: refuse to tag a member CI does NOT build. Without this,
+# `release-ci 0.1.0 pfsmgraph-dataseq` pushes a tag no workflow matches and reports
+# success, having released nothing.
+_ci-release-refused package:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for p in {{ ci_built_packages }}; do
+      [[ "$p" != "{{ package }}" ]] || exit 0
+    done
+    echo "{{ package }} is not built by CI, so no workflow matches its tag and this would release nothing." >&2
+    echo "Use: just release <version> {{ package }}" >&2
+    exit 1
+
+# Assert pyproject.toml declares the version being released.
+#
+# `preflight` carries this for the local path by checking dist/ filenames, and the tag
+# flow cannot borrow it, having no artifacts to name: the tag is what triggers the
+# upload, so a mismatch publishes one version under another version's name. The
+# workflow asserts it again on its own side, because a tag can be pushed with plain git
+# and CI cannot assume this recipe was used.
+#
+# grep rather than tomllib: a recipe may run on a stock python3 older than 3.11. Each
+# member's pyproject.toml carries exactly one line matching `^version = `.
+_version-matches version package:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    declared="$(grep -m1 '^version = ' packages/{{ package }}/pyproject.toml | cut -d'"' -f2)"
+    [[ "$declared" == "{{ version }}" ]] || {
+      echo "packages/{{ package }}/pyproject.toml declares $declared, not {{ version }} -- bump it first" >&2
+      exit 1
+    }
+
+# The half of `preflight` that is about the tree rather than the artifacts, so the tag
+# flow can reuse it without the dist/ filename check it has nothing to satisfy.
+_tree-pushed:
+    @git diff --quiet && git diff --cached --quiet \
+      || { echo "working tree is dirty -- a tag would name a state that exists nowhere else" >&2; exit 1; }
+    git push origin HEAD
+
+
 # --- preflight -------------------------------------------------------------
 #
 # Everything here must pass BEFORE anything irreversible happens, which is why
@@ -207,14 +279,11 @@ publish-test package=default_package:
 # whose metadata three commits had since changed.
 
 # Assert the requested version was built and the tree is committed and pushed.
-preflight version package=default_package:
+preflight version package=default_package: _tree-pushed
     @test -f "dist/{{ replace(package, "-", "_") }}-{{ version }}-py3-none-any.whl" \
       || { echo "dist/ has no {{ package }} {{ version }} wheel -- pyproject.toml declares a different version" >&2; exit 1; }
     @test -f "dist/{{ replace(package, "-", "_") }}-{{ version }}.tar.gz" \
       || { echo "dist/ has no {{ package }} {{ version }} sdist" >&2; exit 1; }
-    @git diff --quiet && git diff --cached --quiet \
-      || { echo "working tree is dirty -- a tag would name a state that exists nowhere else" >&2; exit 1; }
-    git push origin HEAD
 
 
 # --- verify ----------------------------------------------------------------
@@ -256,9 +325,25 @@ verify-test version package=default_package:
 # the moment a second package in this repo ships its own 0.1.0.
 
 # Test, build, validate, upload, and tag.
-release version package=default_package: test (build package) (check package) (preflight version package) (publish package)
+release version package=default_package: (_local-release-refused package) test (build package) (check package) (preflight version package) (publish package)
     git tag -a {{ package }}-v{{ version }} -m "{{ package }} {{ version }}"
     git push origin {{ package }}-v{{ version }}
+
+# Release a CI-built member. The tag is what triggers the upload, so everything that
+# can be checked is checked before it is pushed, and the body holds only the tag.
+#
+# `test` is a prerequisite for the same reason it is one of `release`: the suite is
+# cheap against a tag that cannot be un-pushed cleanly. It says nothing about the twenty
+# wheels -- that is the workflow's own per-wheel test -- only that this commit is sane.
+#
+# The run is reported rather than watched, so `gh` stays out of this file's
+# requirements, which are just, uv and git.
+release-ci version package=default_package: (_ci-release-refused package) (_version-matches version package) test _tree-pushed
+    git tag -a {{ package }}-v{{ version }} -m "{{ package }} {{ version }}"
+    git push origin {{ package }}-v{{ version }}
+    @echo "Pushed {{ package }}-v{{ version }}. The release workflow builds and publishes it."
+    @echo "Watch: gh run watch --exit-status"
+    @echo "   or: https://github.com/PanosMavromatis/pfsmgraph/actions/workflows/release.yml"
 
 # Rehearse on TestPyPI: test, build, validate, upload there, no tag.
 release-test version package=default_package: test (build package) (check package) (publish-test package)

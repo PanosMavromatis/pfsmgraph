@@ -156,4 +156,33 @@ jobs:
         with:
           name: sdist
           path: dist
+
+      # The assertion the justfile's `preflight` carries for the local path, re-made
+      # here rather than borrowed. The tag is what triggers this job and a tag can be
+      # pushed with plain git, so CI cannot assume `just release-ci` checked it --
+      # the two guards are deliberately redundant because either can be bypassed alone.
+      # preflight's own comment says why it matters: without the assertion a release
+      # "would publish 0.1.0 and tag it v0.2.0. Both halves of that are irreversible."
+      # Verified against this workflow's own artifacts before it was added: it passes
+      # over all 21 files of run 35049292620 at their real version and flags every one
+      # of them against a tag claiming another.
+      - name: Assert every artifact carries the tag's version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#pfsmgraph-hmm-v}"
+          test -n "$version"
+          shopt -s nullglob
+          files=(dist/*)
+          test "${#files[@]}" -gt 0 || { echo "::error::dist/ is empty"; exit 1; }
+          bad=0
+          for f in "${files[@]}"; do
+            case "$(basename "$f")" in
+              pfsmgraph_hmm-"$version"-*.whl|pfsmgraph_hmm-"$version".tar.gz) ;;
+              *) echo "::error::$(basename "$f") does not carry version $version from tag $GITHUB_REF_NAME"; bad=1 ;;
+            esac
+          done
+          test "$bad" -eq 0
+          echo "all ${#files[@]} artifacts carry version $version"
+
       - uses: pypa/gh-action-pypi-publish@v1.14.2
