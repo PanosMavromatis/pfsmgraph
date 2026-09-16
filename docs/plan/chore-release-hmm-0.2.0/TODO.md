@@ -97,9 +97,34 @@
     > a silent skip to a failure, per wheel, per platform — which is exactly how a wheel
     > built without its `.so` would otherwise pass green. It is also the first code path
     > ever to exercise the variable, so its first real use is still its first test.
-- [~] Write the GitHub Actions workflows
+- [x] Write the GitHub Actions workflows
+  > **Done:** `.github/workflows/release.yml` and `test.yml`, the repository's first CI,
+  > proven by run `35049292620` before the trigger that enabled it was taken back out —
+  > twenty wheels over four platforms on cp310–cp314 with `cython ✓` against each installed
+  > wheel, a glibc 2.17 manylinux floor, an sdist, and `publish` correctly skipped. Two
+  > findings outlived the goal and are recorded where they act: the per-run cost and the
+  > public-repo condition, under this goal; and the tag-versus-version guard that moving the
+  > release into CI dropped, as a new subgoal of goal 3.
   > **Note:** added 2026-09-16, once goal 1 chose the CI route. This is the repository's
   > first `.github/`, so nothing here has a local precedent to copy.
+  > **Note (measured 2026-09-16, run 35049292620):** what one full matrix run costs, and the
+  > condition that keeps it free. GitHub meters every run at list price regardless of
+  > visibility and then applies a public-repository discount as a separate credit, so the
+  > billing page reads `$0.38 consumed / -$0.38 discounts / $0.00 billable`. The `$0.38` is
+  > the counterfactual — what this run would cost on a private repo — not money owed. By
+  > category: macOS $0.25, Windows $0.08, Linux $0.03, Linux ARM $0.03. **macOS is ~64% of
+  > the metered total despite being the third-shortest job**, entirely because of its 10x
+  > multiplier; Windows is 2x, Linux 1x. Public-repo Actions minutes are free and unlimited
+  > and are *not* drawn from the account's included allowance, which is why the discount is
+  > a credit rather than an allowance deduction — so the Pro subscription buys nothing here
+  > that "unlimited" had not already.
+  > **Note:** that makes **`pfsmgraph` staying public a standing condition of this release
+  > design**, not a fact about today, and it fails discontinuously rather than gradually. The
+  > same workflow on a private repository draws roughly 66 billable minute-equivalents per
+  > run against a 3,000/month allowance — about 45 runs before Actions' default $0 spending
+  > limit halts them rather than charges. If that ever binds, the cheapest lever is dropping
+  > the macOS job: two-thirds of the cost for one platform. Recorded here because the number
+  > on the billing page reads `$0.00` and carries none of this with it.
   > **Note:** only two files in this distribution are platform-dependent —
   > `_viterbi_cython.pyx` and `_forward_backward_cython.pyx`. `cpu_parallel`, `cuda` and
   > `torch` are pure Python compiled or dispatched at runtime, so they are byte-identical in
@@ -178,7 +203,7 @@
     > mean an import that broke after a resolution moved — the green run whose header nobody
     > reads. `cuda` is deliberately absent: no hosted runner has a device, so its 206 tests
     > skip and the GPU half of the `DEFERRED.md` entry stays open, unchanged.
-  - [ ] **Before merge:** remove the temporary `chore/release-hmm-0.2.0` entry from
+  - [x] **Before merge:** remove the temporary `chore/release-hmm-0.2.0` entry from
     `release.yml`'s `on.push.branches`, once the dry run has confirmed the two unverified
     mechanics
     > **Note:** the workflow cannot fire from this branch as designed — its triggers are
@@ -191,10 +216,52 @@
     > sdist from a depth-1 checkout. The fallbacks if either fails are a `CIBW_BEFORE_ALL`
     > copy step and `fetch-depth: 0` respectively. The publish job is unaffected either way:
     > it is gated on the tag, not on the branch.
+    > **Ran (2026-09-16):** run `35049292620`, pushed with commit `df23146`. **Success, 7m48s
+    > wall clock**, and both unverified mechanics are confirmed. `CIBW_TEST_SOURCES` does
+    > reach above `package-dir`: the suite ran in every wheel's test venv, including the
+    > tests that read `.scratch/hmm-lush/Training` four directories up. `pipx run build`
+    > produced the sdist from a depth-1 checkout, so no `fetch-depth: 0` is needed. Twenty
+    > wheels, five per platform, cp310–cp314; `publish to PyPI` **skipped**, as the gate
+    > requires. `cython ✓` against the installed wheel on all four platforms, with
+    > `cpu_parallel`, `cuda` and `torch` reporting absent and naming their extras — around
+    > 748 passed / 523 skipped per interpreter, summing to the 1271 collected.
+    > **Note:** the manylinux tag is the measurement goal 1 could not take locally. The
+    > wheels carry `manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64` — a
+    > **glibc 2.17** floor, against the `manylinux_2_39` this host's `auditwheel` was limited
+    > to. That is the whole argument for the CI route, now measured rather than reasoned.
+    > **Note:** the pass/skip split is not uniform across the matrix, and that is the suite
+    > working rather than flaking: Linux 748, macOS 747, Windows **mixed across
+    > interpreters** (two at 748, three at 747). The differing test is the libm-vs-numpy
+    > `log2` discrimination check, which skips with its own reason — *"numpy's and libm's
+    > log2 agree on every tied candidate drawn on this host (numpy 2.5.3), so there is no
+    > split for the tie to catch"*. Its outcome varies by host **and by numpy build**, which
+    > is the second-host argument for `test.yml` demonstrated rather than asserted, and it is
+    > legible only because `-ra` is in the copied `pyproject.toml`.
+    > **Note:** the dry run has now served its purpose, so leaving the trigger in place only
+    > costs noise — every further push to this branch, through goals 3 to 5, fires the full
+    > twenty-wheel matrix.
+    > **Done (2026-09-16):** removed. `on.push.branches` is back to `[main]`, the tag trigger
+    > and `workflow_dispatch` unchanged, and the file parses. Goals 3 to 5 now push to this
+    > branch without firing the matrix; the next run of `release.yml` will be the merge
+    > commit's push to `main`, which builds and publishes nothing.
 - [ ] Adapt the release tooling to platform wheels
   - [ ] Drop the `build` recipe's `-C setup-args=-Dcompiled=false` for `pfsmgraph-hmm`, and
     decide whether `meson.options`' `compiled` stays as a source-build escape hatch
   - [ ] Teach `preflight` platform tags, and make `publish` upload every wheel plus the sdist
+  - [ ] Restore the tag-versus-version guard that moving the release into CI dropped
+    > **Note (found 2026-09-16 in the dry run):** `release.yml` has no equivalent of the
+    > justfile's `preflight`, and nothing in it compares the pushed tag to the version
+    > actually built. The dry run made that concrete: it produced
+    > `pfsmgraph_hmm-0.1.0-cp312-…-manylinux….whl`, because `pyproject.toml` still reads
+    > 0.1.0 until goal 5's bump — and that filename **differs** from the `py3-none-any` wheel
+    > already published for 0.1.0, so PyPI would accept it as an additional file on a
+    > released version rather than rejecting it. The justfile carries this check with a
+    > comment saying exactly why: "without this assertion `just release 0.2.0` would publish
+    > 0.1.0 and tag it v0.2.0. Both halves of that are irreversible." The subgoal above is
+    > worded "teach `preflight` platform tags", which assumes `preflight` stays on the
+    > release path; it does not, so the assertion has to be re-made inside the workflow —
+    > a step that fails the publish job unless the built version matches `github.ref_name`
+    > minus the `pfsmgraph-hmm-v` prefix.
   - [ ] Update `docs/ops/release.md` and the `justfile` comments; keep
     `tests/test_release_runbook.py` green
 - [ ] Settle what 0.2.0's immutable metadata says

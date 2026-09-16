@@ -14,18 +14,7 @@ name: release
 
 on:
   push:
-    branches:
-      - main
-      # >>> TEMPORARY, REMOVE BEFORE MERGING chore/release-hmm-0.2.0 <<<
-      # This workflow cannot run from a feature branch: its other triggers are
-      # main and a tag, and GitHub offers workflow_dispatch only for workflows
-      # already on the default branch. So the 20-wheel matrix would first
-      # execute on the merge commit, leaving two mechanics unverified across a
-      # merge -- whether CIBW_TEST_SOURCES reaches above package-dir, and
-      # whether `pipx run build` produces meson-python's sdist from a shallow
-      # checkout. This line buys one dry run. The publish job is unaffected and
-      # stays inert: it is gated on a pfsmgraph-hmm-v* tag, not on this branch.
-      - chore/release-hmm-0.2.0
+    branches: [main]
     tags: ["pfsmgraph-hmm-v*"]
   workflow_dispatch:
 
