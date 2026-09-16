@@ -57,6 +57,11 @@ py.install_sources(
     # ADR 0002 phase 4 of forward-backward, the CUDA backend. Pure Python for the
     # same reason as phase 3, and listed for the same reason.
     'src/pfsmgraph/hmm/_forward_backward_cuda.py',
+    # The MDL criterion that revision 04 scores topology moves with: the two
+    # code-length primitives from the Lush Utility library, plus the model and
+    # total halves. Not a DP kernel, so it has no lifecycle phases. No
+    # apostrophes here, per the note above.
+    'src/pfsmgraph/hmm/_mdl.py',
     'src/pfsmgraph/hmm/_numeric.py',
     'src/pfsmgraph/hmm/_params.py',
     'src/pfsmgraph/hmm/_viterbi.py',

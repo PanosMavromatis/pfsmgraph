@@ -92,6 +92,28 @@ def _frozen(values: object, name: str, ndim: int) -> np.ndarray:
     return array
 
 
+def _check_codes(params, records):
+    """Every record's codes index ``params``'s symbol axis, or ``ValueError``.
+
+    Lives here rather than with a caller because it is a statement about
+    :class:`HMMParams` -- that a record was encoded against the vocabulary
+    ``output_p`` was sized against -- and both the EM loop and the description
+    lengths in :mod:`._mdl` ask it. Not a method, because ADR 0017 keeps the
+    value free of algorithm-facing behaviour.
+    """
+    for index, record in enumerate(records):
+        codes = record.codes
+        if codes.size:
+            lowest, highest = int(codes.min()), int(codes.max())
+            if lowest < 0 or highest >= params.n_symbols:
+                raise ValueError(
+                    f"record {index} holds code(s) outside the model's symbol axis "
+                    f"[0, {params.n_symbols}): observed [{lowest}, {highest}]. The "
+                    f"usual cause is a record encoded against a different vocabulary "
+                    f"than the one output_p was sized against"
+                )
+
+
 def _frozen_result(array: np.ndarray) -> np.ndarray:
     """Freeze a derived array on its way out of a cached property.
 

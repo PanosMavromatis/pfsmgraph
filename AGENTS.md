@@ -9,9 +9,79 @@ Shared project knowledge for any coding agent working in this repository.
 
 **`dataseq` and `hmm` are implemented and released — `dataseq` at 0.1.0 (2026-09-02) and `hmm` at 0.2.0 (2026-09-16, after 0.1.0 on 2026-09-13); the other three members are still empty scaffolding.** In place: the uv workspace root `pyproject.toml` (virtual — no `[project]` table), `uv.lock`, all five `packages/*` members with their own `pyproject.toml`, the `meson.build` files for `align` and `hmm` (`align`'s extension block still dormant, `hmm`'s live since the first `.pyx` landed 2026-09-09), and an empty `pfsmgraph/<pkg>/__init__.py` for the three members that have no code yet (plus `dl/rnn/` and `dl/transformer/`). The ADRs in `docs/design/adr/` are authoritative for the decisions they cover — the twelve initial records from the PRD, plus 0013 (how this family documents its public surfaces) and 0014 (how imported migration source is retained), both added 2026-09-01; the PRD remains the narrative design document.
 
-**What `dataseq` now contains.** Six modules under `packages/pfsmgraph-dataseq/src/pfsmgraph/dataseq/` (the container landed 2026-08-31, the encoder API 2026-09-01) and 74 tests — the first tests in this repository, and 74 of the suite's 1418 today; 1292 are `hmm`'s and the remaining 52 are the repo-root backend-matrix, API-docs, release-runbook and meson-source tests. `_reserved.py` hard-codes the ADR 0011 block as module constants, with no class or parameter that could relocate it; `_vocabulary.py` holds the `Vocabulary` protocol and `SymbolTable`, a frozen first-appearance-ordered implementation that encodes strictly and decodes *totally*, reserved codes included; `_record.py` and `_dataset.py` are the ragged container, whose records carry true lengths and never padding; `_collate.py` is `pad_collate`, where padding is introduced and always returned with its mask. The container imports neither torch nor pandas — verified in a subprocess — and its one runtime dependency is `numpy`.
+**What `dataseq` now contains.** Six modules under `packages/pfsmgraph-dataseq/src/pfsmgraph/dataseq/` (the container landed 2026-08-31, the encoder API 2026-09-01) and 74 tests — the first tests in this repository, and 74 of the suite's 1513 today; 1387 are `hmm`'s and the remaining 52 are the repo-root backend-matrix, API-docs, release-runbook and meson-source tests. `_reserved.py` hard-codes the ADR 0011 block as module constants, with no class or parameter that could relocate it; `_vocabulary.py` holds the `Vocabulary` protocol and `SymbolTable`, a frozen first-appearance-ordered implementation that encodes strictly and decodes *totally*, reserved codes included; `_record.py` and `_dataset.py` are the ragged container, whose records carry true lengths and never padding; `_collate.py` is `pad_collate`, where padding is introduced and always returned with its mask. The container imports neither torch nor pandas — verified in a subprocess — and its one runtime dependency is `numpy`.
 
-**What `hmm` now contains.** Eleven Python modules, two Cython kernels, and 1292 tests. The
+**What `hmm` now contains.** Twelve Python modules, two Cython kernels, and 1387 tests. The
+twelfth is `_mdl.py`, the minimum description length criterion revision 04 scores topology
+moves with, opened 2026-09-16 on `feat/hmm-mdl` with its two code-length primitives:
+`_int_code_length`, Rissanen's universal prior, and `_comb_code_length`, the cost of a
+composition. **Two things the reading settled are not in `HMMLIB-ACCOUNT.md` §8 and are
+easy to get wrong from the paper alone.** The original codes `n + 1` rather than `n`
+(`util.lsh:467`), which is what makes the code of zero finite — `log2(2.865)` alone —
+and matters because the search starts from a one-state model; and the iterated logarithm
+runs while the *value* exceeds 1, so it adds every term above **zero**, typically one
+more term than §8's "while the term exceeds 1" describes. The generated C
+(`util.c:637-671`) settled both, which is the use `core.md` claims for it. The binomial
+is never formed — the original already sums `log2(sum+i) - log2(i)` term by term — and
+the port reduces the differenced terms with one ascending `np.add.accumulate`, agreeing
+with the original's interleaving to 5.7e-14 bits and with an `lgamma` closed form to
+4e-11, so it is deliberately **not** claimed bit-identical. Negative input raises where
+the original returned `0.0`, because zero is the *cheapest* code and would make an
+impossible model win; `m <= 1` still returns `0.0`, which is arithmetic rather than a
+guard. The original accumulates in single precision (`flt` locals widened to `real` only
+at the return) and this does not, worth 2.1e-4 bits on an 8-state model description
+length — two orders below the 0.009 bits the data half already differs from the
+original's own logged value. It also owns the data half since the move described below:
+`_quantize` (`round-using`, half up, then an ascending renormalisation),
+`_corpus_description_length`, and `_data_description_length`, which matches the three
+tracked models' logged `data-dl` at their stored `d` to 0.009 bits where the unrounded
+value misses by 1.5 to 29 bits. **The model half landed 2026-09-16**, and two of its
+choices are decisions rather than transcription. `n-states-r` is `(to-float n-states)`
+(`hmm-trainer.lsh:405`) and **not** a rounded quantity, four lines from a
+`transition-p-r` where the same suffix means rounded. And the symbol axis is the **user**
+symbols, `n_symbols - USER_BASE`: `HMMParams` requires the six ADR 0011 reserved fibres to
+be exactly zero, so those codes carry no information, and the count then coincides exactly
+with Lush's `:model:alphabet-size` on all three fixtures. Taking `output_p.shape[-1]`
+literally adds 12, 25 and **105 bits** to the three tracked models -- the last 24% of
+`m008`'s model cost, against a whole training run that moves 58 to 142 bits over four
+accepted splits -- and it inflates the per-arc term alone, so it scales with the
+transition count and biases the search toward sparsity for a reason that is pure encoding
+artifact. `comb-code-length(d, 1 + n_states)` is reproduced although the combinatorics
+call for `m = n_states`; which the original did is settled by the oracle, whether it is
+right is PRD section 8's question. Transitions are counted **after** quantization, which
+is what makes `d` price the topology rather than merely round it. All three logged
+`model-dl` values are reproduced to within the log's six-figure print. **The total,
+`_total_description_length(params, records, d)`, is the one function the search calls**,
+and it returns a bare `float` on purpose: PRD section 8 leaves open whether this project
+ends up with a refined one-part code, which has no data/model split, so a return type
+carrying those fields would assert the two-part structure inside the seam that exists to
+make the swap cheap. A test pins `type(...) is float`; the training log calls the halves
+itself. The original's `1e100` sentinel dissolves with no code, since the data half already
+returns `+inf` and it absorbs -- and the difference is observable in exactly one place: a
+finite sentinel ranks two *impossible* models against each other by the cost of describing
+them, where `+inf` ties them. Each model's stored `_total_dl` is a fourth oracle, at four
+decimals rather than the log's `%g` and the only one constraining both halves jointly;
+reproduced to 0.013 bits, the largest part being the data half's known `d = 29` offset.
+**`_suggest_d(params, records)` chooses `d` as the original does, by Brent's method**:
+`suggest-d` is `minimize-int` over the total on `[1, 10000]` from 3821, and `minimize`
+(`util.lsh:118-227`) is Numerical Recipes' `brent` without `ITMAX`, transliterated statement
+for statement because the fixtures pin the probe *path* -- a tighter tolerance or a
+different start changes the answer, which is why a library `brent` would not do. It
+returns all three stored `d` exactly (29, 3, 4). **It keeps the original's local
+minimum on purpose**: the data half is not monotone in `d`, so the total has several
+basins, and on the one-state model every search starts from `d = 13` is 10.46 bits
+cheaper than the stored 29. Whether the search should use this or a global scan is
+decided in the master plan's loop-design subgoal, which now says so, and a pinning test
+makes that switch visible. **It also qualifies the `+inf` decision above**: Brent
+*subtracts* scores, `inf - inf` is `nan`, and a `nan` step quietly collapses to `-tol1`,
+which drove a synthetic search to an impossible point and changed the chosen `d` on a
+real model with a rare symbol. So `+inf` stays for anything that compares totals, and
+the optimizer's objective alone maps it back to the original's `1e100`. `minimize` was
+never compiled, so unlike the code-length primitives it ran in doubles.
+`tests/test_mdl.py` holds its 106 tests, whose oracle is
+arithmetic rather than the original, there being no Lush runtime here to run: powers of
+two where the iterated logarithm is exact, `math.comb` where the binomial is still
+representable, and an `lgamma` closed form sharing no code with the loop under test. The
 eleventh is `_forward_backward_cuda.py`, forward-backward's ADR 0002 phase 4, which completes
 its lifecycle the same day and makes `baum_welch(backend="cuda")` public, held byte for byte
 on an NVIDIA L4. **NVVM fuses multiply-add by default, and that shaped the kernel**: measured
@@ -84,12 +154,17 @@ can stop on a symmetric saddle**, since it watches only the size of each batch's
 exactly uniform start, which `rand_p_vector(noise_width=0)` returns, is one, so whatever
 initialises a model must break symmetry. The Lush-trained `m008` fixture, run through it
 as one record, moves 0.002 bits and stops after 30 cycles.
-`_data_description_length(params, records, d)` is the original's `update-data-dl`: the same
-forward pass over parameters `_quantize`d to multiples of `1/d` (`round-using`, half up, then
-an ascending renormalisation), `+inf` when rounding kills every path. It matches the three
-tracked models' logged `data-dl` at their stored `d` to 0.009 bits, where the unrounded
-value misses by 1.5 to 29 bits; choosing `d`, the model half and the total stay with
-revision 04's `_mdl.py`. `tests/test_baum_welch.py` holds its 94 tests. **`tests/test_hmmlearn_oracle.py` checks the
+**The data description length moved out of this module on 2026-09-16** and now lives in
+`_mdl.py` with `_quantize` and `_corpus_description_length`; `_check_codes` went to
+`_params.py` at the same time, so `_baum_welch` imports the corpus length from `_mdl`
+rather than the reverse. The direction is the point: EM's convergence quantity and the
+topology search's data half are now the *same function*, not two that agree. The search's
+acceptance rule compares a re-converged candidate against the incumbent, and re-converging
+runs `baum_welch`, so two implementations could drift and a candidate would converge under
+one definition while being scored under another. That the share is possible at all is owed
+to `_corpus_description_length` taking *arrays* rather than an `HMMParams`, which it does
+because `_quantize` can round a row to all zeros -- a rounded model need not be a valid
+one. `tests/test_baum_welch.py` holds its 83 tests. **`tests/test_hmmlearn_oracle.py` checks the
 forward-backward and the E- and M-steps against `hmmlearn`'s `CategoricalHMM`** (21 tests,
 2026-09-14), on the destination-only emission case where arc emission reduces to state
 emission: hmmlearn's `startprob_` is our `init_state_p @ transition_p`, since its first
@@ -474,14 +549,14 @@ under `packages/` may import or read from either**: their contents exist on one 
 so a distribution reaching in passes locally and fails in every clone. Unlike `.scratch/`,
 neither is evidence about anything; do not add negations to commit data through them.
 
-Still to do, in PRD order (§11): `hmm` (Lush translation), then `align`, then `hseg`. **The `hmm` migration is planned as three revisions rather than one**, because the Lush trainer spans three problems that fail differently: `02-hmm-v0.1.0` (Viterbi and the `dataseq` interface, carrying the project's first DP kernel, first `.pyx`, first non-empty ADR 0003 backend matrix; the meson-python resolution ADR 0012 deferred to it was in the event settled *ahead* of it, on `exp/meson-python-namespace`, since the finder turned out to be injected by the editable install rather than by compilation — [ADR 0018](../design/adr/0018-family-wide-meson-python-build-backend.md)), `03-hmm-v0.2.0` (Baum-Welch on a fixed topology, with an optional `torch` autograd backend held against the numpy reference), and `04-hmm-v0.3.0` (topology search by state merge and split, scored by minimum description length). Their plans are drafted under `docs/plan/planned/` and registered in the master plan. `dataseq` is finished and released: 0.1.0 is on PyPI and tagged `pfsmgraph-dataseq-v0.1.0`, as of 2026-09-02. `hmm` 0.1.0 followed on 2026-09-13, tagged `pfsmgraph-hmm-v0.1.0`: the first release built by meson-python, published as a pure `py3-none-any` wheel. **`hmm` 0.2.0 followed on 2026-09-16, tagged `pfsmgraph-hmm-v0.2.0`, and is this family's first release of platform wheels** — twenty of them, over linux x86_64/aarch64, macOS arm64 and Windows x86_64 on cp310–cp314, built by GitHub Actions and published through PyPI Trusted Publishing with PEP 740 attestations. It is the first version whose public API reaches a compiled kernel, which is why the pure wheel could not continue: `backend="cython"` is public, so a pure install would report `cython ✗` to every pip user. The sdist reproduces byte for byte across machines — the archive this repository builds from the tagged commit has the same sha256 as the one CI built and PyPI serves, with no `SOURCE_DATE_EPOCH` set by the sdist job at all. The container half of the merge (three existing implementations, `dl` version as base — §3.5) has landed.
+Still to do, in PRD order (§11): `hmm` (Lush translation), then `align`, then `hseg`. **The `hmm` migration is planned as three revisions rather than one**, because the Lush trainer spans three problems that fail differently: `02-hmm-v0.1.0` (Viterbi and the `dataseq` interface, carrying the project's first DP kernel, first `.pyx`, first non-empty ADR 0003 backend matrix; the meson-python resolution ADR 0012 deferred to it was in the event settled *ahead* of it, on `exp/meson-python-namespace`, since the finder turned out to be injected by the editable install rather than by compilation — [ADR 0018](../design/adr/0018-family-wide-meson-python-build-backend.md)), `03-hmm-v0.2.0` (Baum-Welch on a fixed topology, with an optional `torch` autograd backend held against the numpy reference), and `04-hmm-v0.3.0` (topology search by state merge and split, scored by minimum description length). **All three are now open**, and `docs/plan/planned/` is empty in consequence: 02 and 03 are closed, their subgoals and the branch plans that executed them filed under `docs/plan/02-hmm-v0.1.0/` and `docs/plan/03-hmm-v0.2.0/`, and 04 was opened on 2026-09-16 with its subgoals in the master plan. A revision drafted ahead of its opening still goes under `planned/` as a splice source; the convention is stated in `docs/plan/TODO.md` rather than in a directory git does not track. `dataseq` is finished and released: 0.1.0 is on PyPI and tagged `pfsmgraph-dataseq-v0.1.0`, as of 2026-09-02. `hmm` 0.1.0 followed on 2026-09-13, tagged `pfsmgraph-hmm-v0.1.0`: the first release built by meson-python, published as a pure `py3-none-any` wheel. **`hmm` 0.2.0 followed on 2026-09-16, tagged `pfsmgraph-hmm-v0.2.0`, and is this family's first release of platform wheels** — twenty of them, over linux x86_64/aarch64, macOS arm64 and Windows x86_64 on cp310–cp314, built by GitHub Actions and published through PyPI Trusted Publishing with PEP 740 attestations. It is the first version whose public API reaches a compiled kernel, which is why the pure wheel could not continue: `backend="cython"` is public, so a pure install would report `cython ✗` to every pip user. The sdist reproduces byte for byte across machines — the archive this repository builds from the tagged commit has the same sha256 as the one CI built and PyPI serves, with no `SOURCE_DATE_EPOCH` set by the sdist job at all. The container half of the merge (three existing implementations, `dl` version as base — §3.5) has landed.
 
 ## Commands
 
 Toolchain: **uv** (workspace) + **pytest**. Requires `uv` and Python ≥ 3.10.
 
 - `uv sync` — create/refresh the venv; installs all five members editable (plain `.pth`) plus the `dev` group (`pytest`).
-- `uv run pytest` — run the suite (1418 tests: 74 in `packages/pfsmgraph-dataseq/tests/`, 1292 in `packages/pfsmgraph-hmm/tests/`, and 52 in the repo-root `tests/` — 23 covering the ADR 0003 backend matrix, 11 executing documented code blocks against their pasted output per ADR 0013, 2 checking that `docs/ops/release.md` names only recipes the root `justfile` defines, and 16 asserting each `meson.build`'s `install_sources` matches the package on disk). That last figure was 7 until 2026-09-04: it is parameterised over `packages/*/meson.build`, so it grew by itself when the three pure members got theirs, and that growth **is** the 271 → 280 — no test was written for the change that occasioned it. That verifier reads `docs/api/*/*.md` **and `packages/*/README.md`**: a member README becomes a PyPI long description under an immutable version, so it is the one documentation surface where drift cannot be corrected in place. Every run opens with the backend header. Two narrow skips are by design: `test_torch_interop.py` verifies the `DataLoader` integration and skips when torch is absent, since `dataseq` does not depend on torch; and the 206 numba-cuda tests (59 in `test_viterbi.py`, 25 in `test_viterbi_batch.py`, 55 in `test_forward_backward_backends.py` and 67 in `test_baum_welch_backends.py`: every shared test's `cuda` parameter plus each file's launch-geometry tests) skip without a CUDA device, with the header reading `cuda ✗ (no CUDA device detected)` — set `PFSMGRAPH_REQUIRE_BACKENDS=cuda` where a GPU is expected, so a lost device fails the run instead.
+- `uv run pytest` — run the suite (1513 tests: 74 in `packages/pfsmgraph-dataseq/tests/`, 1387 in `packages/pfsmgraph-hmm/tests/`, and 52 in the repo-root `tests/` — 23 covering the ADR 0003 backend matrix, 11 executing documented code blocks against their pasted output per ADR 0013, 2 checking that `docs/ops/release.md` names only recipes the root `justfile` defines, and 16 asserting each `meson.build`'s `install_sources` matches the package on disk). That last figure was 7 until 2026-09-04: it is parameterised over `packages/*/meson.build`, so it grew by itself when the three pure members got theirs, and that growth **is** the 271 → 280 — no test was written for the change that occasioned it. That verifier reads `docs/api/*/*.md` **and `packages/*/README.md`**: a member README becomes a PyPI long description under an immutable version, so it is the one documentation surface where drift cannot be corrected in place. Every run opens with the backend header. Two narrow skips are by design: `test_torch_interop.py` verifies the `DataLoader` integration and skips when torch is absent, since `dataseq` does not depend on torch; and the 206 numba-cuda tests (59 in `test_viterbi.py`, 25 in `test_viterbi_batch.py`, 55 in `test_forward_backward_backends.py` and 67 in `test_baum_welch_backends.py`: every shared test's `cuda` parameter plus each file's launch-geometry tests) skip without a CUDA device, with the header reading `cuda ✗ (no CUDA device detected)` — set `PFSMGRAPH_REQUIRE_BACKENDS=cuda` where a GPU is expected, so a lost device fails the run instead.
 - `uv build --package pfsmgraph-<pkg>` — build one member's sdist + wheel.
 - `uv lock` — refresh `uv.lock` (committed; one lockfile for the whole family).
 
@@ -645,7 +720,7 @@ A live instance of the footgun, worth recognising: the three members still in de
 
 ## Versioning
 
-**Versions are per-package, and there is deliberately no `VERSION` file at the repo root.** Release order is forced by the dependency graph — `dataseq` must publish before `align` can — so the five members can never share a version, and a repo-wide version number would be a claim about nothing. Each member owns the `version` field in its own `pyproject.toml`: `pfsmgraph-dataseq` reads `0.1.0` as of its release commit (2026-09-02); `pfsmgraph-hmm` read `0.1.0` from its own (2026-09-13), moved to `0.2.0.dev0` on 2026-09-16 when the 0.2.0 release branch needed artifacts to verify, and to a bare `0.2.0` at that release's own commit the same day — **the version field leads the release rather than following it**, so a bare number in the tree means the release commit has been made, not that PyPI has the version; and the other three still read `0.1.0.dev0` — the scheme working as intended rather than drift. **The window between a release commit and the next `.devN` bump is worth naming, because its hazard is not the one the `.dev0` rule is usually explained by.** For those three days `hmm` declared a bare version that was *already published*, and the risk there is not burning a number: a local build now produces a **platform** wheel, whose filename differs from the `py3-none-any` one PyPI already holds for 0.1.0, so an upload would be **accepted** onto the released version rather than rejected as a duplicate. Adding files to a published release changes what `pip install pfsmgraph-hmm==0.1.0` gives people. Two guards added on `chore/release-hmm-0.2.0` close that path — `release` refuses `pfsmgraph-hmm` outright, and the publish job asserts every artifact carries the tag's version — but the cheap structural fix is to bump to the next `.devN` at the release commit rather than days later.
+**Versions are per-package, and there is deliberately no `VERSION` file at the repo root.** Release order is forced by the dependency graph — `dataseq` must publish before `align` can — so the five members can never share a version, and a repo-wide version number would be a claim about nothing. Each member owns the `version` field in its own `pyproject.toml`: `pfsmgraph-dataseq` reads `0.1.0` as of its release commit (2026-09-02); `pfsmgraph-hmm` read `0.1.0` from its own (2026-09-13), moved to `0.2.0.dev0` on 2026-09-16 when the 0.2.0 release branch needed artifacts to verify, to a bare `0.2.0` at that release's own commit the same day, and to `0.3.0.dev0` hours later at revision 04's opening — **the version field leads the release rather than following it**, so a bare number in the tree means the release commit has been made, not that PyPI has the version; and the other three still read `0.1.0.dev0` — the scheme working as intended rather than drift. **The window between a release commit and the next `.devN` bump is worth naming, because its hazard is not the one the `.dev0` rule is usually explained by.** For those three days `hmm` declared a bare version that was *already published*, and the risk there is not burning a number: a local build now produces a **platform** wheel, whose filename differs from the `py3-none-any` one PyPI already holds for 0.1.0, so an upload would be **accepted** onto the released version rather than rejected as a duplicate. Adding files to a published release changes what `pip install pfsmgraph-hmm==0.1.0` gives people. Two guards added on `chore/release-hmm-0.2.0` close that path — `release` refuses `pfsmgraph-hmm` outright, and the publish job asserts every artifact carries the tag's version — but the cheap structural fix is to bump to the next `.devN` at the release commit rather than days later. That fix was missed again at 0.2.0 and applied at revision 04's opening instead, so the second window was hours rather than days — narrower, and with both guards already in place, but the same shape.
 
 Release tags are per-package too: `pfsmgraph-<pkg>-v<version>`, e.g. `pfsmgraph-dataseq-v0.1.0`. Hyphen rather than slash, because git refs are paths and a `pfsmgraph-dataseq/v0.1.0` tag cannot coexist with a plain `pfsmgraph-dataseq` one. The first is `pfsmgraph-dataseq-v0.1.0`, cut by hand at the release commit (`docs/plan/DEFERRED.md`, trigger "the first real release"); no command in use here creates a per-package tag.
 
