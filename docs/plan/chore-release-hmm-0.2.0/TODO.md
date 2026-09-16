@@ -406,12 +406,62 @@
     > Trusted Publishing" section also needs its "suggested posture" revisited: it recommends
     > piloting Trusted Publishing on a member where a botched release costs nothing, and this
     > branch is that pilot happening.
-- [ ] Settle what 0.2.0's immutable metadata says
-  - [ ] Restore `Programming Language :: Cython`; review `description`, the `cpu-parallel`,
+- [x] Settle what 0.2.0's immutable metadata says
+  > **Done:** the metadata is frozen as: `3 - Alpha`, `Programming Language :: Cython`
+  > restored, one classifier per shipped interpreter, `description` unchanged,
+  > `pfsmgraph-dataseq>=0.1.0` and `numpy>=2.1` as dependencies, and the three extras'
+  > bounds unchanged with the `numpy<2.5` cap kept. Three of the four bounds were checked
+  > against PyPI rather than against the workspace, and the one documentation surface that
+  > cannot be corrected after upload — the member README, which becomes the long
+  > description — now states the wheel shape.
+  > **Note:** nothing in this goal changed a shipped module, deliberately. The only
+  > candidate was `_backends.py`'s missing-extension message, and it was left alone because
+  > it is already correct for a world where PyPI carries platform wheels.
+  - [x] Restore `Programming Language :: Cython`; review `description`, the `cpu-parallel`,
     `gpu` and `torch` extras' bounds, and the `pfsmgraph-dataseq` lower bound against the
     `dataseq` API 0.2.0 uses
-  - [ ] State the wheel shape in the member README where it matters, and check
+    > **Q:** Which classifiers should 0.2.0 carry, and should Development Status move from
+    > `3 - Alpha` to `4 - Beta`?
+    > **A:** `Programming Language :: Cython` plus one row per interpreter shipped —
+    > `3.10` through `3.14`, mirroring `CIBW_BUILD` exactly, so PyPI's sidebar answers "is my
+    > Python covered" without reading wheel filenames. Operating-system classifiers were
+    > declined: they read as "only these are supported" when the sdist builds anywhere.
+    > **Development Status stays 3 - Alpha.** Topology search, which the description itself
+    > names as forthcoming, is revision 04, and the public surface grew substantially across
+    > one minor version. Understating maturity costs a reader nothing; overstating it invites
+    > reliance the version cannot support.
+    > **Note:** `description` reviewed and unchanged. It already names batched decoding,
+    > Baum-Welch training and selectable backends, and marks topology search forthcoming —
+    > accurate for what 0.2.0 ships.
+    > **Ran (2026-09-16):** `pfsmgraph-dataseq>=0.1.0` verified **against PyPI rather than
+    > against the workspace**, which is the first time that bound has been checked by
+    > anything. `uv run --no-project --with 'pfsmgraph-dataseq==0.1.0'` installed the
+    > published wheel, and all five names `hmm` imports — `RESERVED_SYMBOLS`, `USER_BASE`,
+    > `Vocabulary`, `SequenceRecord`, `pad_collate` — are in its 15-name `__all__`. This is
+    > exactly what `core.md`'s workspace footgun says review is the only mechanism for: a
+    > path source satisfies any constraint, and `uv.lock` records no specifier for a
+    > workspace member, so neither a local run nor the lockfile can see this bound.
+    > **Ran:** the extras' bounds checked against PyPI's current releases. `numba` is at
+    > 0.67.0 against a `>=0.61` floor and `torch` at 2.14.0 against `>=2.13` — both honest.
+    > **`numba-cuda` is still 0.30.4**, the same release whose `np.row_stack` call at import
+    > breaks on numpy 2.5, so the `numpy<2.5` cap in `gpu` **stays**. Its own comment says to
+    > drop it when a numba-cuda release stops doing that; re-checking rather than inheriting
+    > matters here because the bound is about to become immutable.
+  - [x] State the wheel shape in the member README where it matters, and check
     `backends.md`'s remedy for a missing extension against what PyPI will carry
+    > **Done:** a paragraph directly under the README's `pip install pfsmgraph-hmm`, naming
+    > the four platforms and cp310–cp314, saying that anywhere else pip builds from the
+    > sdist and needs a C compiler, that `backends()` reports `cython ✓` either way, and that
+    > a pure install remains available from source via `-Dcompiled=false` and reports
+    > `cython ✗` rather than pretending otherwise. It is prose, not a code block, so the
+    > ADR 0013 verifier has nothing new to execute — `tests/test_api_docs.py` 11 passed.
+    > **Note:** `backends.md`'s remedy needs **no change**, and there are two reasons rather
+    > than one. It reads "install a platform wheel, or build from source with a C compiler",
+    > which was aspirational at 0.1.0 and becomes actionable at 0.2.0 now that PyPI carries
+    > platform wheels — the check this subgoal asked for, and it passes. Separately, that
+    > table quotes `_backends.py`'s actual message string, so editing the prose without
+    > editing the module would silently desync the document from the code it documents. A
+    > remedy that happens to be correct is not a reason to treat the text as free to edit.
 - [ ] Verify what a consumer installs
   - [ ] Build 0.2.0.dev0 wheels and the sdist; install each available wheel into a clean
     venv outside the workspace: `py.typed`, the `.so` files, no `pfsmgraph/__init__.py`,

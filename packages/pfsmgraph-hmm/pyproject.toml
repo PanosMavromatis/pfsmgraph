@@ -12,10 +12,30 @@ requires-python = ">=3.10"
 license = "MIT"
 authors = [{ name = "Panos Mavromatis", email = "ai.labs@panos-mav.dev" }]
 maintainers = [{ name = "Mavromatis AI Labs", email = "ai.labs@panos-mav.dev" }]
+# Development Status stays at 3 - Alpha for 0.2.0. The package trains, decodes in
+# batches and holds five backends to a measured contract, which reads as beta -- but
+# topology search, which the description names as forthcoming, is revision 04, and the
+# public surface grew substantially across one minor version. Understating maturity
+# costs a reader nothing; overstating it invites reliance the version cannot support.
+#
+# Programming Language :: Cython returns here at 0.2.0. It was dropped for 0.1.0, which
+# shipped a pure wheel reaching no compiled kernel, and is true again now that
+# backend="cython" is public and the wheels carry the extensions.
+#
+# The per-interpreter rows mirror CIBW_BUILD in .github/workflows/release.yml exactly,
+# so PyPI's sidebar answers "is my Python covered" without reading wheel filenames.
+# They are a claim that has to be extended when 3.15 support lands, which is the cost
+# of making it at all.
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
+    "Programming Language :: Cython",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Typing :: Typed",
 ]
 
