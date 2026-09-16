@@ -1,0 +1,170 @@
+# The first CI in this repository, and pfsmgraph-hmm's release path from 0.2.0.
+#
+# 0.2.0 is the first version whose public API reaches a compiled kernel
+# (backend="cython"), so it cannot ship 0.1.0's pure py3-none-any wheel without
+# every pip user seeing `cython ✗`. This matrix is what replaces it.
+#
+# Build and publish have deliberately different triggers. Wheels build on every
+# push to main, so a platform-specific compile failure surfaces while it is
+# still cheap to fix; only a pfsmgraph-hmm-v* tag reaches `publish`. Pull
+# requests are excluded: a 20-wheel matrix on a docs-only PR wants path filters,
+# and path filters are their own source of silent misses.
+
+name: release
+
+on:
+  push:
+    branches:
+      - main
+      # >>> TEMPORARY, REMOVE BEFORE MERGING chore/release-hmm-0.2.0 <<<
+      # This workflow cannot run from a feature branch: its other triggers are
+      # main and a tag, and GitHub offers workflow_dispatch only for workflows
+      # already on the default branch. So the 20-wheel matrix would first
+      # execute on the merge commit, leaving two mechanics unverified across a
+      # merge -- whether CIBW_TEST_SOURCES reaches above package-dir, and
+      # whether `pipx run build` produces meson-python's sdist from a shallow
+      # checkout. This line buys one dry run. The publish job is unaffected and
+      # stays inert: it is gated on a pfsmgraph-hmm-v* tag, not on this branch.
+      - chore/release-hmm-0.2.0
+    tags: ["pfsmgraph-hmm-v*"]
+  workflow_dispatch:
+
+# Read-only by default. Only `publish` raises id-token, and only for the OIDC
+# exchange Trusted Publishing needs.
+permissions:
+  contents: read
+
+jobs:
+  wheels:
+    name: wheels ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {label: linux-x86_64,   os: ubuntu-24.04,     archs: x86_64}
+          - {label: linux-aarch64,  os: ubuntu-24.04-arm, archs: aarch64}
+          - {label: macos-arm64,    os: macos-14,         archs: arm64}
+          - {label: windows-x86_64, os: windows-2022,     archs: AMD64}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      # The root justfile sets SOURCE_DATE_EPOCH from the commit time because
+      # meson-python otherwise stamps build-time entry timestamps and two builds
+      # of one commit differ. Doing the same here keeps a locally built wheel and
+      # a CI-built one of the same commit byte-identical.
+      - name: Pin the build timestamp to the commit
+        shell: bash
+        run: echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> "$GITHUB_ENV"
+
+      - uses: pypa/cibuildwheel@v4.2.1
+        with:
+          package-dir: packages/pfsmgraph-hmm
+        env:
+          CIBW_ARCHS: ${{ matrix.archs }}
+          # cp310 is requires-python's floor; cp314 is the newest released.
+          CIBW_BUILD: cp310-* cp311-* cp312-* cp313-* cp314-*
+          # musllinux and PyPy are sdist-only by decision, not by omission.
+          CIBW_SKIP: "*-musllinux* pp*"
+          CIBW_ENVIRONMENT_PASS_LINUX: SOURCE_DATE_EPOCH
+
+          # No -Dcompiled is passed: meson.options defaults it to true, and a
+          # release wheel is precisely the case that must not use the escape
+          # hatch. 0.1.0's build recipe passed -Dcompiled=false; that is what
+          # goal 3 removes from the justfile.
+
+          # WHAT THE TEST STEP IS FOR, and why it is this narrow: only
+          # _viterbi_cython.pyx and _forward_backward_cython.pyx differ between
+          # these twenty wheels. cpu_parallel, cuda and torch are pure Python
+          # compiled or dispatched at runtime, identical in all of them, and
+          # verified once on a checkout by test.yml -- so they are deliberately
+          # NOT installed here and they skip. That is legitimate: their `needs`
+          # are not in _backends.ESCALATED_NEEDS. `cython`'s IS, so a wheel that
+          # shipped without its .so aborts the session in pytest_configure
+          # instead of passing green. No PFSMGRAPH_REQUIRE_BACKENDS is needed
+          # for that -- detect() escalates before check_required() is reached.
+          #
+          # test-sources paths are relative to the PROJECT root -- the directory
+          # cibuildwheel was called from -- not to package-dir. That is what lets
+          # the root conftest.py and the .scratch fixtures come along; 8 of the
+          # 12 test files read those fixtures, resolved as parents[3] from
+          # tests/, so the directory layout has to be preserved exactly.
+          #
+          # pyproject.toml is copied for addopts = "-ra", not for rootdir:
+          # measured 2026-09-16, pytest falls back to the cwd when no ini file
+          # is found, so conftest.py loads either way. But ADR 0003 requires a
+          # skipped backend to state its reason in the run's own output, and
+          # without -ra pytest prints a bare "s" and swallows it.
+          CIBW_TEST_SOURCES: >-
+            conftest.py
+            _backends.py
+            pyproject.toml
+            packages/pfsmgraph-hmm/tests
+            .scratch/hmm-lush/Training
+          CIBW_TEST_REQUIRES: pytest>=8
+          # Relative paths, because test-sources is set: the command runs in the
+          # temporary directory those sources were copied into.
+          #
+          # The hmmlearn oracle is ignored rather than installed. It checks the
+          # numpy reference against an external library -- platform-independent,
+          # so it proves nothing new per wheel -- and it has no cp314 wheels,
+          # which would make one interpreter diverge from the other four.
+          CIBW_TEST_COMMAND: >-
+            python -m pytest ./packages/pfsmgraph-hmm/tests
+            --ignore=./packages/pfsmgraph-hmm/tests/test_hmmlearn_oracle.py
+
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: wheels-${{ matrix.label }}
+          path: wheelhouse/*.whl
+          if-no-files-found: error
+
+  sdist:
+    name: sdist
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      # `build` rather than `uv build`, deliberately. The workspace root sets
+      # [tool.uv] no-build-isolation-package for all five members, so `uv build`
+      # would look for meson-python in an environment CI has not synced. `build`
+      # uses ordinary PEP 517 isolation and reads build-system.requires, which
+      # is also what a pip user installing from this sdist will do.
+      - run: pipx run build --sdist --outdir dist packages/pfsmgraph-hmm
+
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  publish:
+    name: publish to PyPI
+    needs: [wheels, sdist]
+    # The gate. Every other trigger builds and stops; nothing is uploaded unless
+    # the ref is a pfsmgraph-hmm-v* tag. Per-package tags exist because a bare
+    # v0.2.0 becomes ambiguous the moment a second member ships its own.
+    if: startsWith(github.ref, 'refs/tags/pfsmgraph-hmm-v')
+    runs-on: ubuntu-24.04
+    environment:
+      name: pypi
+      url: https://pypi.org/p/pfsmgraph-hmm
+    permissions:
+      id-token: write
+    steps:
+      # Note the majors: upload-artifact is v7 and download-artifact is v8.
+      # They do not track each other.
+      - uses: actions/download-artifact@v8.0.1
+        with:
+          pattern: wheels-*
+          merge-multiple: true
+          path: dist
+      - uses: actions/download-artifact@v8.0.1
+        with:
+          name: sdist
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@v1.14.2

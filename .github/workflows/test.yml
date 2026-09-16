@@ -1,0 +1,48 @@
+# The suite on a second machine.
+#
+# Not merely CI hygiene: ADR 0016 and ADR 0020 make bit-exactness across
+# backends *on one host* the contract, and this suite has already found
+# host-dependent behaviour twice -- libm's log2 against numpy's on an AVX-512
+# host, and phase-3 fork/join costs an order of magnitude apart between two
+# machines. A second host is new information, not redundancy.
+
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@v10.1.0
+        with:
+          enable-cache: true
+
+      # A plain `uv sync`, not a trimmed one. The dev group is what this
+      # repository promises itself, and a CI environment that differs from the
+      # documented one verifies something nobody runs. It is heavy -- torch and
+      # numba-cuda[cu13] between them are several GB -- which is what the cache
+      # is for.
+      - run: uv sync
+
+      # DEFERRED.md's "wire PFSMGRAPH_REQUIRE_BACKENDS into the GPU job" lands
+      # here in the only form a hosted runner allows, and only half of it. No
+      # GitHub-hosted runner has a GPU, so `cuda` is deliberately absent and
+      # still skips; that half stays deferred. The three named here ARE
+      # installed by the sync above, so a skip would mean an import that broke
+      # after a resolution moved -- exactly the green run whose header nobody
+      # reads. `cython` is already unconditional via ESCALATED_NEEDS; naming it
+      # costs nothing and records the intent.
+      - run: uv run pytest
+        env:
+          PFSMGRAPH_REQUIRE_BACKENDS: cython,cpu_parallel,torch

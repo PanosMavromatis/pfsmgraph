@@ -36,6 +36,7 @@ A composable ecosystem of Python packages for modeling symbolic data sequences. 
 pyproject.toml                 # uv workspace root (virtual — not a package)
 dp-compile.toml                # manifest for the dp-compile plugin (see docs/agents/claude.md)
 .claude/settings.json          # marketplace + enabled plugins (see docs/agents/claude.md)
+.github/workflows/             # CI: suite on push/PR, cibuildwheel release (first CI, 2026-09-16)
 docs/design/PRD.md             # authoritative design document
 docs/design/adr/               # decision records (authoritative)
 docs/design/algorithms/        # per-algorithm formalizations, one directory each
