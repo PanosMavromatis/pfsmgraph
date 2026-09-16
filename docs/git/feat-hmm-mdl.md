@@ -11,7 +11,7 @@ Write `_mdl.py`, the minimum-description-length criterion revision 04's topology
 ## Scope
 
 - ~~Decide what moves into `_mdl.py` and what stays in `_baum_welch.py`~~ — settled 2026-09-16, see Notes
-- `int_code_length` (Rissanen's universal prior) and `comb_code_length` (`log₂(sum+m) + log₂ C(sum+m−1, m−1)`), overflow-safe
+- ~~`int_code_length` and `comb_code_length`, overflow-safe~~ — landed 2026-09-16, see Notes
 - The model description length (`update-model-dl`, `hmm-trainer.lsh:402-427`), including what counts as a non-zero transition and how the reserved symbol block enters `n_symbols`
 - The total, validated against the three tracked models' `_total_dl` at their stored `d`
 - `suggest-d`, with those models' stored `d` as the oracle
@@ -30,3 +30,7 @@ Write `_mdl.py`, the minimum-description-length criterion revision 04's topology
 **2026-09-16 — the seam.** `_mdl.py` owns `_quantize`, `_corpus_description_length` and `_data_description_length`; `_check_codes` moves to `_params.py`; `_baum_welch` imports the corpus length back for its convergence check, so every edge points downward from training to scoring. Nothing is exported.
 
 The risk this scope line originally named was not the real one. `_data_description_length` has **no call site in `packages/`** — `baum_welch` watches the unrounded length, and the rounded one exists only for a scorer that does not exist yet — so the 94 tests were never exposed to the move, and the whole cost is one import block in `test_baum_welch.py`. What is genuinely shared is `_corpus_description_length` and `_check_codes`, which the plan had not named. Reasoning in `docs/plan/feat-hmm-mdl/TODO.md` under goal 1.
+
+**2026-09-16 — the primitives.** `_mdl.py` and `tests/test_mdl.py` (60 tests). Two things the reading settled that `HMMLIB-ACCOUNT.md` §8 does not state correctly: the original codes `n + 1` rather than `n`, and its iterated logarithm runs while the *value* exceeds 1, so it adds every term above zero — one more than §8's "while the term exceeds 1". The DH compiler's generated C settled both, which is the first time this branch has needed it.
+
+The overflow concern in the scope line above was already answered by the original, which never forms the binomial. Measured, none of the three candidate forms was distinguishable on fidelity (≤ 4e-11 bits apart), so the choice was idiom. Cost was a non-issue too: the model half calls `_comb_code_length` twice per score however many states there are.
