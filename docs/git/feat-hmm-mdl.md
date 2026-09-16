@@ -13,7 +13,7 @@ Write `_mdl.py`, the minimum-description-length criterion revision 04's topology
 - ~~Decide what moves into `_mdl.py` and what stays in `_baum_welch.py`~~ — settled and executed 2026-09-16, see Notes
 - ~~`int_code_length` and `comb_code_length`, overflow-safe~~ — landed 2026-09-16, see Notes
 - ~~The model description length~~ — landed 2026-09-16, see Notes
-- The total, validated against the three tracked models' `_total_dl` at their stored `d`
+- ~~The total, validated against `_total_dl`~~ — landed 2026-09-16, see Notes
 - `suggest-d`, with those models' stored `d` as the oracle
 - The `DEFERRED.md` trigger for promoting `_mdl.py` to a shared home, which the draft cited and which does not exist
 
@@ -42,3 +42,5 @@ Two things the move turned up. The five helpers the moved section needed (`SEED`
 **2026-09-16 — the model half.** `_model_description_length(params, d)`, reproducing all three logged `model-dl` values (58.2207 / 142.024 / 439.154) to within the log's six-figure print. Both open questions were settled by that oracle rather than by argument: the symbol axis is the **user** symbols, and `comb_code_length(d, 1 + n_states)` is reproduced although the combinatorics call for `m = n_states`.
 
 The reserved-block exclusion is worth 12, 25 and 105 bits on the three models. That is not a rounding detail — 105 bits is 24% of `m008`'s model cost, and the whole `m001` run moves 58 → 142 bits across four accepted splits. Two tests pin each decision against the variant a future reader would most plausibly "fix" it to, since excluding the reserved block looks like an oversight and `1 + n_states` looks like an off-by-one. Mutation check: four mutants, all caught (7, 4, 2, 4 failures).
+
+**2026-09-16 — the total.** `_total_description_length(params, records, d) -> float`, the one function the search calls. The return is a bare float by decision: a refined one-part code, which PRD §8 leaves open, has no data/model split, so a record would bake the two-part shape into the seam. `_total_dl` reproduced to 0.013 bits. Mutation check: 4 mutants, all caught — including a `1e100` sentinel, which only one test sees, because it sorts impossible models last exactly as `+inf` does and differs only in ranking two impossible models against each other.

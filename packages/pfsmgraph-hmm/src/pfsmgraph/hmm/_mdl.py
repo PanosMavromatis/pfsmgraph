@@ -249,3 +249,43 @@ def _model_description_length(params, d):
         + (1 + n_states) * _comb_code_length(d, 1 + n_states)
         + n_non_zero * _comb_code_length(d, 1 + n_user_symbols)
     )
+
+
+def _total_description_length(params, records, d):
+    """The two-part score: the data half plus the model half, in bits.
+
+    ``update-total-dl`` (``hmm-trainer.lsh:430-433``), and **the one function the
+    topology search calls**. Nothing else assembles a score from the pieces: a
+    candidate move wins or loses by this number alone, so
+    :func:`_data_description_length` and :func:`_model_description_length` are
+    implementation of the criterion rather than parts of its interface.
+
+    That is the whole reason for the seam. [PRD §8] registers *which* description
+    length should score this search as an open research question -- exact NML for
+    HMM classes is intractable, and the tractable route, factorised NML over the
+    multinomial case, is a decision this project has not made. Answering it later
+    must be a substitution of this function, not a rewrite of the search, which is
+    also why the return is a bare ``float``: a one-part code has no data/model
+    split, so a return type carrying those two fields would assert the very
+    structure that may be replaced.
+
+    **No ``1e100`` sentinel.** The original maps its ``-1`` log-zero sentinel to
+    ``1e100`` so an impossible model sorts last rather than best. Here
+    :func:`~._numeric.bits` gives ``+inf``, which already sorts last and absorbs
+    under addition, so the mapping dissolves -- the same dissolution revision 02
+    applied to ``safe->--log`` and revision 03 inherited. A ported ``1e100``
+    would be a magic number that is also *comparable*, and a model scoring
+    ``1e100 + 1`` would lose to one scoring ``1e100`` for no reason at all.
+
+    The sum is data-then-model, as the original writes it. Checked against the
+    ``_total_dl`` each tracked model stores -- a fourth oracle, at four decimals
+    rather than the training log's ``%g``, and the only one that constrains both
+    halves at once: reproduced to 0.013 bits, whose largest part is the data
+    half's known offset at ``d = 29``.
+
+    ``d`` is taken as given; choosing it is ``suggest-d``'s job. Both halves
+    reject a ``d`` that is not positive and finite, the data half first.
+    """
+    return _data_description_length(params, records, d) + _model_description_length(
+        params, d
+    )

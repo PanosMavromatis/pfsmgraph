@@ -11,7 +11,7 @@ be written down; :func:`math.comb`, which evaluates the binomial the
 implementation deliberately never forms; and a ``lgamma`` closed form, which
 computes the same quantity by a route sharing no code with the loop under test.
 
-Seven sections:
+Eight sections:
 
 - **Exact values**, where float arithmetic is exact and ``==`` is the right
   assertion rather than a tolerance.
@@ -28,6 +28,9 @@ Seven sections:
 - **The model description length**, against the `model-dl` column of the same
   logs, with both of its contested choices pinned against the alternative
   that would otherwise pass unnoticed.
+- **The total**, against the `_total_dl` each model stores -- a fourth oracle,
+  at four decimals rather than the log's `%g`, and the only one that constrains
+  both halves at once.
 """
 
 from __future__ import annotations
@@ -47,9 +50,10 @@ from pfsmgraph.hmm._mdl import (
     _int_code_length,
     _model_description_length,
     _quantize,
+    _total_description_length,
 )
 
-from _lush_fixtures import FIXTURES, load_corpus_record, load_params
+from _lush_fixtures import FIXTURES, load_corpus_record, load_params, read_scalar
 
 #: Shared with `test_baum_welch.py`, whose data-description-length section moved
 #: here. Copied rather than extracted: every test module in this package defines
@@ -550,3 +554,95 @@ def test_the_model_half_rejects_a_precision_the_data_half_would(d):
     rng = np.random.default_rng(SEED)
     with pytest.raises(ValueError, match="d must be positive and finite"):
         _model_description_length(_random_params(rng, 3, 3), d)
+
+
+# === the total ==================================================================
+#
+# `_total_dl` is a file in each saved model directory, written at four decimals
+# where the training log prints `%g`. It is the only oracle here that constrains
+# the two halves jointly: either could be wrong in a way its own test tolerates
+# and still sum correctly, but not while both sums land within a hundredth of a
+# bit on three models of different sizes at three different `d`.
+
+#: The data half's own tolerance, inherited: the saved parameters are four-decimal
+#: prints, so `x * d` near a half can round the other way from the original's
+#: full-precision value. Measured residuals here are -0.0131, +0.0007 and -0.0025,
+#: the first being the known `d = 29` offset rather than anything new.
+STORED_TOTAL_DL_TOL = 0.02
+
+
+@pytest.mark.parametrize("model", ["m001_0001_001", "m001_0005_005", "m008_0001_008"])
+def test_the_total_is_the_models_own_stored_total_dl(model):
+    directory = FIXTURES / f"{model}.hmm"
+    params = load_params(directory)
+    d = read_scalar(directory / "d")
+    stored = read_scalar(directory / "_total_dl")
+    records = [load_corpus_record()]
+    assert _total_description_length(params, records, d) == pytest.approx(
+        stored, abs=STORED_TOTAL_DL_TOL
+    )
+
+
+@pytest.mark.parametrize("model", ["m001_0001_001", "m008_0001_008"])
+def test_the_total_adds_the_two_halves_and_nothing_else(model):
+    """Bit for bit, so no stray term can hide inside the tolerance above.
+
+    The original's forward pass ends by adding `bits` of the last column's sum,
+    which is 1 within rounding; `baum_welch` omits it and so does the data half,
+    and this pins that the total does not quietly reintroduce it or anything like
+    it. A term worth a bit would pass `STORED_TOTAL_DL_TOL` unnoticed.
+    """
+    directory = FIXTURES / f"{model}.hmm"
+    params = load_params(directory)
+    d = read_scalar(directory / "d")
+    records = [load_corpus_record()]
+    assert _total_description_length(params, records, d) == (
+        _data_description_length(params, records, d)
+        + _model_description_length(params, d)
+    )
+
+
+def test_the_total_is_a_plain_float_the_search_can_compare():
+    """Pins the return type, which is a decision rather than a convenience.
+
+    PRD section 8 leaves open whether this project should end up with a refined
+    one-part code, which has no data/model split. A return value carrying those
+    two fields would assert the two-part structure in the seam that exists to
+    make the swap cheap, so the criterion is a bare number and the training log
+    calls the halves itself.
+    """
+    rng = np.random.default_rng(SEED)
+    params = _random_params(rng, 3, 3)
+    got = _total_description_length(params, _random_corpus(rng, 3, (20,)), 1000.0)
+    assert type(got) is float
+    assert got < float("inf")
+
+
+def test_an_impossible_model_scores_inf_rather_than_a_comparable_sentinel():
+    """The `1e100` mapping dissolves, and the difference is not cosmetic.
+
+    `update-total-dl` substitutes `1e100` for its `-1` log-zero sentinel so an
+    impossible model sorts last. Under `+inf` that happens by arithmetic instead,
+    and -- the part a sentinel gets wrong -- every impossible model scores the
+    *same*, where `1e100 + model_dl` would rank them by the cost of describing a
+    model that cannot generate the data at all.
+    """
+    n_user = 10
+    output = np.zeros((1, 1, USER_BASE + n_user))
+    output[:, :, USER_BASE:] = 0.1
+    params = HMMParams(np.ones(1), np.ones((1, 1)), output, _vocabulary(USER_BASE + n_user))
+    records = [SequenceRecord(np.array([USER_BASE]))]
+
+    impossible = _total_description_length(params, records, 3)
+    assert impossible == np.inf
+    # It absorbs, so a second impossible model is not ranked against the first by
+    # its model cost -- which is exactly what a large finite sentinel would do.
+    assert impossible == _total_description_length(params, records + records, 3)
+    assert impossible > _total_description_length(params, records, 10)
+
+
+@pytest.mark.parametrize("d", [0, -1.0, np.inf, np.nan])
+def test_the_total_rejects_a_precision_either_half_would(d):
+    rng = np.random.default_rng(SEED)
+    with pytest.raises(ValueError, match="d must be positive and finite"):
+        _total_description_length(_random_params(rng, 3, 3), _random_corpus(rng, 3, (20,)), d)
