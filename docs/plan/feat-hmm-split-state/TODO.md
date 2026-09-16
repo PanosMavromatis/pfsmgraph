@@ -87,5 +87,8 @@
   - [ ] Test the invariants that hold for any model: row sums, zero reserved fibres, inbound mass conserved across the pair, likelihood of a sequence unchanged before randomization where that holds
   - [ ] Construct the case the fixtures cannot: a state with `init_p == 0` after a split that can still emit `begin`, and decode it, so revision 02's δ-seeding fix is exercised for the first time
   - [ ] Pin reproducibility: the same `Generator` state yields a bit-identical candidate
-- [ ] Decide where `try-split` and `suggest-split` belong
-  - [ ] `try-split` re-converges and chooses `d`, and `suggest-split` ranks trials: port them here, or leave them to the scored-primitives subgoal and the search loop, and record which
+- [x] Decide where `try-split` and `suggest-split` belong
+  > **Q:** Where do `try-split` and `suggest-split` belong: both in the scored-primitives subgoal, `try-split` here and `suggest-split` later, or both here?
+  > **A:** Both in the master plan's scored-primitives subgoal. This branch delivers the split function only. `try-split` (`hmm-trainer.lsh:749-770`) is split, then `run-converge`, then `suggest-d`/`keep-d`, and it is what `suggest-split` runs per trial. Its EM budget (ADR 0022 §4) and its choice of `d` are decisions the search-loop subgoal owns, so porting it here would bake in two choices not yet made. `try-merge`/`suggest-merge` follow the same rule.
+  > **Done:** Notes added to the master plan under "Implement state split", "Implement state merge" and "Port the scored primitives", so the reassignment is visible where those subgoals are read.
+  - [x] `try-split` re-converges and chooses `d`, and `suggest-split` ranks trials: port them here, or leave them to the scored-primitives subgoal and the search loop, and record which
