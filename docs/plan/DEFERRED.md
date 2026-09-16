@@ -625,6 +625,35 @@ a second time.
   `core.md` records the Viterbi backends' logarithms drifting before
   `fix/hmm-viterbi-log2`.
 
+## Trigger: a trained model large enough for per-arc work to dominate
+
+- **Consider live-arc iteration in the forward-backward and Viterbi kernels.** Decided
+  2026-09-16 on `exp/hmm-param-representation`: parameter storage stays dense (ADRs 0015 and
+  0017, **Resolved**), and any sparsity saving belongs in the kernels. A forward step on the
+  tracked trained models touches 8.7% and 12.1% of arcs, because an arc is live only if it
+  can emit that step's symbol, so a kernel iterating host-built per-symbol live-arc lists
+  could cut per-arc work by up to 11.5x and 8.3x. Skipping exact zeros in ascending order
+  was measured bit-identical to the dense fold.
+
+  **Why it waits.** Per-arc work is not yet the cost. The numpy forward pass is nearly flat
+  in `S` -- 35 ms at `S = 5`, 79 ms at `S = 50` -- so its time is per-timestep overhead,
+  and only on Cython at large `S` does per-arc work dominate, where the speedup over numpy
+  falls to 1.8x at `S = 150`. And live-arc density is measured only at `S = 5` and `8`, on
+  models far smaller than those.
+
+  **What fires it:** the search producing a trained model at a state count where Cython
+  scoring is dominated by per-arc work -- roughly `S >= 50` on the measurements so far.
+  **What to do then:** measure live-arc density on that model; if it is still around a
+  tenth, build per-symbol live-arc index lists on the host beside the arc table and have all
+  eight kernels iterate them, held bit-exact to the dense reference by the existing suites.
+  It is `dp-compile`-gated, and adds a clause to both `FORMALIZATION.md` documents rather
+  than changing ADR 0020's ordering. The forward fold's skip-zero exactness is measured;
+  Viterbi's min-sum skipping `+inf` terms, which `min` absorbs exactly with the first-wins
+  tie-break preserved by ascending order, is argued rather than measured.
+
+  Evidence: `.scratch/hmm-lush/measurements/param_representation_move_cost.py`, and the
+  branch plan for `exp/hmm-param-representation`.
+
 ## No trigger yet — revisit deliberately
 
 These have no event that will surface them. They need to be looked at on purpose.

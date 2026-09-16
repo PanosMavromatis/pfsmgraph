@@ -10,9 +10,9 @@ Settle how `pfsmgraph.hmm` stores model parameters before state split and merge 
 
 ## Scope
 
-- Measure what a move costs today, separating `HMMParams` construction from the re-convergence that scores a candidate
-- Measure the three representations against a search-shaped workload
-- Decide, and record the decision where it binds
+- ~~Measure what a move costs today~~ — done 2026-09-16, see Notes
+- ~~Measure the three representations~~ — done 2026-09-16, see Notes
+- ~~Decide, and record the decision where it binds~~ — decided 2026-09-16, see Notes
 - Land whatever representation split and merge will be written against, possibly nothing
 
 ## Context
@@ -26,3 +26,7 @@ Settle how `pfsmgraph.hmm` stores model parameters before state split and merge 
 ## Notes
 
 **2026-09-16 — what a move costs.** Building a candidate (new arrays, `HMMParams`, the `state_p` solve) is 0.17 ms at S=5 and 1.2 ms at S=50. Scoring it (`_suggest_d` plus a `baum_welch` re-convergence) takes 6.5–21 s, so building is **about 0.005% of a move** on `python`, and still negligible on Cython, where one EM cycle costs 32–102 builds. Reallocate and over-allocate-and-slice therefore can't be told apart on cost. The numpy forward pass is nearly flat in S (35 ms at S=5, 79 ms at S=50), so on the default backend an edge list attacks the cheaper part; on Cython the per-arc work starts to count at large S (speedup over numpy falls to 1.8× at S=150), which leaves the edge list as a question of kernel speed, not storage. Also found: `_suggest_d` always runs the numpy forward pass, about 0.8 s per call at S=5 whatever the training backend. Evidence: `.scratch/hmm-lush/measurements/param_representation_move_cost.py`.
+
+**2026-09-16 — the three representations.** Over-allocating and slicing is ruled out by construction: `_frozen` copies every input before freezing it, so a view into a larger buffer gets copied anyway. The edge list's saving is real but belongs to the kernels. A forward step on the trained models uses only 8.7% and 12.1% of arcs, because an arc counts only if it can emit that step's symbol. That sparsity lives in the host-built arc table, not in parameter storage. Skipping exact zeros in ascending order was measured bit-identical to the dense fold over 1268 steps.
+
+**2026-09-16 — the decision.** Keep dense frozen storage; defer live-arc kernels. Recorded where the question was asked: ADR 0015's "Dense array versus edge list" and ADR 0017's "Whether this type is also what revision 04 stores" moved from `Open` to `Resolved`, following ADR 0016's precedent, and ADR 0017 gains its first `Resolved` section. No new ADR. The live-arc kernel is deferred under `DEFERRED.md`'s new `## Trigger: a trained model large enough for per-arc work to dominate`, because its payoff is unmeasured at the large S where per-arc work matters.

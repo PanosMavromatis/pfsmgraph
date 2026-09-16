@@ -191,12 +191,27 @@ forgotten-restore risk both grow exactly as trials become cheaper and more numer
 
 ## Open
 
-**Whether this type is also what revision 04 stores.** That revision has to choose among
-three parameter representations — reallocate per accepted move, over-allocate and slice,
-or hold no dense array at all and keep an edge list — and is instructed to measure before
-choosing, since the arc-emission tensor is quadratic in the state count (62,500 entries at
-`S=50`, `A=25`, against a state-emission model's 1,250) and mostly empty for a sparse
-topology. This record fixes that parameters are a frozen value and that moves return a new
-one; it does not fix what the value holds internally. [ADR 0015](0015-arc-emission-mealy-formulation.md)
-leaves storage open for the same reason, and an edge-list representation is as freezable as
-a dense one.
+None. The one item this record opened -- whether this type is also what revision 04 stores
+-- is settled below.
+
+## Resolved
+
+- **Whether this type is also what revision 04 stores** (2026-09-16,
+  `exp/hmm-param-representation`). **Yes: `HMMParams` stays a frozen value over dense arrays,
+  rebuilt on every move.** Of the three representations revision 04 was told to measure,
+  reallocation is kept, over-allocate-and-slice is ruled out, and the edge list is recast as a
+  kernel question -- see [ADR 0015](0015-arc-emission-mealy-formulation.md)'s **Resolved**.
+
+  **Over-allocate and slice is incompatible with this record as implemented, not merely
+  slower.** `_frozen` copies every input before setting it read-only, because `np.asarray`
+  may return the caller's own array and freezing it would mutate an object `HMMParams` does
+  not own. A view into a larger buffer is therefore copied at construction, and no allocation
+  is saved. Saving one would mean freezing a caller's buffer in place, or keeping a mutable
+  buffer behind the frozen interface -- the stored-and-stale failure this record makes
+  unrepresentable.
+
+  **The Evidence section's "reasoned, not observed" claim is now measured.** It held that
+  immutable rollback costs the same at any acceptance ratio. Building a candidate is 0.17 ms
+  at `S = 5` and 1.2 ms at `S = 50`, about 0.005% of scoring it (6.5-21 s on
+  `set11a_dInt`), so the ratio cannot change this architecture's cost in any range the search
+  will reach. Measurement: `.scratch/hmm-lush/measurements/param_representation_move_cost.py`.
