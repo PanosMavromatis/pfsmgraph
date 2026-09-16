@@ -1,6 +1,6 @@
 # exp/hmm-param-representation
 
-**Status**: active
+**Status**: merged — PR #44 — 2026-09-16
 **Created**: 2026-09-16
 **Subgoal**: Settle the parameter representation — `docs/plan/TODO.md`, revision 04-hmm-v0.3.0
 
