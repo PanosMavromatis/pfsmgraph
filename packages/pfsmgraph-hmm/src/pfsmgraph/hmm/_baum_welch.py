@@ -64,13 +64,10 @@ import numpy as np
 from pfsmgraph.dataseq import pad_collate
 
 from ._backends import BackendName, _resolve
-from ._forward_backward import (
-    _description_length,
-    _e_step_batch,
-    _forward_backward,
-)
+from ._forward_backward import _e_step_batch
+from ._mdl import _corpus_description_length
 from ._numeric import safe_divide
-from ._params import HMMParams
+from ._params import HMMParams, _check_codes
 from ._viterbi import ImpossibleSequenceError
 
 __all__ = ["BaumWelchResult", "baum_welch"]
@@ -130,20 +127,6 @@ class BaumWelchResult:
     degenerate_states: tuple[int, ...]
 
 
-def _check_codes(params, records):
-    for index, record in enumerate(records):
-        codes = record.codes
-        if codes.size:
-            lowest, highest = int(codes.min()), int(codes.max())
-            if lowest < 0 or highest >= params.n_symbols:
-                raise ValueError(
-                    f"record {index} holds code(s) outside the model's symbol axis "
-                    f"[0, {params.n_symbols}): observed [{lowest}, {highest}]. The "
-                    f"usual cause is a record encoded against a different vocabulary "
-                    f"than the one output_p was sized against"
-                )
-
-
 def _corpus_step(params, records, e_step=_e_step_batch, batch_size=None, device=None):
     """One E-step over every record: summed counts and summed description length.
 
@@ -177,68 +160,6 @@ def _corpus_step(params, records, e_step=_e_step_batch, batch_size=None, device=
             emission_counts += counts[2][b]
     total = float(np.add.accumulate(bits_per_record)[-1]) if len(records) else 0.0
     return (init_counts, transition_counts, emission_counts), bits_per_record, total
-
-
-def _corpus_description_length(init_state_p, transition_p, output_p, records):
-    """Bits over every record, from arrays rather than an ``HMMParams``.
-
-    Arrays because :func:`_data_description_length` passes rounded parameters,
-    which need not be a valid model: a row can round to all zeros.
-    """
-    bits_per_record = np.zeros(len(records), dtype=np.float64)
-    for index, record in enumerate(records):
-        _, _, scale = _forward_backward(
-            init_state_p, transition_p, output_p, record.codes
-        )
-        bits_per_record[index] = _description_length(scale)
-    return float(np.add.accumulate(bits_per_record)[-1]) if len(records) else 0.0
-
-
-def _quantize(p, d):
-    """Round each probability to a multiple of ``1 / d`` and renormalise the last axis.
-
-    ``update-approx-init-state-p``, ``-transition-p`` and ``-output-p``
-    (``hmm-trainer.lsh:269-341``) in one function: ``round-using``
-    (``util.lsh:59-62``) is ``int(x * d + 0.5) / d``, which for the non-negative
-    values here is ``floor``, so an exact half rounds up. Each vector is then
-    divided by its own sum, taken ascending, through ``safe_divide``.
-
-    The result is arrays, never an ``HMMParams``, and nothing is checked: a vector
-    whose every entry is below ``1 / (2 d)`` rounds to all zeros and stays zero,
-    which is how coarse precision can make a record impossible. ``d`` need not be
-    an integer, as in the original.
-    """
-    p = np.asarray(p, dtype=np.float64)
-    rounded = np.floor(p * d + 0.5) / d
-    total = np.add.accumulate(rounded, axis=-1)[..., -1:]
-    return safe_divide(rounded, total)
-
-
-def _data_description_length(params, records, d):
-    """The data description length at precision ``d``: ``update-data-dl``.
-
-    The original runs its forward pass again over the rounded ``-r`` matrices
-    (``hmm-trainer.lsh:346-402``); here the same corpus description length the EM
-    loop uses is called on :func:`_quantize`'s arrays, so there is one forward
-    pass, not two. It is the data half of revision 04's two-part score, where
-    ``d`` is chosen against the model half; this function takes ``d`` as given.
-
-    ``+inf`` when rounding leaves some record with no path, which the original
-    reports as ``1e100`` through its ``-1`` sentinel (``update-total-dl``). The
-    original's final ``bits`` of the last column's sum is 1 within rounding and is
-    omitted, as it is in :func:`baum_welch`. Raises ``ValueError`` for a ``d`` that is
-    not positive and finite, and for a code outside the symbol axis.
-    """
-    if not (np.isfinite(d) and d > 0):
-        raise ValueError(f"d must be positive and finite, got {d}")
-    records = list(records)
-    _check_codes(params, records)
-    return _corpus_description_length(
-        _quantize(params.init_state_p, d),
-        _quantize(params.transition_p, d),
-        _quantize(params.output_p, d),
-        records,
-    )
 
 
 def baum_welch(

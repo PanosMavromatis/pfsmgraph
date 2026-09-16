@@ -28,7 +28,11 @@ impossible model win; `m <= 1` still returns `0.0`, which is arithmetic rather t
 guard. The original accumulates in single precision (`flt` locals widened to `real` only
 at the return) and this does not, worth 2.1e-4 bits on an 8-state model description
 length — two orders below the 0.009 bits the data half already differs from the
-original's own logged value. `tests/test_mdl.py` holds its 60 tests, whose oracle is
+original's own logged value. It also owns the data half since the move described below:
+`_quantize` (`round-using`, half up, then an ascending renormalisation),
+`_corpus_description_length`, and `_data_description_length`, which matches the three
+tracked models' logged `data-dl` at their stored `d` to 0.009 bits where the unrounded
+value misses by 1.5 to 29 bits. `tests/test_mdl.py` holds its 71 tests, whose oracle is
 arithmetic rather than the original, there being no Lush runtime here to run: powers of
 two where the iterated logarithm is exact, `math.comb` where the binomial is still
 representable, and an `lgamma` closed form sharing no code with the loop under test. The
@@ -104,12 +108,17 @@ can stop on a symmetric saddle**, since it watches only the size of each batch's
 exactly uniform start, which `rand_p_vector(noise_width=0)` returns, is one, so whatever
 initialises a model must break symmetry. The Lush-trained `m008` fixture, run through it
 as one record, moves 0.002 bits and stops after 30 cycles.
-`_data_description_length(params, records, d)` is the original's `update-data-dl`: the same
-forward pass over parameters `_quantize`d to multiples of `1/d` (`round-using`, half up, then
-an ascending renormalisation), `+inf` when rounding kills every path. It matches the three
-tracked models' logged `data-dl` at their stored `d` to 0.009 bits, where the unrounded
-value misses by 1.5 to 29 bits; choosing `d`, the model half and the total stay with
-revision 04's `_mdl.py`. `tests/test_baum_welch.py` holds its 94 tests. **`tests/test_hmmlearn_oracle.py` checks the
+**The data description length moved out of this module on 2026-09-16** and now lives in
+`_mdl.py` with `_quantize` and `_corpus_description_length`; `_check_codes` went to
+`_params.py` at the same time, so `_baum_welch` imports the corpus length from `_mdl`
+rather than the reverse. The direction is the point: EM's convergence quantity and the
+topology search's data half are now the *same function*, not two that agree. The search's
+acceptance rule compares a re-converged candidate against the incumbent, and re-converging
+runs `baum_welch`, so two implementations could drift and a candidate would converge under
+one definition while being scored under another. That the share is possible at all is owed
+to `_corpus_description_length` taking *arrays* rather than an `HMMParams`, which it does
+because `_quantize` can round a row to all zeros -- a rounded model need not be a valid
+one. `tests/test_baum_welch.py` holds its 83 tests. **`tests/test_hmmlearn_oracle.py` checks the
 forward-backward and the E- and M-steps against `hmmlearn`'s `CategoricalHMM`** (21 tests,
 2026-09-14), on the destination-only emission case where arc emission reduces to state
 emission: hmmlearn's `startprob_` is our `init_state_p @ transition_p`, since its first

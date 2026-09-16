@@ -10,7 +10,7 @@ Write `_mdl.py`, the minimum-description-length criterion revision 04's topology
 
 ## Scope
 
-- ~~Decide what moves into `_mdl.py` and what stays in `_baum_welch.py`~~ — settled 2026-09-16, see Notes
+- ~~Decide what moves into `_mdl.py` and what stays in `_baum_welch.py`~~ — settled and executed 2026-09-16, see Notes
 - ~~`int_code_length` and `comb_code_length`, overflow-safe~~ — landed 2026-09-16, see Notes
 - The model description length (`update-model-dl`, `hmm-trainer.lsh:402-427`), including what counts as a non-zero transition and how the reserved symbol block enters `n_symbols`
 - The total, validated against the three tracked models' `_total_dl` at their stored `d`
@@ -34,3 +34,7 @@ The risk this scope line originally named was not the real one. `_data_descripti
 **2026-09-16 — the primitives.** `_mdl.py` and `tests/test_mdl.py` (60 tests). Two things the reading settled that `HMMLIB-ACCOUNT.md` §8 does not state correctly: the original codes `n + 1` rather than `n`, and its iterated logarithm runs while the *value* exceeds 1, so it adds every term above zero — one more than §8's "while the term exceeds 1". The DH compiler's generated C settled both, which is the first time this branch has needed it.
 
 The overflow concern in the scope line above was already answered by the original, which never forms the binomial. Measured, none of the three candidate forms was distinguishable on fidelity (≤ 4e-11 bits apart), so the choice was idiom. Cost was a non-issue too: the model half calls `_comb_code_length` twice per score however many states there are.
+
+**2026-09-16 — the move executed.** `_quantize`, `_corpus_description_length` and `_data_description_length` are in `_mdl.py`; `_check_codes` is in `_params.py`; `_baum_welch` imports downward. Suite unchanged at 1478, which is the whole check a relocation needs. `test_baum_welch.py` goes 94 → 83 tests and `test_mdl.py` 60 → 71.
+
+Two things the move turned up. The five helpers the moved section needed (`SEED`, `ROW_TOL`, `_vocabulary`, `_random_params`, `_random_corpus`) were **copied, not extracted**: three test modules already define their own `_vocabulary`/`_random_params` and two disagree about the signature, so sharing them would be a refactor of four files rather than a move of one section. And `test_baum_welch.py`'s docstring said "Six sections" over seven bullets — an off-by-one dating from revision 03 — so removing the moved section made the header true rather than breaking it.
