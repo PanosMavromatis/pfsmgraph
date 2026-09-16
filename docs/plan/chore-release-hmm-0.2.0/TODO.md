@@ -244,10 +244,68 @@
     > and `workflow_dispatch` unchanged, and the file parses. Goals 3 to 5 now push to this
     > branch without firing the matrix; the next run of `release.yml` will be the merge
     > commit's push to `main`, which builds and publishes nothing.
-- [ ] Adapt the release tooling to platform wheels
+- [ ] Settle what the release tooling means now that CI builds the artifact
+  > **Note:** retitled and rewritten 2026-09-16. The old title, "Adapt the release tooling to
+  > platform wheels", and its three subgoals assumed `just release` stays `pfsmgraph-hmm`'s
+  > release path and needs only to be taught about new filenames. It does not. The artifact
+  > hmm ships is twenty wheels this host cannot build — three of the four platforms are
+  > physically unreachable from here — and the question the goal has to answer first is what
+  > `just release 0.2.0 pfsmgraph-hmm` *means* once that is true, not which recipes to edit.
+  > **Q:** What does `just release` mean for a member whose shipped artifact this machine
+  > cannot produce? (A) `release` refuses for hmm and points at the tag flow; (B) add
+  > `release-ci`, which pushes the tag and watches the run, so `just` stays the single entry
+  > point without ever touching artifacts; (C) `just` downloads the CI artifacts and
+  > publishes them with the `.envrc` token; (D) keep the local build as a *verification*
+  > tool under an honest name, severed from "release".
+  > **A:** **A + B + D, agreed.** C is the only answer that literally gets the CI artifacts
+  > to `just`, and it costs the thing the route was chosen for.
+  > **Note:** C was declined on its cost, not on feasibility, and the difference is measured
+  > rather than assumed: `gh run download 35049292620` fetched all 21 files — twenty wheels
+  > and the sdist — in seconds on 2026-09-16. The artifacts are ordinary, reachable, and
+  > retained 90 days. What makes C expensive is that **Trusted Publishing cannot be driven
+  > from this machine at all**: it is OIDC, and the token is minted by GitHub Actions for a
+  > specific repository, workflow and environment, with no local equivalent. Publishing
+  > locally therefore means reverting to the `.envrc` token and losing PEP 740 attestations,
+  > which are signed against the Trusted Publishing identity. The justfile already documents
+  > the symptom — an empty `UV_PUBLISH_TOKEN` "falls through to trusted-publishing
+  > discovery, which resolves only inside CI".
+  > **Note:** the consequence to keep in view while editing: this repository will have **two
+  > release mechanisms**, and that is the decision rather than an accident. `just release`
+  > stays the path for the four members that ship pure wheels; a pushed tag is the path for
+  > any member with a compiled artifact. `docs/ops/release.md` has to say which is which in
+  > as many words, because a runbook that describes one path while the repository has two is
+  > worse than a runbook that describes neither.
+  - [ ] Make `release` refuse for `pfsmgraph-hmm`, as a **prerequisite** and never a body line
+    > **Note:** the justfile states this rule about itself already — "a guard must be a
+    > *prerequisite* of `release`, never a body line, because every body line runs after
+    > `publish`, the irreversible step". A refusal written into the body would run after the
+    > upload it exists to prevent.
+    > **Note:** today the command already fails, but by accident rather than by design:
+    > `preflight` demands a `py3-none-any` filename and a local hmm build no longer produces
+    > one. That is a filename check standing in for a policy, and the subgoal below on
+    > `preflight` is what keeps the two from being confused.
+  - [ ] Add `release-ci <version> [package]`: assert the tree is clean and pushed **and that
+    `pyproject.toml`'s version matches `<version>`**, then tag and push, and report the run
+    > **Note:** this is where the justfile's own preflight assertion survives the move. Its
+    > comment — "without this assertion `just release 0.2.0` would publish 0.1.0 and tag it
+    > v0.2.0. Both halves of that are irreversible" — describes a hazard the tag flow has
+    > too, since the tag is what triggers the upload. Local and workflow-side guards are
+    > both wanted: a tag can be pushed by `git` directly, so the workflow cannot rely on
+    > this recipe having been used.
   - [ ] Drop the `build` recipe's `-C setup-args=-Dcompiled=false` for `pfsmgraph-hmm`, and
     decide whether `meson.options`' `compiled` stays as a source-build escape hatch
-  - [ ] Teach `preflight` platform tags, and make `publish` upload every wheel plus the sdist
+    > **Note:** under (D) this recipe's job changes rather than disappears. It stops being
+    > the first step of a release and becomes the way goal 4 produces a local wheel to
+    > install into a clean venv, so it should be named and commented for that.
+  - [ ] Re-examine `preflight`'s `py3-none-any` assertion rather than relaxing it
+    > **Note:** this replaces "Teach `preflight` platform tags", which was the wrong task and
+    > actively harmful. Under A + B + D no member publishes platform wheels locally, so the
+    > assertion stays *correct* for the four pure members — and teaching it to accept
+    > platform tags would have deleted the check that currently stops a local hmm release
+    > from proceeding, leaving PyPI's refusal of a bare `linux_x86_64` tag as the only
+    > backstop. A check we were about to relax turns out to be load-bearing in a new way.
+    > Worth splitting, though: `preflight` also asserts the tree is clean and pushes it, and
+    > `release-ci` wants that half without the filename half.
   - [ ] Restore the tag-versus-version guard that moving the release into CI dropped
     > **Note (found 2026-09-16 in the dry run):** `release.yml` has no equivalent of the
     > justfile's `preflight`, and nothing in it compares the pushed tag to the version
@@ -255,15 +313,16 @@
     > `pfsmgraph_hmm-0.1.0-cp312-…-manylinux….whl`, because `pyproject.toml` still reads
     > 0.1.0 until goal 5's bump — and that filename **differs** from the `py3-none-any` wheel
     > already published for 0.1.0, so PyPI would accept it as an additional file on a
-    > released version rather than rejecting it. The justfile carries this check with a
-    > comment saying exactly why: "without this assertion `just release 0.2.0` would publish
-    > 0.1.0 and tag it v0.2.0. Both halves of that are irreversible." The subgoal above is
-    > worded "teach `preflight` platform tags", which assumes `preflight` stays on the
-    > release path; it does not, so the assertion has to be re-made inside the workflow —
-    > a step that fails the publish job unless the built version matches `github.ref_name`
-    > minus the `pfsmgraph-hmm-v` prefix.
+    > released version rather than rejecting it. The fix is a step in the publish job that
+    > fails unless the built version matches `github.ref_name` minus the `pfsmgraph-hmm-v`
+    > prefix.
   - [ ] Update `docs/ops/release.md` and the `justfile` comments; keep
     `tests/test_release_runbook.py` green
+    > **Note:** that test asserts every recipe `release.md` names exists, so `release-ci` has
+    > to be named there rather than only in the justfile. The runbook's "Token sprawl vs.
+    > Trusted Publishing" section also needs its "suggested posture" revisited: it recommends
+    > piloting Trusted Publishing on a member where a botched release costs nothing, and this
+    > branch is that pilot happening.
 - [ ] Settle what 0.2.0's immutable metadata says
   - [ ] Restore `Programming Language :: Cython`; review `description`, the `cpu-parallel`,
     `gpu` and `torch` extras' bounds, and the `pfsmgraph-dataseq` lower bound against the
@@ -289,4 +348,26 @@
   - [ ] Confirm PyPI's digests match the verified build, the tag `pfsmgraph-hmm-v0.2.0`
     is on `origin`, and `just verify 0.2.0` installs from PyPI
   - [ ] Record commit: the "released" statements in `core.md`, the root README and the
-    `docs/api/hmm/` pages
+    `docs/api/hmm/` pages, **including three stale claims in the root README that this
+    branch found rather than caused**
+    > **Note (found 2026-09-16, during a docs sync that correctly declined to fix it):** the
+    > root README carries both halves of the rot `DEFERRED.md` catalogues, and they need
+    > different treatment. The *mechanical* half is line 60, `uv run pytest # run the suite
+    > (709: 74 dataseq, 584 hmm, 51 root)`; measured today the figure is **1418 = 74 + 1292 +
+    > 52**, so it is stale by more tests than it claims. Do not copy that number when the
+    > time comes — re-measure, because the point of the entry is that figures written once go
+    > silently false, and a number transcribed from this note would be the same mistake with
+    > a fresher date.
+    > **Note:** the *semantic* half is the status paragraph at line 5, and it is the worse of
+    > the two because no count-checker could ever find it — which is exactly the limitation
+    > `DEFERRED.md` records under "Check documented repo-state counts against the tree",
+    > citing "`SymbolTable` is the provisional encoder implementation" as the precedent. It
+    > says `pfsmgraph-hmm` "has begun", describes its surface as the numeric helpers plus
+    > `HMMParams` and the Viterbi decode, and closes with "the compiled kernels stay in the
+    > repository until a public call selects them". By 0.2.0 every clause is false: the
+    > package trains, decodes in batches, selects among five backends, and a public call
+    > reaches a compiled kernel — that last being the entire premise of this release. Line
+    > 71's "released at 0.1.0" is the third, and moves to 0.2.0 with the rest.
+    > **Note:** these belong in the record commit rather than earlier because the README is
+    > being edited there anyway and the figures are only correct once the release has
+    > happened. Fixing them mid-branch would mean writing them twice, the first time wrongly.
