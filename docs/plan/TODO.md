@@ -26,14 +26,22 @@ revisions already drafted and waiting to be opened.
 
 ## Planned revisions
 
-Drafted ahead of being opened, one file each under [`planned/`](planned/), carrying the
-same `## Subgoals` section `/close-revision` archives — so opening one is a splice rather
-than an authoring job. They sit in `planned/` rather than in `docs/plan/<label>/` because
-`/open-revision` refuses a label whose directory already exists, on the sound assumption
-that only `/file-plans` creates one; a draft filed there would make every planned revision
-look already-opened. The detail lives in those files and not here, which is the point: this file stays
-short enough to read on every session, and a revision's subgoals enter it only while that
-revision is in progress.
+**None are planned today** — `planned/` is empty as of 2026-09-16, when the last of the
+three drafts was spliced in. The convention stands for the next revision drafted ahead of
+its opening, and is recorded here rather than in the empty directory, which git does not
+track: one file per revision under `planned/`, carrying the same `## Subgoals` section
+`/close-revision` archives, so opening one is a splice rather than an authoring job. A
+draft sits in `planned/` rather than in `docs/plan/<label>/` because `/open-revision`
+refuses a label whose directory already exists, on the sound assumption that only
+`/file-plans` creates one; a draft filed there would make every planned revision look
+already-opened. The detail lives in those files and not here, which is the point: this
+file stays short enough to read on every session, and a revision's subgoals enter it only
+while that revision is in progress.
+
+**A draft is reconciled at opening, not copied.** Each of the three was written before the
+Lush source was read, and each opening found assumptions that had moved — so the splice
+carries a record of what changed and why, beside the draft's original reasoning rather
+than in place of it. That record is the reason a stale draft is still worth keeping.
 
 The `hmm` migration is **three** releases rather than one. The Lush trainer is 1,102 lines
 spanning three problems that fail differently — a decode, a fixed-topology estimator, and
@@ -43,16 +51,147 @@ first resizing search in one revision, where a failure in any of them would be d
 against all three.
 
 The first two of the three are **closed** (see below), and `pfsmgraph-hmm` is released at
-0.2.0; the third, `04-hmm-v0.3.0`, is still planned, so no revision is currently open. Each
-entry moves up as its revision is opened.
-
-- **Revision 04-hmm-v0.3.0** — topology search by state merge and split, scored by
-  minimum description length. See [`planned/04-hmm-v0.3.0.md`](planned/04-hmm-v0.3.0.md).
+0.2.0; the third, `04-hmm-v0.3.0`, is **open** as of 2026-09-16 and its subgoals follow
+this section. All three have now been opened, so nothing remains to move up.
 
 All three were drafted from a structural survey of `.scratch/hmm-lush/Code/HMMlib/` —
 definition maps and call-site counts — **before the source was read**. Each names the
 findings that would falsify its boundaries, and revision 02's first subgoal is the reading
 that checks them.
+
+## Subgoals — revision 04-hmm-v0.3.0
+
+Topology search: the model learns its own shape by merging and splitting states. This is
+335 lines of the Lush trainer (`hmm-trainer.lsh:738-1073`) plus the 228 lines of parameter
+surgery that back them (`hmm-param.lsh:142-369`), and the part with no analogue anywhere
+else in the family. Opened 2026-09-16, the day `pfsmgraph-hmm` 0.2.0 was released, from the
+draft written on `docs/hmm-migration-plan` (2026-09-03). That draft was written **before
+the Lush source was read**; the reading happened during revisions 02 and 03 and is recorded
+in `.scratch/hmm-lush/HMMLIB-ACCOUNT.md`. The section below is reconciled against it, and
+the corrections are listed so a reader of the draft can tell what changed and why.
+
+Two things make it a separate revision rather than a feature of the last one. First, the
+**scoring criterion is minimum description length**, and the MDL machinery lives in
+`Code/Utility/util.lsh`, not in the trainer — `int-code-length` (a universal code for
+integers), `comb-code-length` (a log-binomial), and `calculate-entropy`. These encode
+research decisions about what a model *costs*, and they are the reason a merge is ever
+preferred to a better fit. Second, every accepted move **changes the size of every
+parameter array**, so this revision is about matrix copying and resizing under a search
+that mostly rejects — the trainer must be able to try a move, score it, and put the model
+back unchanged, which `keep-model`/`reset-model` (`677-705`) exist to do.
+
+**Settled, and not to be relitigated:**
+
+- **`_mdl.py` is private to `pfsmgraph.hmm`.** If `hseg` later scores segmentations by
+  description length, a shared home is reconsidered then; inventing a sixth distribution
+  before a second consumer exists is not warranted. *(The draft cited a
+  `## Trigger: hseg needing description lengths` heading in
+  [`DEFERRED.md`](DEFERRED.md). No such heading exists — the file has no occurrence of
+  "description length" at all, so the promotion path was never actually written down.
+  Write that trigger as part of this revision's first subgoal, or restate the deferral
+  under `## Trigger: hseg design settling`, which is where it would surface.)*
+- **The criterion stays the original's two-part code, and this revision does not answer
+  whether it should.** Whether a refined one-part code (NML / stochastic complexity) is
+  what this project should end up with is registered at
+  [PRD §8](../design/PRD.md), *"Which description length scores the topology search"*:
+  exact NML for HMM classes is intractable, and the tractable route — factorised NML over
+  the multinomial case — is a research decision rather than a porting one. The only
+  obligation it places here is structural: **keep the criterion a seam.** If scoring is
+  inlined into the search driver, answering the question later means rewriting the search;
+  if it is a boundary in `_mdl.py`, it means substituting a function.
+- **No alignment-seeded initialisation.** The search starts from a single state and grows
+  by splitting, as the original does (`model-starting-size` defaults to **1**,
+  `HMMLIB-ACCOUNT.md` §11). Seeding the topology from a multiple alignment is **its own
+  later revision**, gated on `align` being able to produce one and expected at `hmm`
+  0.4.0 — see [`DEFERRED.md`](DEFERRED.md), `## Trigger: align able to produce a multiple
+  alignment`. It follows this search rather than replacing it, because the seed is a
+  better *starting point for* merge/split. So nothing here imports `pfsmgraph-align`, and
+  `hmm`'s metadata still declares no edge to it under
+  [ADR 0019](../design/adr/0019-declared-dependencies-follow-imports.md).
+- **Rollback is free, and the draft's open branch on this is closed.** The draft weighed a
+  single mutable class (which "owes this subgoal an explicit save-point") against an
+  immutable parameter object (which "gets rollback for free by construction").
+  [ADR 0017](../design/adr/0017-frozen-parameter-object-for-hmm.md) settled it as the
+  second: `HMMParams` is a frozen value, so trying a move means building a candidate and
+  keeping or dropping the reference. Lush's `hmm`/`hmm-param` working-copy split — which
+  existed precisely to make `keep-model`/`reset-model` cheap (`HMMLIB-ACCOUNT.md` §5) —
+  is therefore **not** inherited, and this revision must not reintroduce it as a
+  performance argument without measuring first.
+- **No `1e100` sentinel.** `update-total-dl` (`430-433`) maps the Lush `-1` log-zero
+  sentinel to `1e100` so an impossible model sorts last rather than best. Here `bits(0)`
+  is `+inf`, which already sorts last and absorbs under addition, so the mapping
+  dissolves — the same dissolution revision 02 applied to `safe->--log` and revision 03
+  inherited. A ported `1e100` would be a magic number that is also *comparable*, which is
+  strictly worse than the infinity it replaces.
+- **The filing of `docs-hmm-migration-plan` is decided: it stays put.** `DEFERRED.md`'s
+  `## Trigger: revision 03 or 04 opening` asked whether that plan moves, splits across the
+  revisions it touches, or stays in `docs/plan/02-hmm-v0.1.0/` with its scope note. It
+  stays: a branch plan is filed where it was *worked*, not where its consequences land,
+  and it has no master-plan backlink to redirect. Close that entry. (Its other item,
+  unifying `log2` across the Viterbi backends, was settled on 2026-09-14 and is already
+  closed.)
+
+**Falsifiers, reconciled at opening.** The draft named two; one fired, one is resolved,
+and the reading turned up a third correction larger than either:
+
+- **There is no search driver to port.** This is the draft's biggest misreading, and it
+  affects the subgoal list rather than a detail. `HMMLIB-ACCOUNT.md` §11: the library
+  offers `suggest-split`, `suggest-merge` and `suggest-move`, which **score candidates**,
+  but "nothing in the tree loops over them automatically. A training run was a person
+  watching the description length and pressing buttons." Both training scripts under
+  `Training/` end by constructing a `HMMtrainerWindow` and waiting on it. So
+  `suggest-move` (`952-1073`) is a scoring method, not a driver, and — in the account's
+  own words — "anything in revision 04 that reads as 'the search strategy' will be a
+  design decision being made for the first time, not a translation." The subgoals below
+  therefore **separate the two**: porting the scored primitives is a migration and is
+  reviewable against the original; the loop that calls them is new work and must be
+  reviewed as a design.
+- **The MDL criterion not being the whole story** — does not hold, and the pieces are
+  already named. `HMMLIB-ACCOUNT.md` §8 reads `update-model-dl` (`402-427`) as
+  `int-code-length(n-states-r) + int-code-length(d) + (1+n-states-r)·comb-code-length(d,
+  1+n-states)`, plus `n-non-0-transitions × comb-code-length(d, 1+n-symbols)`, and
+  `update-total-dl` (`430-433`) as the sum of the data and model halves — so the "single
+  named entry point" the draft asks for is a shape the original already has. It also
+  answers the draft's "document *which* universal code for integers": `int-code-length` is
+  **Rissanen's universal prior for the integers**, `log₂ 2.865` plus the iterated
+  logarithm while the term exceeds 1, and `comb-code-length(sum, m)` is
+  `log₂(sum+m) + log₂ C(sum+m−1, m−1)`. What the falsifier asked about `suggest-move`
+  applying *further* criteria is subsumed by the finding above: there is no automatic
+  search to apply them in.
+- **Split is stochastic and retried — confirmed, but the reproducibility cost is already
+  paid.** `HMMLIB-ACCOUNT.md` §5: `split-state` (`hmm-param.lsh:142-215`) "randomizes
+  every outbound emission fibre with `rand-p-vector … 0.1`", so the draft was right that
+  `*min-split-trials*` and `*split-trials-per-state-p*` imply trials rather than a
+  deterministic move. The consequence it feared does not follow, because revision 02 built
+  `rand_p_vector(size, noise_width, rng)` with a **required** `numpy.random.Generator`,
+  no default and no module state — reproducibility is structural here rather than merely
+  available. What is still owed is the *contract*: whose generator the search takes, and
+  where it enters the public API. Note the `0.1` noise width is also what breaks the
+  symmetry that would otherwise stall EM, since `baum_welch`'s stopping rule can halt on
+  an exactly uniform saddle.
+- **A third Lush defect, undecided and this revision's to settle.**
+  `HMMLIB-ACCOUNT.md` §5 records that `hmm-param.lsh:172` and `:262` seed the new initial
+  distribution from the **stationary** one — `(new-init-state-p i (state-p ...))` — where
+  the surrounding code is copying `init-state-p`, and `split-state` contradicts itself
+  four lines later at `179-180` by using `(init-state-p state-n)`. The effect is that
+  after **any** split or merge, every state not directly involved has its initial
+  probability overwritten by its stationary probability, and the vector is not
+  renormalized afterwards. Provenance unknown: consistent across both methods (weak
+  evidence for intent), internally inconsistent within one of them (stronger evidence for
+  a copy-paste slip). This is the same shape as the δ-seeding defect revision 02 fixed
+  rather than reproduced, and unlike that one it **does** reach downstream — it perturbs
+  the model every accepted move scores. Decide it explicitly in the split and merge
+  subgoals, and record the divergence.
+
+- [ ] Write `_mdl.py`, and note that **revision 03 already built half of it**. Present today in `_baum_welch.py`: `_quantize(p, d)` (the original's `update-approx-*`, `round-using` half up then an ascending renormalisation) and `_data_description_length(params, records, d)` (`update-data-dl`, `346-399`), matched against the three tracked models' logged `data-dl` to 0.009 bits. `entropy` is in `_numeric.py` and **must not be re-implemented** — the draft listed it as new work. What is owed: `int_code_length` (Rissanen's universal prior), `comb_code_length` (`log₂(sum+m) + log₂ C(sum+m−1, m−1)`), the **model** description length (`update-model-dl`, `402-427`), and the **total** as the single named entry point the search calls and nothing else computes, so the PRD §8 question can later be answered by substitution rather than by rewriting the search. Two decisions come with it: whether the data half and `_quantize` **move** out of `_baum_welch.py` into `_mdl.py` (the seam argues yes; the existing tests argue for care), and how `d` is chosen (`suggest-d`), which is not a free parameter — §8 notes a transition counts as non-zero **after** quantization, so `d` is simultaneously the rounding grid and the code's argument, and it is rounding at `1/d` that drives small transitions to exactly zero and makes a sparse topology cheaper to describe than a dense one. The three tracked models' stored `d` is the oracle. Write the missing `hseg` promotion trigger in `DEFERRED.md` here too.
+- [ ] Implement state split (`split-state`, `hmm-param.lsh:142-215`, and its trainer wrappers `try-split`/`suggest-split`, `hmm-trainer.lsh:738-843`): add one state at index `old-size`, halve the initial and inbound transition mass between the original and its new partner, copy the original's inbound emissions to the partner, and randomize every outbound emission fibre at noise width `0.1`. Settle the reproducibility contract the trial budget (`*min-split-trials*`, `*split-trials-per-state-p*`) makes load-bearing — whose `Generator`, and where it enters the public API. **Decide the `hmm-param.lsh:172` initial-distribution defect here** and record the decision; revision 02's oracles cannot exhibit it, since splitting is exactly what they never do. Note that halving initial probabilities without halving a topology is also what decouples `init_p == 0` from "cannot emit `begin`", which is the degenerate δ-seeding case revision 02 recorded as masked by the learned topology and unmasked by this operation.
+- [ ] Implement state merge (`merge-states`, `hmm-param.lsh:218-369`, with `try-merge`/`suggest-merge`, `hmm-trainer.lsh:843-952`): remove the higher-indexed of the two, remap indices through an `old-state-numbers` table, sum inbound transition mass, and take **stationary-probability-weighted** averages of the outbound transitions and emissions (`299-313`, `state-p` values renormalized to sum to one). Two consequences already recorded elsewhere land here and are worth expecting rather than discovering: `safe_divide` finally acquires consumers — the original uses `safe-/` throughout so a merge of two unreachable states yields zeros rather than dividing by zero — and a merge can produce a **reducible** chain, whose stationary solve `stationary_distribution` raises `ValueError` on. That failure surfaces on a `cached_property` access under ADR 0017, and since the merge *itself* consumes `state_p`, decide whether a move that makes the model's own scoring quantity undefined is rejected at proposal time or allowed to raise.
+- [ ] Port the scored primitives as a migration: `suggest-split`, `suggest-merge` and `suggest-move` (`952-1073`) score candidate moves and return them ranked. This is reviewable line-by-line against the original. It must obtain a score by **calling** `_mdl.py`'s total entry point, never by assembling it from the pieces — the primitive decides *whether* a move wins, not *what winning costs*. A merge step tries all state pairs and so is quadratic in model size; record the measured cost, because it is what the deferred alignment seed later attacks at its input rather than in its inner loop.
+- [ ] Design the automatic search loop, and **mark it as new work in the plan, the docstrings and the ADR if one is written**. The original has no such loop (`HMMLIB-ACCOUNT.md` §11), so there is nothing to be faithful to and no oracle: what to decide is how a move is proposed, when a candidate is re-converged with `baum_welch` before scoring, the acceptance rule against the total description length, the rollback path, and the stopping criterion. Start from a single-state model, as `model-starting-size` does. `hmm-trainer-view.lsh`'s thirteen buttons are the best available statement of the intended workflow and should be read as a requirements list rather than as a UI. Beware of presenting any of this as a port; a reviewer who believes it is one will check it against the wrong thing.
+- [ ] Settle the **parameter representation**, of which the resize strategy is only one branch. There are three options, not two: reallocate on every accepted move; over-allocate and slice; or hold **no dense array at all** and keep an edge list, in which resizing is not the problem being solved. [ADR 0015](../design/adr/0015-arc-emission-mealy-formulation.md) leaves this open deliberately — it fixes the model's semantics and not its storage — and it is also why the third option exists at all: under arc-emission the emission tensor is `(S, S, A)` and so quadratic in the number of states, measured at **62,500** entries against a Moore model's 1,250 for a 50-state model over `set11a_dInt`'s 25-symbol alphabet, and mostly empty for any sparse topology. Add to that the `6·S²` reserved-fibre entries `HMMParams` requires to be exactly zero, which are dead by construction. Measure before choosing; this is the one revision where the data structure, not the recurrence, is the cost. Rollback is no longer part of this question — ADR 0017 answered it — so what remains is allocation cost under a search that rejects far more moves than it accepts.
+- [ ] Report search progress on **standard output** by porting the original training log, which is this revision's rather than revision 03's — a division the draft predicted and revision 03 honoured. `update-training-log` and `training-log-line` (`hmm-trainer.lsh:457-477`) append one line per *accepted* move from `keep-model` (`677-690`), holding the size, the split (`n ^`) or merge (`i v j`) marker, `data-dl`, `model-dl`, `total-dl` and `d`, every one of which only `_mdl.py` and the search loop produce. Drop `test-data-dl`, which the original never assigned (all seven logged lines read `0`); the three tracked `_training_log` files are the format's oracle. Decide whether rejected moves are reported too, since the original records only accepted ones and the search rejects most. `baum_welch(..., log=)` already writes a header, a row per convergence check and a stop line to a text stream, so a search nests those under its moves unless it silences them — decide which, and note that a search re-converging every candidate would otherwise emit one such block per rejected move. Persisting the log beside a saved model stays `DEFERRED.md`'s model-persistence entry. This is the run a user most wants to watch and the one most likely to prompt a dashboard; the decision is that it does not get one — see `DEFERRED.md`, `## Trigger: a second module needing training progress reporting`.
+- [ ] Record that `hmm-trainer-view.lsh` (237 lines) migrated **nowhere**, and why, so the omission reads as a decision rather than an oversight. It is the only file in `Code/HMMlib/` with no destination. Two things make the record worth more than a line: it is "presentation only — every button calls a trainer method and then `update-view`" (§11), which is what makes dropping it lossless, and it is simultaneously the only written statement of the workflow the search loop above is reconstructing. Say both.
+- [ ] Release `pfsmgraph-hmm` 0.3.0. It follows 0.2.0's CI path — `just release-ci`, since `pfsmgraph-hmm` is in `ci_built_packages` and `just release` refuses it — and it is the first release to exercise that path from a version the tree bumped at opening rather than at the release commit. Expect **no** new ADR 0002 lifecycle phases: `HMMLIB-ACCOUNT.md` §12 records that not one topology-search method was compiled in the original, on the reasoning that "search *drives* compiled work — a split trial calls `run-converge`, which is compiled — so leaving the driver interpreted costs little". If that holds, 04 is the first `hmm` revision that adds no backend row, the `dp-compile` gate never arms, and the backend header is unchanged from 0.2.0's. Verify it rather than assuming it, and check the four-file release invariant plus `license-files` are still intact.
 
 ## Closed revisions
 
