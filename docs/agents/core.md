@@ -575,8 +575,20 @@ These constrain any code written here. They are inherited from the proof-of-conc
   they are an invariant rather than a checklist. A `LICENSE` symlinked to the repo-root one
   builds a valid-looking sdist and then fails on **unpack** — a symlink escaping the sdist
   root is refused — so it must be a real copy. The copy is also a
-  **silent drift surface**: the wheel ships the member's copy, not the root one, so editing
-  the repo-root `LICENSE` alone changes nothing a consumer sees. Keep the two byte-identical
+  **silent drift surface**, and the mechanism is not the one this sentence used to claim.
+  It read "the wheel ships the member's copy, not the root one"; **measured 2026-09-16, the
+  wheel shipped *neither*.** meson-python includes no license file unless `license-files`
+  is declared, so `pfsmgraph-hmm` 0.1.0 went to PyPI with `License-Expression: MIT` in its
+  METADATA and no license text at all -- valid PEP 639, accepted by `twine check`, rendered
+  as MIT by PyPI, and visible only by opening the archive. `pfsmgraph-dataseq` 0.1.0 does
+  carry `dist-info/licenses/`, because it was built by **hatchling**, which globs `LICENSE*`
+  by default; the invariant was written in the hatchling era and inherited unexamined into a
+  backend with different defaults. **So a released member must also declare
+  `license-files = ["LICENSE"]`** -- one line, verified to produce
+  `dist-info/licenses/LICENSE` and a `License-File:` field. None of the five declared it as
+  of 2026-09-16; `hmm` gained it at 0.2.0, and `align`/`hseg`/`dl` should gain it before
+  their first release, where it still costs nothing. The old conclusion survives its broken
+  premise: editing the repo-root `LICENSE` alone still changes nothing a consumer sees. Keep the two byte-identical
   — both carry the copyright line `Copyright (c) 2026 Panayotis Mavromatis`, the legal name
   rather than the professional one, because a license is read by lawyers. A `py.typed` at the distribution root instead
   of inside the importable package reaches no wheel at all, with no error and no warning, and

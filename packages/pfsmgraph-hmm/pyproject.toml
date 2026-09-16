@@ -10,6 +10,7 @@ description = "Arc-emission hidden Markov models for the pfsmgraph family: froze
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "Panos Mavromatis", email = "ai.labs@panos-mav.dev" }]
 maintainers = [{ name = "Mavromatis AI Labs", email = "ai.labs@panos-mav.dev" }]
 # Development Status stays at 3 - Alpha for 0.2.0. The package trains, decodes in

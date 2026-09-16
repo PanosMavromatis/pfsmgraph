@@ -417,6 +417,16 @@
   > **Note:** nothing in this goal changed a shipped module, deliberately. The only
   > candidate was `_backends.py`'s missing-extension message, and it was left alone because
   > it is already correct for a world where PyPI carries platform wheels.
+  > **Amended 2026-09-16, while verifying goal 5:** one more field joins the frozen set —
+  > `license-files = ["LICENSE"]`. The member `LICENSE` has **never reached the wheel**.
+  > `hmm` 0.1.0 is on PyPI with `License-Expression: MIT` in METADATA and no license text at
+  > all: valid PEP 639, accepted by `twine check`, rendered as MIT by PyPI, and detectable
+  > only by opening the archive. meson-python ships no license file unless `license-files` is
+  > declared; `pfsmgraph-dataseq` 0.1.0 does carry `dist-info/licenses/` because hatchling
+  > globs `LICENSE*` by default, which is why the gap survived the 0.1.0 release unnoticed.
+  > Declaring it produces `dist-info/licenses/LICENSE` (1077 bytes) and a `License-File:`
+  > field, matching what hatchling gave `dataseq`. None of the five members declared it;
+  > `align`, `hseg` and `dl` should before their first release, where it still costs nothing.
   - [x] Restore `Programming Language :: Cython`; review `description`, the `cpu-parallel`,
     `gpu` and `torch` extras' bounds, and the `pfsmgraph-dataseq` lower bound against the
     `dataseq` API 0.2.0 uses
@@ -463,6 +473,30 @@
     > editing the module would silently desync the document from the code it documents. A
     > remedy that happens to be correct is not a reason to treat the text as free to edit.
 - [~] Verify what a consumer installs
+  > **Reopened 2026-09-16, same day:** the goal's own verification found a defect in the
+  > artifact it was verifying, so the artifacts that were checked are no longer the ones that
+  > will ship. The `.so` files, `py.typed`, the namespace invariant and the bit-exactness
+  > results are all unaffected by adding a license file, but a verification that does not
+  > match what ships is worse than none, so subgoal 1's structural checks are re-run against
+  > the rebuilt wheel before this closes again.
+  > **Note:** the rebuild after adding `license-files` produced a wheel **still missing the
+  > license**, and that is the sharpest possible confirmation of the finding recorded two
+  > commits ago. `just build` builds the wheel from the sdist, the sdist's contents are
+  > `git archive HEAD`, and the change was uncommitted — so the sdist's `PKG-INFO` carried
+  > `License-File: LICENSE` from the working tree while the `pyproject.toml` inside the same
+  > archive had **zero** `license-files` lines. **Nothing caught it**, because the divergent
+  > field was not the version, which is the only field uv cross-checks between sdist and
+  > wheel. The earlier `uv build --wheel` test did produce the license, because it builds
+  > from the working tree and bypasses the sdist entirely. Predicted in `docs/ops/release.md`
+  > on the same day, then demonstrated by accident within the hour.
+  > **Done:** a consumer's install was exercised three ways and all three hold. The platform
+  > wheel carries both extensions, `py.typed` and no namespace `__init__.py`, resolves
+  > `pfsmgraph-dataseq` from PyPI, reports `cython ✓`, and runs its own README's examples.
+  > Its kernels are **bit-exact** with the numpy reference — 748 tests plus an explicit
+  > `tobytes()` comparison over a 210-cycle EM run. The sdist builds and installs to the same
+  > result in 15.7s on a machine with a compiler, and `-Dcompiled=false` yields a working pure
+  > install that says so. The only thing not verified here is the *other three platforms*,
+  > which this host cannot build; CI checked those on its own hardware, with the same 748.
   > **Note:** the version was bumped to `0.2.0.dev0` rather than `0.2.0` before building,
   > by the repository's own rule rather than by preference: `core.md` says the `.dev0` suffix
   > stays until the release commit, because a bare version means one accidental publish burns
@@ -485,12 +519,58 @@
   > **Note:** so the version bump must be **committed** before `just build` yields consistent
   > artifacts, which is what goal 6's "release commit: bump, relock, rebuild" implies —
   > demonstrated here rather than assumed.
-  - [~] Build 0.2.0.dev0 wheels and the sdist; install each available wheel into a clean
+  - [x] Build 0.2.0.dev0 wheels and the sdist; install each available wheel into a clean
     venv outside the workspace: `py.typed`, the `.so` files, no `pfsmgraph/__init__.py`,
     `backends()` reporting `cython ✓`, the README examples
-  - [ ] Check the installed compiled kernels bit-exact against the numpy reference
+    > **Ran (2026-09-16):** `just build` under `0.2.0.dev0` produced
+    > `pfsmgraph_hmm-0.2.0.dev0-cp312-cp312-linux_x86_64.whl` — **platform-tagged**, which is
+    > the `-Dcompiled=false` drop working — and the sdist. The wheel's own listing carries
+    > both `.so` files, `py.typed`, eleven modules and **no `pfsmgraph/__init__.py`**.
+    > **Ran:** installed into a fresh venv under the scratchpad, outside the workspace. uv
+    > resolved `pfsmgraph-dataseq==0.1.0` **from PyPI** and numpy 2.5.3 — three packages, no
+    > extras. `pfsmgraph.hmm` resolves to that venv's `site-packages`, `pfsmgraph.__path__`
+    > is the namespace directory alone, `py.typed` is present, both extensions are present,
+    > and `backends()` reports `cython ✓` on all three public calls, with each absent backend
+    > naming its extra.
+    > **Ran:** the README examples against the *installed* wheel, by running
+    > `tests/test_api_docs.py -k "hmm and README"` with the consumer venv's interpreter —
+    > 2 passed. The session header is what proves where it ran: `cython ✓ · cpu_parallel ✗
+    > (numba is not installed)` cannot appear in a checkout, where numba is in the dev group.
+    > **Note:** a scripting error turned into a check worth keeping. `backends("forward_backward")`
+    > raises `ValueError: no public call 'forward_backward' has backends`, which is the package
+    > being right — forward-backward is a private kernel with no public call, so it exposes no
+    > selection — and the refusal is loud rather than an empty list.
+  - [x] Check the installed compiled kernels bit-exact against the numpy reference
     (a platform wheel built with contraction on would pass every tolerance test)
-  - [ ] Build and install from the sdist alone, on a platform with no wheel
+    > **Ran (2026-09-16):** the package's own suite against the installed wheel, using
+    > cibuildwheel's mechanism — `conftest.py`, `_backends.py`, `pyproject.toml`, the tests
+    > and the `.scratch/hmm-lush/Training` fixtures copied into a temp tree, then the consumer
+    > venv's pytest. **748 passed, 523 skipped**, which is the *same* figure CI's Linux wheels
+    > produced, and it includes `test_forward_backward_backends.py`'s 213 `tobytes()`
+    > comparisons.
+    > **Ran:** an explicit comparison besides the suite, because a test count is not a
+    > demonstration. On a 12-state model over four records of length 61 to 200: `viterbi`
+    > states byte-identical and `total_bits` identical as hex floats on every record;
+    > `viterbi_batch` identical row by row; and `baum_welch` run to convergence — **210
+    > cycles** — giving an identical `description_lengths` tuple and `max|diff| = 0.0` on all
+    > three parameter arrays, compared as `tobytes()`. Bit-exact is what a contraction-enabled
+    > build fails and every tolerance test passes, so this is the check the `-ffp-contract=off`
+    > flag exists for, made against what a consumer installs rather than what meson accepted.
+  - [x] Build and install from the sdist alone, on a platform with no wheel
+    > **Ran (2026-09-16):** `uv pip install --no-binary pfsmgraph-hmm <sdist>` into a fresh
+    > venv, build isolation on, so `build-system.requires` had to supply meson-python, Cython
+    > and numpy with no workspace involvement. Built and installed in **15.7s**, and the
+    > result is indistinguishable from the wheel: both `.so` files, `py.typed`, no
+    > `pfsmgraph/__init__.py`, `cython ✓`. That is the path every platform without a wheel
+    > takes — Intel macOS, musl Linux, 32-bit Windows, any glibc older than the manylinux
+    > image.
+    > **Ran:** the escape hatch the README now promises, since a promise made in an immutable
+    > long description should be tested before it ships. `-C setup-args=-Dcompiled=false`
+    > installs pure: no `.so` files, `python` backend working, and `cython` reporting
+    > *"this install of pfsmgraph-hmm has no compiled extension (a pure wheel, or a build with
+    > -Dcompiled=false): install a platform wheel, or build from source with a C compiler"*.
+    > That also confirms goal 4's reading empirically — both halves of that remedy are
+    > actionable at 0.2.0, where at 0.1.0 the first half was not.
 - [ ] Release: publish, tag, and close what the branch discharged
   - [ ] **User:** attach a Trusted Publisher for `pfsmgraph-hmm` on PyPI, per goal 1
     > **Note:** ordered after the workflow goal, not before it. PyPI's trusted publisher

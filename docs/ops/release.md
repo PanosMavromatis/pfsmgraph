@@ -38,16 +38,25 @@ A member's release commit must contain all four, inside `packages/pfsmgraph-<pkg
 
 - `README.md` -- the PyPI long description. The root README is about the workspace and
   every relative link in it 404s there.
-- `LICENSE` -- a **real copy**, never a symlink to the repo-root one.
+- `LICENSE` -- a **real copy**, never a symlink to the repo-root one, **and declared as
+  `license-files = ["LICENSE"]`**, without which meson-python ships no license text.
 - the `Typing :: Typed` classifier.
 - `src/pfsmgraph/<pkg>/py.typed` -- the PEP 561 marker, **inside** the importable package.
 
-Two of these fail silently if placed wrong, which is why
+**Three** of these fail silently if placed or declared wrong, which is why
 [`core.md`](../agents/core.md) carries them as an invariant rather than a checklist:
 
 - A symlinked `LICENSE` builds a valid-looking sdist and then fails on **unpack** -- a
   symlink escaping the sdist root is refused. That is a consumer-side failure, caught here
   only because `uv build` routes wheel-building through the sdist.
+- An **undeclared** `LICENSE` reaches no wheel at all. meson-python includes no license
+  file unless `license-files` names it, and the omission is invisible from outside the
+  archive: METADATA still carries `License-Expression: MIT`, which is valid PEP 639, so
+  `twine check` passes and PyPI renders the license correctly. Measured 2026-09-16 --
+  `pfsmgraph-hmm` 0.1.0 is on PyPI with no license text, and nobody noticed because
+  `pfsmgraph-dataseq` 0.1.0 *does* carry `dist-info/licenses/`, hatchling having globbed
+  `LICENSE*` by default. The rule predates this repository's move to meson-python and was
+  inherited into a backend with different defaults.
 - A `py.typed` at the distribution root instead of inside the importable package reaches no
   wheel at all, with no error and no warning, and a type checker then discards every
   annotation in the package. It cannot go at the `pfsmgraph/` namespace level either, for
