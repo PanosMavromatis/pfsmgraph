@@ -476,7 +476,7 @@ claim about the three members that have no code yet, and the test count is a cla
 belonging to other projects, and now also Python of our own — a runnable transliteration of
 the Lush original under `.scratch/hmm-lush/translation/`, written as a reading aid for the
 merge, and since 2026-09-14 the measurement scripts behind ADR 0020 under
-`.scratch/hmm-lush/measurements/`, joined 2026-09-15 by `viterbi_batch_speed.py`, the per-phase batch timings, which unlike the ADR 0020 scripts imports the public `pfsmgraph.hmm`. `param_representation_move_cost.py` followed on 2026-09-16, splitting a topology move's cost into building the candidate and scoring it; building is about 0.005% of the total, which is what settles the parameter representation's dense options on cost. Those are tracked so a decision record's evidence can
+`.scratch/hmm-lush/measurements/`, joined 2026-09-15 by `viterbi_batch_speed.py`, the per-phase batch timings, which unlike the ADR 0020 scripts imports the public `pfsmgraph.hmm`. `param_representation_move_cost.py` followed on 2026-09-16, splitting a topology move's cost into building the candidate and scoring it; building is about 0.005% of the total, which is what settles the parameter representation's dense options on cost. `split_symmetry_breaking.py` joined the same day on `feat/hmm-split-state`, comparing how a split state's twins are told apart: the original's outbound redraw against a per-predecessor inbound perturbation, which needs a deliberate seed where the twins share one predecessor row and more EM than `run-converge` gives it by default. Those are tracked so a decision record's evidence can
 be re-run rather than only read. They sit outside `tests/` because they measure the
 alternatives the record rejected.
 
