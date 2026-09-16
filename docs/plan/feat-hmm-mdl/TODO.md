@@ -1,6 +1,6 @@
 # feat/hmm-mdl
 
-**Status**: active
+**Status**: merged — PR #43 — 2026-09-16
 **Created**: 2026-09-16
 **Subgoal**: Write `_mdl.py` — `docs/plan/TODO.md`, revision 04-hmm-v0.3.0
 
