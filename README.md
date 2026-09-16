@@ -2,7 +2,7 @@
 
 A composable ecosystem of Python packages for modeling symbolic data sequences. Probabilistic finite-state models (PFSMs) are the unifying core, bridging sequence alignment, hierarchical segmentation, HMMs (Baum-Welch), deep learning (RNNs, Transformers), interpretability, and graph operations.
 
-> **Status: two packages released, three scaffolded.** The workspace layout, package boundaries, and build backends are in place. `pfsmgraph-dataseq` — the base layer every other member depends on — is implemented, tested, documented at [`docs/api/dataseq/`](docs/api/dataseq/README.md), and released at 0.1.0. `pfsmgraph-hmm` has begun: its migrated numeric helpers are in place and tested, and it now exports the frozen parameter value `HMMParams` together with the Viterbi decode over it — the project's first dynamic-programming kernel, checked against the original implementation's own saved decodes. That decode reached [ADR 0002](docs/design/adr/0002-three-phase-algorithm-lifecycle.md) phase 2 on 2026-09-09 as `_viterbi_cython.pyx`, the first compiled code this repository carries and the first non-trivial row in its backend matrix. `pfsmgraph-hmm` was released at 0.1.0 on 2026-09-13, as a pure wheel; the compiled kernels stay in the repository until a public call selects them. The other three are still empty namespace subpackages, and all three unreleased names still hold dependency-free `0.0.0` placeholders. See [`docs/design/PRD.md`](docs/design/PRD.md) for the design and [`docs/design/adr/`](docs/design/adr/README.md) for the decision records, which are authoritative.
+> **Status: two packages released, three scaffolded.** The workspace layout, package boundaries, and build backends are in place. `pfsmgraph-dataseq` — the base layer every other member depends on — is implemented, tested, documented at [`docs/api/dataseq/`](docs/api/dataseq/README.md), and released at 0.1.0. `pfsmgraph-hmm` is implemented through Baum-Welch and released at **0.2.0** (2026-09-16). It exports the frozen parameter value `HMMParams`, the Viterbi decode over it — one record at a time or many padded together — and Baum-Welch training over a fixed topology, each with a choice of backend across [ADR 0002](docs/design/adr/0002-three-phase-algorithm-lifecycle.md)'s four lifecycle phases plus torch. The decode was checked against the original implementation's own saved decodes; the compiled phases are held to the numpy reference **bit for bit**, not to a tolerance. 0.2.0 is this family's first release of platform wheels — twenty of them, cp310–cp314 across four platforms — because it is the first version whose public API reaches a compiled kernel, and a pure wheel would report `cython ✗` to every pip user. Topology search by state merge and split is a later revision. The other three are still empty namespace subpackages, and all three unreleased names still hold dependency-free `0.0.0` placeholders. See [`docs/design/PRD.md`](docs/design/PRD.md) for the design and [`docs/design/adr/`](docs/design/adr/README.md) for the decision records, which are authoritative.
 
 ## Packages
 
@@ -36,6 +36,7 @@ A composable ecosystem of Python packages for modeling symbolic data sequences. 
 pyproject.toml                 # uv workspace root (virtual — not a package)
 dp-compile.toml                # manifest for the dp-compile plugin (see docs/agents/claude.md)
 .claude/settings.json          # marketplace + enabled plugins (see docs/agents/claude.md)
+.github/workflows/             # CI: suite on push/PR, cibuildwheel release (first CI, 2026-09-16)
 docs/design/PRD.md             # authoritative design document
 docs/design/adr/               # decision records (authoritative)
 docs/design/algorithms/        # per-algorithm formalizations, one directory each
@@ -56,7 +57,7 @@ Requires [uv](https://docs.astral.sh/uv/) and Python ≥ 3.10.
 
 ```bash
 uv sync                             # venv + all five members editable + dev tools
-uv run pytest                       # run the suite (709: 74 dataseq, 584 hmm, 51 root)
+uv run pytest                       # run the suite (1418: 74 dataseq, 1292 hmm, 52 root)
 uv build --package pfsmgraph-align  # build one distribution
 uv lock                             # refresh uv.lock (committed; one per family)
 ```
@@ -67,9 +68,9 @@ Because `uv sync` installs every member **editable**, imports resolve to `packag
 
 ## Publishing
 
-Release order follows declared dependencies ([ADR 0019](docs/design/adr/0019-declared-dependencies-follow-imports.md)): a package cannot publish before the family members it imports exist on PyPI, so `dataseq` goes first and `hmm`, which imports only `dataseq`, can follow it directly. `pfsmgraph-dataseq` and `pfsmgraph-hmm` are released at 0.1.0; the other four names — the three remaining packages plus the bare `pfsmgraph` umbrella — are still dependency-free `0.0.0` placeholders. See PRD §4 and §11.
+Release order follows declared dependencies ([ADR 0019](docs/design/adr/0019-declared-dependencies-follow-imports.md)): a package cannot publish before the family members it imports exist on PyPI, so `dataseq` goes first and `hmm`, which imports only `dataseq`, can follow it directly. `pfsmgraph-dataseq` is released at 0.1.0 and `pfsmgraph-hmm` at 0.2.0; the other four names — the three remaining packages plus the bare `pfsmgraph` umbrella — are still dependency-free `0.0.0` placeholders. See PRD §4 and §11.
 
-Releases run through the repo-root `justfile`, which requires [just](https://just.systems) (`brew install just`): `just release <version> [package]` runs test → build → `twine check` → preflight → upload → tag, defaulting to `default_package`, the member under development, so an omitted argument can never reach a published package. `just` alone lists every recipe, and [`docs/ops/release.md`](docs/ops/release.md) is the runbook.
+Releases run through the repo-root `justfile`, which requires [just](https://just.systems) (`brew install just`): `just release <version> [package]` runs test → build → `twine check` → preflight → upload → tag, defaulting to `default_package`, the member under development, so an omitted argument can never reach a published package. Since 2026-09-16 that is one of **two** release paths: a member whose shipped artifact this machine cannot build — today `pfsmgraph-hmm`, whose wheels GitHub Actions builds — releases through `just release-ci <version> [package]`, which pushes the tag that triggers the workflow's publish job. `just` refuses the wrong path in either direction. `just` alone lists every recipe, and [`docs/ops/release.md`](docs/ops/release.md) is the runbook.
 
 ## License
 

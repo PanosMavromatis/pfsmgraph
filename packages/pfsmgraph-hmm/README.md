@@ -11,6 +11,13 @@ It depends on `pfsmgraph-dataseq`, for its vocabulary and its records, and on nu
 pip install pfsmgraph-hmm
 ```
 
+From 0.2.0 that is a **platform wheel** with the Cython kernels already compiled: Linux
+x86_64 and aarch64, macOS arm64, and Windows x86_64, on CPython 3.10 through 3.14.
+Anywhere else pip falls back to the source distribution and builds them, which needs a C
+compiler; `backends()` reports `cython ✓` either way. A pure install with no compiled
+kernels is available from source with `-C setup-args=-Dcompiled=false`, and reports
+`cython ✗` rather than pretending otherwise.
+
 ## Emission is on the arc
 
 A two-state model over two symbols, and one decoded sequence:

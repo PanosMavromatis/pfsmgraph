@@ -38,16 +38,25 @@ A member's release commit must contain all four, inside `packages/pfsmgraph-<pkg
 
 - `README.md` -- the PyPI long description. The root README is about the workspace and
   every relative link in it 404s there.
-- `LICENSE` -- a **real copy**, never a symlink to the repo-root one.
+- `LICENSE` -- a **real copy**, never a symlink to the repo-root one, **and declared as
+  `license-files = ["LICENSE"]`**, without which meson-python ships no license text.
 - the `Typing :: Typed` classifier.
 - `src/pfsmgraph/<pkg>/py.typed` -- the PEP 561 marker, **inside** the importable package.
 
-Two of these fail silently if placed wrong, which is why
+**Three** of these fail silently if placed or declared wrong, which is why
 [`core.md`](../agents/core.md) carries them as an invariant rather than a checklist:
 
 - A symlinked `LICENSE` builds a valid-looking sdist and then fails on **unpack** -- a
   symlink escaping the sdist root is refused. That is a consumer-side failure, caught here
   only because `uv build` routes wheel-building through the sdist.
+- An **undeclared** `LICENSE` reaches no wheel at all. meson-python includes no license
+  file unless `license-files` names it, and the omission is invisible from outside the
+  archive: METADATA still carries `License-Expression: MIT`, which is valid PEP 639, so
+  `twine check` passes and PyPI renders the license correctly. Measured 2026-09-16 --
+  `pfsmgraph-hmm` 0.1.0 is on PyPI with no license text, and nobody noticed because
+  `pfsmgraph-dataseq` 0.1.0 *does* carry `dist-info/licenses/`, hatchling having globbed
+  `LICENSE*` by default. The rule predates this repository's move to meson-python and was
+  inherited into a backend with different defaults.
 - A `py.typed` at the distribution root instead of inside the importable package reaches no
   wheel at all, with no error and no warning, and a type checker then discards every
   annotation in the package. It cannot go at the `pfsmgraph/` namespace level either, for
@@ -66,12 +75,36 @@ wheel with none of the new metadata. At release this is harmless, because `prefl
 refuses a dirty tree. To inspect uncommitted work, build the wheel directly with
 `uv build --package <pkg> --wheel --out-dir <scratch>`.
 
-**`pfsmgraph-hmm` 0.1.0 is built with `-C setup-args=-Dcompiled=false`**, which the `build`
-recipe passes for that package alone. The option (`packages/pfsmgraph-hmm/meson.options`)
-skips the Cython kernel and installs to purelib, giving a `py3-none-any` wheel, since no
-public call in 0.1.0 reaches a compiled kernel. Both halves are needed: skipping the
-extension alone still left a platform-tagged wheel. uv's `--config-settings-package` would
-be the natural spelling, but it is silently ignored for the package being built.
+**Sharpened 2026-09-16: "reaches neither artifact" is not quite right, and the exception is
+the part worth knowing.** An uncommitted change reaches the sdist's *metadata* and not its
+*contents*. Measured while bumping `pfsmgraph-hmm` to `0.2.0.dev0` for the goal-5
+verification: the sdist's `PKG-INFO` read `Version: 0.2.0.dev0`, taken from the working
+tree, while the `pyproject.toml` **inside the same archive** read `0.1.0`, taken from
+`git archive HEAD`. For the **version** field that divergence is caught loudly, because
+`uv build` builds the wheel from the sdist's contents and then refuses the pair -- *"The
+source distribution declares version 0.2.0.dev0, but the wheel declares version 0.1.0"*.
+For **every other field it is silent**: an uncommitted classifier, dependency bound or
+description change yields an sdist advertising one thing in `PKG-INFO` and carrying another
+in `pyproject.toml`, with nothing to catch it. The practical rule does not change and now
+has a reason behind it -- commit before building.
+
+**`pfsmgraph-hmm` 0.1.0 was built with `-C setup-args=-Dcompiled=false`, and 0.2.0 is not.**
+The option (`packages/pfsmgraph-hmm/meson.options`) skips the Cython kernels and installs to
+purelib, giving a `py3-none-any` wheel; both halves are needed, since skipping the extension
+alone still left a platform-tagged wheel. That was right for 0.1.0, where no public call
+reached a compiled kernel. From 0.2.0 `backend="cython"` is public, so a pure wheel would
+mean every pip user seeing `cython ✗`, and the `build` recipe passes the flag no longer.
+
+**The option stays, as a source-build escape hatch rather than a release setting.** It is the
+only way to install this package from the sdist on a machine with no C compiler, accepting a
+pure install that reports `cython ✗` honestly rather than failing to build at all. Nothing in
+the release path sets it, and nothing should: a release wheel is exactly the case that must
+not use it.
+
+**`build` is no longer the first step of `pfsmgraph-hmm`'s release**, and that changes what it
+is for rather than retiring it. It produces one local platform wheel, useful for installing
+into a clean venv to check what a consumer gets. The wheels that ship are built by GitHub
+Actions -- see *Two release paths* below.
 
 ### Validate
 
@@ -150,6 +183,32 @@ already provably reproducible for the wheel, and pays for it by skipping the ent
 
 ## 1. The `justfile`
 
+### Two release paths, and which member takes which
+
+**This repository has two release mechanisms, deliberately.** Which one a member takes
+follows from whether this machine can build its shipped artifact:
+
+| | Members | Command | Upload |
+| --- | --- | --- | --- |
+| **Local** | those shipping a pure `py3-none-any` wheel | `just release <version> <pkg>` | project-scoped token, from here |
+| **CI** | those in the `ci_built_packages` variable -- today `pfsmgraph-hmm` | `just release-ci <version> <pkg>` | Trusted Publishing, from the workflow run the tag triggers |
+
+A member moves from the first row to the second when its first public call reaches a compiled
+kernel, because from that point its release is platform wheels for machines this one is not.
+`pfsmgraph-hmm` crossed that line at 0.2.0.
+
+**The two are not interchangeable, and `just` refuses the wrong one in both directions.**
+`release` stops for a member CI builds; `release-ci` stops for a member CI does not, since
+that would push a tag no workflow matches and report success having released nothing. Both
+refusals are *prerequisites* rather than body lines, for the reason given below.
+
+**Trusted Publishing cannot be driven from here at all.** It is OIDC: the token is minted by
+GitHub Actions for a specific repository, workflow and environment, and there is no local
+equivalent. So "download the CI wheels and publish them with `just`" is not a shortcut to the
+same outcome -- it is the token path, without PEP 740 attestations, which are signed against
+the Trusted Publishing identity. The artifacts *are* downloadable (`gh run download <run-id>`
+fetches all of them in seconds); the reason not to is the identity, not access.
+
 `just` is a command runner: named recipes, arguments, no build graph and no `make` tab
 traps. The `justfile` sits at the workspace root beside the root `pyproject.toml`, because
 the recipes assume that working directory -- `uv build --package` and the shared `dist/`
@@ -218,6 +277,18 @@ against an old build it passes, and reads as verification. Inside `release` the 
 exist, since `clean` and `build` run first and it only ever sees an artifact built moments
 earlier. Observed 2026-09-02, when it passed against a wheel whose metadata three commits
 had since changed.
+
+**Its `py3-none-any` assertion was re-examined for 0.2.0 and deliberately not relaxed.** The
+obvious reading of platform wheels is that `preflight` must learn to accept platform tags.
+It must not. No member publishes platform wheels *from here* -- those go out from CI -- so the
+assertion stays correct for every member that still takes the local path, and relaxing it
+would delete the last check standing between a local `pfsmgraph-hmm` release and an upload,
+leaving PyPI's refusal of a bare `linux_x86_64` tag as the only backstop. The explicit
+refusal in `release` is the policy; this filename check is a second line behind it.
+
+What did move is the half of `preflight` that is about the tree rather than the artifacts --
+the dirty-tree check and the `git push origin HEAD` -- into `_tree-pushed`, so `release-ci`
+can require it without a `dist/` check it has no artifacts to satisfy.
 
 ---
 
@@ -409,6 +480,18 @@ row either way; it was the one row in the original draft that was stated backwar
 Pilot Trusted Publishing on a member where a botched release costs nothing, and if it holds,
 move the rest and revoke the tokens. The `justfile` is what makes that a one-recipe edit
 rather than a habit rewrite.
+
+**That pilot is happening, and it was not chosen for the reason above.** `pfsmgraph-hmm`
+0.2.0 moves to Trusted Publishing because its wheels are built by GitHub Actions and the
+upload therefore happens there, not because hmm was picked as a low-stakes subject -- it is
+the most-developed member in the family. The paragraph's conclusion survives its reasoning:
+the posture is still token-first, and the other four members are unaffected.
+
+**One prediction it made is worth marking as half-wrong.** "The `justfile` is what makes that
+a one-recipe edit" holds for the *upload* -- `publish` is untouched by any of this -- and not
+for the release. `release` has `build` as a prerequisite and `build` runs `clean`, so a recipe
+chain ending in `publish` cannot consume wheels an external job produced; the tag flow is a
+second path beside it rather than an edit to it.
 
 ---
 
