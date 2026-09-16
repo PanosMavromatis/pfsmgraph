@@ -66,6 +66,19 @@ wheel with none of the new metadata. At release this is harmless, because `prefl
 refuses a dirty tree. To inspect uncommitted work, build the wheel directly with
 `uv build --package <pkg> --wheel --out-dir <scratch>`.
 
+**Sharpened 2026-09-16: "reaches neither artifact" is not quite right, and the exception is
+the part worth knowing.** An uncommitted change reaches the sdist's *metadata* and not its
+*contents*. Measured while bumping `pfsmgraph-hmm` to `0.2.0.dev0` for the goal-5
+verification: the sdist's `PKG-INFO` read `Version: 0.2.0.dev0`, taken from the working
+tree, while the `pyproject.toml` **inside the same archive** read `0.1.0`, taken from
+`git archive HEAD`. For the **version** field that divergence is caught loudly, because
+`uv build` builds the wheel from the sdist's contents and then refuses the pair -- *"The
+source distribution declares version 0.2.0.dev0, but the wheel declares version 0.1.0"*.
+For **every other field it is silent**: an uncommitted classifier, dependency bound or
+description change yields an sdist advertising one thing in `PKG-INFO` and carrying another
+in `pyproject.toml`, with nothing to catch it. The practical rule does not change and now
+has a reason behind it -- commit before building.
+
 **`pfsmgraph-hmm` 0.1.0 was built with `-C setup-args=-Dcompiled=false`, and 0.2.0 is not.**
 The option (`packages/pfsmgraph-hmm/meson.options`) skips the Cython kernels and installs to
 purelib, giving a `py3-none-any` wheel; both halves are needed, since skipping the extension

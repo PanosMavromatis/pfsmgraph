@@ -462,8 +462,30 @@
     > table quotes `_backends.py`'s actual message string, so editing the prose without
     > editing the module would silently desync the document from the code it documents. A
     > remedy that happens to be correct is not a reason to treat the text as free to edit.
-- [ ] Verify what a consumer installs
-  - [ ] Build 0.2.0.dev0 wheels and the sdist; install each available wheel into a clean
+- [~] Verify what a consumer installs
+  > **Note:** the version was bumped to `0.2.0.dev0` rather than `0.2.0` before building,
+  > by the repository's own rule rather than by preference: `core.md` says the `.dev0` suffix
+  > stays until the release commit, because a bare version means one accidental publish burns
+  > that number on PyPI permanently. PyPI already carries `0.0.0` and `0.1.0` for this
+  > distribution, so the tree was, until this bump, declaring an already-published version.
+  > **Ran (2026-09-16):** the first `just build` **failed**, and the failure is the finding.
+  > `uv` refused with *"The source distribution declares version 0.2.0.dev0, but the wheel
+  > declares version 0.1.0"*. Diagnosed precisely: the sdist is internally inconsistent —
+  > its `PKG-INFO` says `0.2.0.dev0`, read from the working tree, while the `pyproject.toml`
+  > **inside the same archive** says `0.1.0`, because meson-python builds the sdist with
+  > `git archive HEAD` and the bump was uncommitted. The wheel is then built from those
+  > contents, so it comes out `0.1.0`, and uv catches the pair.
+  > **Note:** this sharpens `docs/ops/release.md`, which said an uncommitted change "reaches
+  > neither artifact". It reaches the sdist's *metadata* and not its *contents*. For the
+  > version field the divergence is loud; **for every other field it is silent** — an
+  > uncommitted classifier, bound or description change gives an sdist whose `PKG-INFO` and
+  > `pyproject.toml` describe different packages, with nothing to catch it. That is not
+  > hypothetical for this branch: goal 4 edited exactly those fields, and had they been built
+  > uncommitted the sdist would have advertised the new classifiers while carrying the old.
+  > **Note:** so the version bump must be **committed** before `just build` yields consistent
+  > artifacts, which is what goal 6's "release commit: bump, relock, rebuild" implies —
+  > demonstrated here rather than assumed.
+  - [~] Build 0.2.0.dev0 wheels and the sdist; install each available wheel into a clean
     venv outside the workspace: `py.typed`, the `.so` files, no `pfsmgraph/__init__.py`,
     `backends()` reporting `cython ✓`, the README examples
   - [ ] Check the installed compiled kernels bit-exact against the numpy reference
