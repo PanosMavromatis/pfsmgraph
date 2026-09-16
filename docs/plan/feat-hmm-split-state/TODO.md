@@ -1,6 +1,6 @@
 # feat/hmm-split-state
 
-**Status**: active
+**Status**: merged — PR #45 — 2026-09-16
 **Created**: 2026-09-16
 **Subgoal**: Implement state split — `docs/plan/TODO.md`, revision 04-hmm-v0.3.0
 
