@@ -203,6 +203,6 @@ False
 ```
 
 Two models built from the same arrays compare unequal. Comparing arrays has no single right
-answer — exactly, or within a tolerance, and if so whose — and nothing in 0.1.0 needs it,
+answer — exactly, or within a tolerance, and if so whose — and nothing in 0.2.0 needs it,
 so the question is left open rather than guessed at. Compare the arrays yourself, with the
 tolerance your use calls for.

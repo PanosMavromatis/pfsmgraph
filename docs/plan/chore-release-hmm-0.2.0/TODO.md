@@ -588,7 +588,12 @@
     > -Dcompiled=false): install a platform wheel, or build from source with a C compiler"*.
     > That also confirms goal 4's reading empirically — both halves of that remedy are
     > actionable at 0.2.0, where at 0.1.0 the first half was not.
-- [~] Release: publish, tag, and close what the branch discharged
+- [x] Release: publish, tag, and close what the branch discharged
+  > **Done:** `pfsmgraph-hmm` 0.2.0 is on PyPI — 21 files, 20 platform wheels and an sdist,
+  > published by run `35061709394` through Trusted Publishing with PEP 740 attestations, and
+  > tagged `pfsmgraph-hmm-v0.2.0` on `075f22a`. A real `pip install` gets
+  > `manylinux_2_17_x86_64` with both extensions, `py.typed`, the LICENSE and `cython ✓`.
+  > The release is recorded in `core.md`, the root README and `docs/api/hmm/params.md`.
   > **Q:** Release from this branch, or merge to `main` first and release from there?
   > **A:** From this branch, then merge — 0.1.0's precedent exactly. Two facts settle it
   > rather than preference. The `pfsmgraph-hmm-v0.1.0` tag points at `75b5c47 "Release
@@ -625,7 +630,12 @@
     > form asks for the workflow *filename* and the environment name, so it cannot be
     > filled in until `release.yml` exists and both are settled. The `.envrc` token is not
     > retired by this — it stays as the fallback path `publish` still implements.
-  - [~] Release commit: bump `version` to `0.2.0`, relock, rebuild and re-verify
+  - [x] Release commit: bump `version` to `0.2.0`, relock, rebuild and re-verify
+    > **Done:** commit `075f22a` "Release pfsmgraph-hmm 0.2.0". Rebuilt after it landed, and
+    > the sdist is internally consistent at last — `PKG-INFO` and the embedded
+    > `pyproject.toml` both `0.2.0`. Wheel re-verified in a clean venv: `licenses/LICENSE`,
+    > `py.typed`, two `.so`, no namespace `__init__.py`, `cython ✓`; suite 748 passed / 523
+    > skipped; `twine check` PASSED on both artifacts.
     > **Ran (2026-09-16):** bumped `0.2.0.dev0` → `0.2.0` and ran `uv lock`. The relock is
     > **not** a formality: it reported *"Updated pfsmgraph-hmm v0.1.0 -> v0.2.0"*, meaning
     > `uv.lock` had been carrying `0.1.0` since commit `58942fe`, days before this branch
@@ -644,7 +654,7 @@
     > `core.md` warns about — one accidental publish burns the number permanently. Both paths
     > are closed by guards this branch added: `just release` refuses `pfsmgraph-hmm` before
     > running anything, and the workflow's publish job is gated on a `pfsmgraph-hmm-v*` tag.
-  - [ ] **User:** publish (irreversible): push the `pfsmgraph-hmm-v0.2.0` tag to trigger
+  - [x] **User:** publish (irreversible): push the `pfsmgraph-hmm-v0.2.0` tag to trigger
     the release workflow's publish job
     > **Note:** the exact command is **`just release-ci 0.2.0`**, run from the repo root.
     > There is no separate tag command — this recipe *is* the tag push. The package argument
@@ -664,9 +674,40 @@
     > committed before `release-ci` will run**. That ordering is not a nuisance: it is why
     > the verification results below are recorded *after* the publish rather than before,
     > where they can state what happened instead of what was expected.
-  - [ ] Confirm PyPI's digests match the verified build, the tag `pfsmgraph-hmm-v0.2.0`
+    > **Ran (2026-09-16):** `just release-ci 0.2.0`. Guards passed, the full suite ran green
+    > at **1418** — this host has the L4, so `cuda ✓` and the 206 numba-cuda tests ran, which
+    > no hosted runner can do — `git push origin HEAD` reported "Everything up-to-date", and
+    > the tag was created on `075f22a` and pushed. Release run `35061709394` followed:
+    > **all five build jobs green, and `publish to PyPI` success.** The version guard this
+    > branch added executed and passed, logging *"all 21 artifacts carry version 0.2.0"*.
+    > PEP 740 attestations were generated, which happens only under a Trusted Publishing
+    > identity — so the OIDC exchange and the publisher configuration both worked first time.
+  - [x] Confirm PyPI's digests match the verified build, the tag `pfsmgraph-hmm-v0.2.0`
     is on `origin`, and `just verify 0.2.0` installs from PyPI
-  - [ ] Record commit: the "released" statements in `core.md`, the root README and the
+    > **Ran:** PyPI carries `0.2.0` with **21 files**, the tag is on `origin` at
+    > `964870850a5a` pointing to `075f22a`, and `just verify 0.2.0` installs from PyPI and
+    > prints `0.2.0`. A full consumer check on top of the recipe: a real `pip install` gets
+    > `cp312-cp312-manylinux_2_17_x86_64` with both `.so`, `py.typed`, `licenses/LICENSE`,
+    > no namespace `__init__.py`, and **`cython ✓`** — the branch's entire premise, delivered.
+    > **Note:** the digest comparison failed at first and the investigation is the useful
+    > part. The local sdist and PyPI's differed by one byte with **identical contents** — 33
+    > files, zero differing — and every tar member's mtime differed by 407 seconds. The cause
+    > was not a build discrepancy: `dist/` held artifacts built from `7b10d94`, *before* that
+    > commit was amended into `075f22a` for the plan note, and it was never rebuilt. PyPI's
+    > mtimes are exactly `075f22a`'s commit time. The contents matched because the amend
+    > touched only `docs/plan/`, which is outside the member's sdist.
+    > **Note:** rebuilding from the tagged commit settles it — **the local sdist's sha256 is
+    > byte-identical to the one CI built and PyPI serves**,
+    > `379d598c57d549f161f85333dba3590f0f831b0965f709b80afa1347757555f5`. Two machines, two
+    > build frontends (`uv build` here, `pipx run build` in CI), one byte-identical archive.
+    > That confirms `docs/ops/release.md`'s claim that the meson sdist carries commit times
+    > rather than build times, and the claim is stronger than it reads: the sdist job in
+    > `release.yml` sets no `SOURCE_DATE_EPOCH` at all and still reproduces exactly.
+    > **Note:** the moral of the false alarm is worth keeping. `dist/` is not versioned by
+    > anything, so it can silently describe a commit that no longer exists — here, one that an
+    > amend had replaced. `build`'s `clean` prerequisite protects against a stale *version*;
+    > nothing protects against a stale *commit* at the same version.
+  - [x] Record commit: the "released" statements in `core.md`, the root README and the
     `docs/api/hmm/` pages, **including three stale claims in the root README that this
     branch found rather than caused**
     > **Note (found 2026-09-16, during a docs sync that correctly declined to fix it):** the
@@ -690,3 +731,17 @@
     > **Note:** these belong in the record commit rather than earlier because the README is
     > being edited there anyway and the figures are only correct once the release has
     > happened. Fixing them mid-branch would mean writing them twice, the first time wrongly.
+    > **Done (2026-09-16):** `core.md` records `hmm` at 0.2.0 in its Current state opener and
+    > a full release statement beside 0.1.0's — first platform wheels in this family, the
+    > reason the pure wheel could not continue, and the cross-machine sdist reproducibility.
+    > The root README's three stale claims are all corrected: the status paragraph, whose
+    > every clause was false at 0.2.0, now describes a package that trains and ships platform
+    > wheels; the release line reads `dataseq` 0.1.0 and `hmm` 0.2.0; and the suite count is
+    > **1418 = 74 + 1292 + 52**, **re-measured** rather than copied from the note above, as
+    > that note asked.
+    > **Note:** two of the three `docs/api/hmm/` hits needed nothing. `hmm/README.md` already
+    > read "Version 0.1.0 carried the model's parameters and its decode. 0.2.0 adds …", which
+    > was written forward during the audit and is simply true now. `backends.md`'s platform
+    > wheel references were checked in goal 4 and are actionable rather than aspirational
+    > from this release on. Only `params.md`'s "nothing in 0.1.0 needs it", about `__eq__`,
+    > was reasoning that reads as current rather than historical, so it now says 0.2.0.
