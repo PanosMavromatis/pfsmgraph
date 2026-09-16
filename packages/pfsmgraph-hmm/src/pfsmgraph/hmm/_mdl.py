@@ -36,6 +36,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from pfsmgraph.dataseq import USER_BASE
+
 from ._forward_backward import _description_length, _forward_backward
 from ._numeric import safe_divide
 from ._params import _check_codes
@@ -187,4 +189,63 @@ def _data_description_length(params, records, d):
         _quantize(params.transition_p, d),
         _quantize(params.output_p, d),
         records,
+    )
+
+
+def _model_description_length(params, d):
+    """The model half of the two-part score at precision ``d``: ``update-model-dl``.
+
+    ``hmm-trainer.lsh:402-427``::
+
+        int_code_length(n_states)
+        + int_code_length(d)
+        + (1 + n_states) * comb_code_length(d, 1 + n_states)
+        + n_non_zero_transitions * comb_code_length(d, 1 + n_symbols)
+
+    read left to right as the original accumulates it. The ``(1 + n_states)``
+    factor counts the vectors transmitted -- one initial distribution plus one
+    transition row per state -- and the per-arc term pays for one emission fibre
+    on every transition that survives quantization.
+
+    **``n-states-r`` is not a rounded quantity**, despite four lines later
+    ``transition-p-r`` being exactly that. It is ``(to-float n-states)``
+    (``hmm-trainer.lsh:405``), so the ``-r`` suffix means *real* in one binding
+    and *rounded* in the next, inside one ``let*``. Both are the state count.
+
+    **Transitions are counted after quantization**, which is the point of the
+    whole scheme: rounding at ``1 / d`` is what drives a small transition to
+    exactly zero, and a sparse topology is cheaper to describe than a dense one
+    only because of it. So ``d`` is simultaneously the rounding grid and an
+    argument of the code, and it cannot be chosen independently of the topology
+    it prices.
+
+    **The symbol axis is the user symbols, not the whole vocabulary.** The
+    original passes ``:model:alphabet-size``, its entire alphabet; here
+    ``HMMParams`` sizes ``output_p`` over the full ``dataseq`` vocabulary and
+    requires the six ADR 0011 reserved fibres to be *exactly zero*, so those
+    codes carry no information and must not be paid for. Taking
+    ``output_p.shape[-1]`` literally would charge every arc for six symbols the
+    model is forbidden to emit. This is not a rounding detail: measured against
+    the three tracked models it adds 12, 25 and **105 bits**, the last 24% of
+    ``m008``'s model description length -- far more than the differences the
+    search arbitrates between, and biased consistently toward sparsity.
+
+    Checked against the ``model-dl`` column each tracked model's own
+    ``_training_log`` recorded at its stored ``d``: 58.2207, 142.024 and 439.154
+    bits, reproduced to within the log's six-significant-figure print.
+
+    Raises ``ValueError`` for a ``d`` that is not positive and finite, as
+    :func:`_data_description_length` does.
+    """
+    if not (np.isfinite(d) and d > 0):
+        raise ValueError(f"d must be positive and finite, got {d}")
+    n_states = params.n_states
+    n_user_symbols = params.n_symbols - USER_BASE
+    quantized = _quantize(params.transition_p, d)
+    n_non_zero = int(np.count_nonzero(quantized))
+    return (
+        _int_code_length(n_states)
+        + _int_code_length(d)
+        + (1 + n_states) * _comb_code_length(d, 1 + n_states)
+        + n_non_zero * _comb_code_length(d, 1 + n_user_symbols)
     )

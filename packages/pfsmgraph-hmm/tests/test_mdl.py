@@ -11,7 +11,7 @@ be written down; :func:`math.comb`, which evaluates the binomial the
 implementation deliberately never forms; and a ``lgamma`` closed form, which
 computes the same quantity by a route sharing no code with the loop under test.
 
-Six sections:
+Seven sections:
 
 - **Exact values**, where float arithmetic is exact and ``==`` is the right
   assertion rather than a tolerance.
@@ -25,6 +25,9 @@ Six sections:
 - **The data description length at precision `d`**, against the `data-dl` each
   tracked model's own training log recorded. Moved here from
   `test_baum_welch.py` with the functions it covers.
+- **The model description length**, against the `model-dl` column of the same
+  logs, with both of its contested choices pinned against the alternative
+  that would otherwise pass unnoticed.
 """
 
 from __future__ import annotations
@@ -42,6 +45,7 @@ from pfsmgraph.hmm._mdl import (
     _corpus_description_length,
     _data_description_length,
     _int_code_length,
+    _model_description_length,
     _quantize,
 )
 
@@ -398,3 +402,151 @@ def test_the_renormalisation_is_the_literal_ascending_loop_bit_for_bit():
         for r in rounded:
             total += r
         assert got[index].tolist() == [r / total if total else 0.0 for r in rounded]
+
+
+# === the model description length ==============================================
+#
+# The same three logs, one column further along: `model-dl` at the model's own
+# stored `d`. Unlike the data half this needs no forward pass, so the only way a
+# saved parameter's four-decimal print can reach it is by moving a transition
+# across the `1 / (2 d)` threshold and changing the non-zero count. It does not,
+# for any of the three, so the tolerance is the log's print precision alone.
+
+#: `%g` at six significant figures, so half a printed unit is 0.0005 at 439 bits
+#: and 0.00005 at 58. Measured residuals: 0.00000, 0.00015, 0.00044. 0.001 leaves
+#: headroom while staying far below the 12-to-105 bits the rejected variants miss
+#: by, which is what makes it a real assertion rather than a wide net.
+LOGGED_MODEL_DL_TOL = 0.001
+
+
+def _logged_model_dl(model):
+    directory = FIXTURES / f"{model}.hmm"
+    last = (directory / "_training_log").read_text().strip().splitlines()[-1].split()
+    # A row ends `data-dl model-dl total-dl d flag`; read from the end, as the
+    # data-half helper above does, since what precedes varies with the move.
+    return load_params(directory), float((directory / "d").read_text()), float(last[-4])
+
+
+@pytest.mark.parametrize("model", ["m001_0001_001", "m001_0005_005", "m008_0001_008"])
+def test_the_model_description_length_is_the_originals_logged_value(model):
+    params, d, logged = _logged_model_dl(model)
+    assert _model_description_length(params, d) == pytest.approx(
+        logged, abs=LOGGED_MODEL_DL_TOL
+    )
+
+
+@pytest.mark.parametrize("model", ["m001_0001_001", "m001_0005_005", "m008_0001_008"])
+def test_charging_for_the_reserved_block_misses_the_logged_value(model):
+    """Pins the symbol-axis decision against the literal `output_p.shape[-1]`.
+
+    `HMMParams` requires the six ADR 0011 reserved fibres to be exactly zero, so
+    those codes carry no information; charging for them is an encoding artifact.
+    The point of the test is that it is a *large* artifact, biased one way: it
+    inflates the per-arc term only, so it grows with the transition count and
+    pushes the search toward sparse topologies.
+    """
+    params, d, logged = _logged_model_dl(model)
+    n_states = params.n_states
+    whole_vocabulary = (
+        _int_code_length(n_states)
+        + _int_code_length(d)
+        + (1 + n_states) * _comb_code_length(d, 1 + n_states)
+        + int(np.count_nonzero(_quantize(params.transition_p, d)))
+        * _comb_code_length(d, 1 + params.n_symbols)
+    )
+    assert whole_vocabulary > logged + 10.0
+    assert whole_vocabulary > _model_description_length(params, d)
+
+
+@pytest.mark.parametrize("model", ["m001_0001_001", "m001_0005_005", "m008_0001_008"])
+def test_the_vector_code_takes_one_part_more_than_the_state_count(model):
+    """Pins `comb_code_length(d, 1 + n_states)` against the arithmetically natural
+    `comb_code_length(d, n_states)`.
+
+    A vector of `n_states` probabilities quantized to `1 / d` is a composition of
+    `d` into `n_states` parts, so `m = n_states` is what the combinatorics call
+    for and `1 + n_states` is what the original wrote. The oracle settles it: the
+    natural form misses every logged value. Reproduced rather than corrected --
+    the master plan fixes the criterion as the original's two-part code, and
+    PRD section 8 owns the question of whether it should be.
+    """
+    params, d, logged = _logged_model_dl(model)
+    n_states = params.n_states
+    natural = (
+        _int_code_length(n_states)
+        + _int_code_length(d)
+        + (1 + n_states) * _comb_code_length(d, n_states)
+        + int(np.count_nonzero(_quantize(params.transition_p, d)))
+        * _comb_code_length(d, 1 + (params.n_symbols - USER_BASE))
+    )
+    assert natural < logged - 5.0
+
+
+def _two_states_one_arc_below_the_grid():
+    """A model whose 0.1 transition rounds to zero at `d = 4`, and 0.5 does not."""
+    n_user = 2
+    output = np.zeros((2, 2, USER_BASE + n_user))
+    output[:, :, USER_BASE:] = 0.5
+    return HMMParams(
+        np.array([0.6, 0.4]),
+        np.array([[0.9, 0.1], [0.5, 0.5]]),
+        output,
+        _vocabulary(USER_BASE + n_user),
+    )
+
+
+def test_transitions_are_counted_after_quantization_not_before():
+    """The whole reason a sparse topology is cheaper to describe.
+
+    All four transitions are non-zero as stored. At `d = 4` the 0.1 is below half
+    a grid step and rounds away, so three arcs are paid for, not four. Counting
+    before quantization would make `d` a cosmetic rounding parameter instead of
+    the thing that prices the topology.
+    """
+    params = _two_states_one_arc_below_the_grid()
+    assert np.count_nonzero(params.transition_p) == 4
+    assert np.count_nonzero(_quantize(params.transition_p, 4.0)) == 3
+
+    per_arc = _comb_code_length(4.0, 1 + (params.n_symbols - USER_BASE))
+    got = _model_description_length(params, 4.0)
+    fixed = (
+        _int_code_length(2) + _int_code_length(4.0) + 3 * _comb_code_length(4.0, 3)
+    )
+    assert got == pytest.approx(fixed + 3 * per_arc, abs=1e-12)
+    # And it is exactly one arc's worth below what counting before quantization
+    # would charge -- stated against the naive count rather than against 3, so
+    # the assertion is about the decision and not about arithmetic.
+    naive = fixed + np.count_nonzero(params.transition_p) * per_arc
+    assert naive - got == pytest.approx(per_arc, abs=1e-12)
+
+
+def test_a_coarser_grid_can_only_remove_arcs_so_the_per_arc_cost_falls():
+    """Monotone in `d` through the count, which is what makes `suggest-d` a search.
+
+    Coarsening `d` cuts the per-arc term by zeroing transitions, and raises the
+    two integer codes and the vector term. The criterion is the trade between
+    them, so neither direction is monotone overall -- only the arc count is.
+    """
+    params = _two_states_one_arc_below_the_grid()
+    counts = [
+        np.count_nonzero(_quantize(params.transition_p, d))
+        for d in (2.0, 4.0, 20.0, 1000.0)
+    ]
+    assert counts == sorted(counts)
+    assert counts[0] < counts[-1]
+
+
+def test_more_states_costs_more_bits_at_a_fixed_grid():
+    """The property the search leans on: a split must pay for itself."""
+    rng = np.random.default_rng(SEED)
+    lengths = [_model_description_length(_random_params(rng, size, 3), 1000.0)
+               for size in (1, 2, 4, 8)]
+    assert all(b > a for a, b in zip(lengths, lengths[1:]))
+
+
+@pytest.mark.parametrize("d", [0, -1.0, np.inf, np.nan])
+def test_the_model_half_rejects_a_precision_the_data_half_would(d):
+    """Both halves guard `d` the same way, since the total calls them with one value."""
+    rng = np.random.default_rng(SEED)
+    with pytest.raises(ValueError, match="d must be positive and finite"):
+        _model_description_length(_random_params(rng, 3, 3), d)

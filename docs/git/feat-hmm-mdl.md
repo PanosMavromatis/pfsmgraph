@@ -12,7 +12,7 @@ Write `_mdl.py`, the minimum-description-length criterion revision 04's topology
 
 - ~~Decide what moves into `_mdl.py` and what stays in `_baum_welch.py`~~ — settled and executed 2026-09-16, see Notes
 - ~~`int_code_length` and `comb_code_length`, overflow-safe~~ — landed 2026-09-16, see Notes
-- The model description length (`update-model-dl`, `hmm-trainer.lsh:402-427`), including what counts as a non-zero transition and how the reserved symbol block enters `n_symbols`
+- ~~The model description length~~ — landed 2026-09-16, see Notes
 - The total, validated against the three tracked models' `_total_dl` at their stored `d`
 - `suggest-d`, with those models' stored `d` as the oracle
 - The `DEFERRED.md` trigger for promoting `_mdl.py` to a shared home, which the draft cited and which does not exist
@@ -38,3 +38,7 @@ The overflow concern in the scope line above was already answered by the origina
 **2026-09-16 — the move executed.** `_quantize`, `_corpus_description_length` and `_data_description_length` are in `_mdl.py`; `_check_codes` is in `_params.py`; `_baum_welch` imports downward. Suite unchanged at 1478, which is the whole check a relocation needs. `test_baum_welch.py` goes 94 → 83 tests and `test_mdl.py` 60 → 71.
 
 Two things the move turned up. The five helpers the moved section needed (`SEED`, `ROW_TOL`, `_vocabulary`, `_random_params`, `_random_corpus`) were **copied, not extracted**: three test modules already define their own `_vocabulary`/`_random_params` and two disagree about the signature, so sharing them would be a refactor of four files rather than a move of one section. And `test_baum_welch.py`'s docstring said "Six sections" over seven bullets — an off-by-one dating from revision 03 — so removing the moved section made the header true rather than breaking it.
+
+**2026-09-16 — the model half.** `_model_description_length(params, d)`, reproducing all three logged `model-dl` values (58.2207 / 142.024 / 439.154) to within the log's six-figure print. Both open questions were settled by that oracle rather than by argument: the symbol axis is the **user** symbols, and `comb_code_length(d, 1 + n_states)` is reproduced although the combinatorics call for `m = n_states`.
+
+The reserved-block exclusion is worth 12, 25 and 105 bits on the three models. That is not a rounding detail — 105 bits is 24% of `m008`'s model cost, and the whole `m001` run moves 58 → 142 bits across four accepted splits. Two tests pin each decision against the variant a future reader would most plausibly "fix" it to, since excluding the reserved block looks like an oversight and `1 + n_states` looks like an off-by-one. Mutation check: four mutants, all caught (7, 4, 2, 4 failures).
