@@ -588,15 +588,82 @@
     > -Dcompiled=false): install a platform wheel, or build from source with a C compiler"*.
     > That also confirms goal 4's reading empirically — both halves of that remedy are
     > actionable at 0.2.0, where at 0.1.0 the first half was not.
-- [ ] Release: publish, tag, and close what the branch discharged
-  - [ ] **User:** attach a Trusted Publisher for `pfsmgraph-hmm` on PyPI, per goal 1
+- [~] Release: publish, tag, and close what the branch discharged
+  > **Q:** Release from this branch, or merge to `main` first and release from there?
+  > **A:** From this branch, then merge — 0.1.0's precedent exactly. Two facts settle it
+  > rather than preference. The `pfsmgraph-hmm-v0.1.0` tag points at `75b5c47 "Release
+  > pfsmgraph-hmm 0.1.0"`, a commit made on its release branch, which became an ancestor of
+  > `main` through the merge. And the dry run already proved GitHub executes `release.yml`
+  > from a non-default ref: run `35049292620` ran the full matrix from this branch before
+  > that workflow had ever been on `main`, so a tag pushed here will trigger the publish job
+  > with no merge required. An earlier worry in this session that the merge had to come first
+  > was wrong, and the evidence refuting it was already in hand.
+  > **Note:** this makes the **merge strategy load-bearing rather than stylistic**. The
+  > tagged commit stays reachable from `main` only under a merge commit; a squash merge
+  > rewrites it and leaves the release tag pointing at a commit `main` cannot reach. The
+  > merge-commit preference already in use is what keeps 0.1.0's tag honest, and must hold
+  > here too.
+  > **Q:** How is the Trusted Publisher set up?
+  > **A:** Values supplied here, entered by hand at
+  > `pypi.org/manage/project/pfsmgraph-hmm/settings/publishing/`; nothing in this session
+  > touches PyPI. Read from `release.yml` on 2026-09-16: owner `PanosMavromatis`, repository
+  > `pfsmgraph`, workflow name `release.yml`, environment `pypi`. All four are matched
+  > against the OIDC claim, and a mismatch fails at upload with the tag already pushed.
+  > **Note:** the environment name is the field most likely to go wrong, because PyPI's form
+  > makes it optional and `release.yml` does declare `environment: name: pypi` on the publish
+  > job. A publisher configured with *no* environment still matches; one configured with a
+  > *different* name does not. Nothing else is currently attached to that environment — no
+  > required reviewers, no branch restriction — so it is a label today, and the place to add
+  > a human gate between tag push and upload later without touching the workflow.
+  - [x] **User:** attach a Trusted Publisher for `pfsmgraph-hmm` on PyPI, per goal 1
+    > **Done (2026-09-16, by the user):** attached with owner `PanosMavromatis`, repository
+    > `pfsmgraph`, workflow `release.yml`, environment `pypi` — the four values read from
+    > `.github/workflows/release.yml` and matched against the OIDC claim at upload. The
+    > `.envrc` token is not retired by this; it remains the path `publish` still implements
+    > for the four members that release locally.
     > **Note:** ordered after the workflow goal, not before it. PyPI's trusted publisher
     > form asks for the workflow *filename* and the environment name, so it cannot be
     > filled in until `release.yml` exists and both are settled. The `.envrc` token is not
     > retired by this — it stays as the fallback path `publish` still implements.
-  - [ ] Release commit: bump `version` to `0.2.0`, relock, rebuild and re-verify
+  - [~] Release commit: bump `version` to `0.2.0`, relock, rebuild and re-verify
+    > **Ran (2026-09-16):** bumped `0.2.0.dev0` → `0.2.0` and ran `uv lock`. The relock is
+    > **not** a formality: it reported *"Updated pfsmgraph-hmm v0.1.0 -> v0.2.0"*, meaning
+    > `uv.lock` had been carrying `0.1.0` since commit `58942fe`, days before this branch
+    > opened. The `0.2.0.dev0` bump never relocked, so the lockfile and `pyproject.toml`
+    > disagreed about the member's own version across several commits — and `uv run pytest`
+    > ran clean throughout, so nothing here would ever have surfaced it. This subgoal's
+    > "relock" step is the only thing in the release path that catches that drift.
+    > **Note:** the rebuild must follow the *commit*, not the bump. `HEAD` still declares
+    > `0.2.0.dev0` while the working tree declares `0.2.0`, so `just build` now would take
+    > `0.2.0` for the sdist's `PKG-INFO` and `0.2.0.dev0` for its contents from `git archive`,
+    > and uv would refuse the pair — the same trap as before, met for the third time and this
+    > time anticipated rather than discovered. The subgoal's own wording already put "rebuild"
+    > after "release commit"; it is now clear that the ordering is a requirement rather than a
+    > description.
+    > **Note:** the tree now declares a bare, unpublished `0.2.0`, which is the state
+    > `core.md` warns about — one accidental publish burns the number permanently. Both paths
+    > are closed by guards this branch added: `just release` refuses `pfsmgraph-hmm` before
+    > running anything, and the workflow's publish job is gated on a `pfsmgraph-hmm-v*` tag.
   - [ ] **User:** publish (irreversible): push the `pfsmgraph-hmm-v0.2.0` tag to trigger
     the release workflow's publish job
+    > **Note:** the exact command is **`just release-ci 0.2.0`**, run from the repo root.
+    > There is no separate tag command — this recipe *is* the tag push. The package argument
+    > is omitted because `default_package` is `pfsmgraph-hmm`. In order it runs
+    > `_ci-release-refused` (hmm is CI-built), `_version-matches 0.2.0` (pyproject declares
+    > it), the full suite, and `_tree-pushed` (refuses a dirty tree, pushes `HEAD`); only
+    > then does its body tag and push. Everything checkable is checked before the trigger
+    > exists, which is the whole shape of the recipe.
+    > **Note:** the raw equivalent, for reference and **not** the recommended path, is what
+    > that body runs once the four prerequisites pass:
+    > `git tag -a pfsmgraph-hmm-v0.2.0 -m "pfsmgraph-hmm 0.2.0"` then
+    > `git push origin pfsmgraph-hmm-v0.2.0`. Running these directly skips every guard above.
+    > The workflow's own version assertion would still refuse a tag naming a version the
+    > artifacts do not carry — which is precisely why that redundancy exists, since a tag can
+    > be pushed with plain `git` and CI cannot assume the recipe was used.
+    > **Note:** `_tree-pushed` refuses a dirty working tree, so **this plan file must be
+    > committed before `release-ci` will run**. That ordering is not a nuisance: it is why
+    > the verification results below are recorded *after* the publish rather than before,
+    > where they can state what happened instead of what was expected.
   - [ ] Confirm PyPI's digests match the verified build, the tag `pfsmgraph-hmm-v0.2.0`
     is on `origin`, and `just verify 0.2.0` installs from PyPI
   - [ ] Record commit: the "released" statements in `core.md`, the root README and the
