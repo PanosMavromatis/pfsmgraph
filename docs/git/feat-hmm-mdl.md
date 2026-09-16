@@ -10,7 +10,7 @@ Write `_mdl.py`, the minimum-description-length criterion revision 04's topology
 
 ## Scope
 
-- Decide what moves into `_mdl.py` and what stays in `_baum_welch.py` — the seam argues for moving the data half; its 94 passing tests argue for care
+- ~~Decide what moves into `_mdl.py` and what stays in `_baum_welch.py`~~ — settled 2026-09-16, see Notes
 - `int_code_length` (Rissanen's universal prior) and `comb_code_length` (`log₂(sum+m) + log₂ C(sum+m−1, m−1)`), overflow-safe
 - The model description length (`update-model-dl`, `hmm-trainer.lsh:402-427`), including what counts as a non-zero transition and how the reserved symbol block enters `n_symbols`
 - The total, validated against the three tracked models' `_total_dl` at their stored `d`
@@ -26,3 +26,7 @@ Write `_mdl.py`, the minimum-description-length criterion revision 04's topology
 - No DP kernel here, so the `dp-compile` gate does not arm and no ADR 0002 phases are owed
 
 ## Notes
+
+**2026-09-16 — the seam.** `_mdl.py` owns `_quantize`, `_corpus_description_length` and `_data_description_length`; `_check_codes` moves to `_params.py`; `_baum_welch` imports the corpus length back for its convergence check, so every edge points downward from training to scoring. Nothing is exported.
+
+The risk this scope line originally named was not the real one. `_data_description_length` has **no call site in `packages/`** — `baum_welch` watches the unrounded length, and the rounded one exists only for a scorer that does not exist yet — so the 94 tests were never exposed to the move, and the whole cost is one import block in `test_baum_welch.py`. What is genuinely shared is `_corpus_description_length` and `_check_codes`, which the plan had not named. Reasoning in `docs/plan/feat-hmm-mdl/TODO.md` under goal 1.
