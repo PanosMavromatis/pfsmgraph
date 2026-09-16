@@ -18,6 +18,9 @@ Sections:
   zero reserved fibres, and the same vocabulary.
 - **The likelihood**: unchanged without the seed, and moved by at most the bound
   the seed's weight implies with it.
+- **The decode's zero initial probability**: the case revision 02's fixtures could
+  not exhibit, a state with ``init_p == 0`` that can emit ``begin``, built by a
+  split and decoded.
 - **The domain**: what ``state`` may be.
 """
 
@@ -29,9 +32,10 @@ import numpy as np
 import pytest
 
 from pfsmgraph.dataseq import USER_BASE, SequenceRecord, SymbolTable
-from pfsmgraph.hmm import HMMParams
+from pfsmgraph.hmm import HMMParams, viterbi
 from pfsmgraph.hmm import _topology
 from pfsmgraph.hmm._mdl import _corpus_description_length
+from pfsmgraph.hmm._viterbi import _viterbi
 from pfsmgraph.hmm._topology import _INBOUND_WIDTH, _SEED_NOISE, _SEED_WEIGHT, _split_state
 
 from _lush_fixtures import FIXTURES, SAVED_MODELS, load_corpus_record, load_params
@@ -276,6 +280,82 @@ def test_with_the_seed_no_record_costs_more_than_the_seed_weight_allows(split):
     n_symbols = sum(record.codes.size for record in records)
     bound = n_symbols * -math.log2(1 - _SEED_WEIGHT)
     assert _bits(result, records) <= _bits(params, records) + bound + 1e-9
+
+
+# --- the decode's zero initial probability ---------------------------------------
+#
+# Revision 02 fixed the original's `update-viterbi-path`, which seeded the decode's
+# first column with the raw initial probability instead of its bits, so a state
+# with `init_p == 0` cost nothing to start in. Every zero-init state in the
+# tracked models also cannot emit `begin`, which hid the defect, and a split was
+# expected to be what breaks that link. It does, but only through ADR 0022's 1%
+# seed, which is too weak to make the defect win on the fixtures. So the first
+# test shows the link broken, and the second builds a model in which the defect
+# would change the decode, so the fix is exercised rather than merely
+# unchallenged.
+
+#: The fixtures' `begin`: Lush code 0, renumbered onto the user block.
+BEGIN = USER_BASE
+
+
+def _defective_start(params, codes):
+    """The start state the original's seeding would choose: pass `2**-init` to the
+    kernel, which takes `bits` of it, so its first column is the raw `init`."""
+    states, _ = _viterbi(2.0 ** -params.init_state_p, params.transition_p, params.output_p, codes)
+    return int(states[0])
+
+
+def _zero_init_splits_of_states_that_cannot_emit_begin():
+    out = []
+    record = load_corpus_record()
+    for name in SAVED_MODELS:
+        params = load_params(FIXTURES / name)
+        live = params.transition_p > 0
+        emits_begin = (live & (params.output_p[..., BEGIN] > 0)).any(axis=1)
+        for s in range(params.n_states):
+            if params.init_state_p[s] == 0 and not emits_begin[s]:
+                out.append(pytest.param((params, record, s), id=f"{name.removesuffix('.hmm')}-s{s}"))
+    return out
+
+
+@pytest.mark.parametrize("case", _zero_init_splits_of_states_that_cannot_emit_begin())
+def test_a_split_lets_zero_init_twins_emit_begin_and_the_decode_never_starts_there(case):
+    params, record, s = case
+    result = _split_state(params, s, rng=np.random.default_rng([SEED, s]))
+    twins = (s, params.n_states)
+    for twin in twins:
+        assert result.init_state_p[twin] == 0.0
+        live = result.transition_p[twin] > 0
+        assert np.any(result.output_p[twin, live, BEGIN] > 0)
+    assert record.codes[0] == BEGIN
+    path = viterbi(result, record)
+    assert math.isfinite(path.total_bits)
+    assert int(path.states[0]) not in twins
+
+
+def _begin_trap():
+    """Two states over `begin`, `x`, `y`. State 0 starts every path and rarely
+    emits `begin`; state 1 can never start one and emits `begin` with 0.9, so the
+    original's free start makes state 1 the cheaper choice."""
+    output = np.zeros((2, 2, USER_BASE + 3))
+    output[0, :, USER_BASE:] = [0.1, 0.45, 0.45]
+    output[1, :, USER_BASE:] = [0.9, 0.05, 0.05]
+    return HMMParams(
+        np.array([1.0, 0.0]), np.array([[0.5, 0.5], [0.5, 0.5]]), output, _vocabulary(3)
+    )
+
+
+@pytest.mark.parametrize("split_first", [False, True], ids=["incumbent", "after-split"])
+def test_the_fixed_seeding_never_starts_where_the_original_would(split_first):
+    params = _begin_trap()
+    if split_first:
+        params = _split_state(params, 1, rng=np.random.default_rng(SEED))
+    record = SequenceRecord(np.array([BEGIN, BEGIN + 1, BEGIN + 2, BEGIN]))
+    zero_init = set(np.flatnonzero(params.init_state_p == 0).tolist())
+    assert _defective_start(params, record.codes) in zero_init
+    path = viterbi(params, record)
+    assert int(path.states[0]) not in zero_init
+    assert math.isfinite(path.total_bits)
 
 
 # --- the domain -------------------------------------------------------------------
