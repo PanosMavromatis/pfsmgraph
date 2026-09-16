@@ -15,7 +15,7 @@ Write `_mdl.py`, the minimum-description-length criterion revision 04's topology
 - ~~The model description length~~ — landed 2026-09-16, see Notes
 - ~~The total, validated against `_total_dl`~~ — landed 2026-09-16, see Notes
 - ~~`suggest-d`, with those models' stored `d` as the oracle~~ — landed 2026-09-16, see Notes
-- The `DEFERRED.md` trigger for promoting `_mdl.py` to a shared home, which the draft cited and which does not exist
+- ~~The `DEFERRED.md` trigger for promoting `_mdl.py` to a shared home~~ — written 2026-09-16, see Notes
 
 ## Context
 
@@ -46,3 +46,5 @@ The reserved-block exclusion is worth 12, 25 and 105 bits on the three models. T
 **2026-09-16 — the total.** `_total_description_length(params, records, d) -> float`, the one function the search calls. The return is a bare float by decision: a refined one-part code, which PRD §8 leaves open, has no data/model split, so a record would bake the two-part shape into the seam. `_total_dl` reproduced to 0.013 bits. Mutation check: 4 mutants, all caught — including a `1e100` sentinel, which only one test sees, because it sorts impossible models last exactly as `+inf` does and differs only in ranking two impossible models against each other.
 
 **2026-09-16 — choosing `d`.** `_suggest_d` ports `suggest-d` as Brent's method and returns all three stored `d` exactly. It keeps the original's local minimum on the one-state model (29 where 13 is 10.46 bits cheaper), and the choice between that and a global scan is now written into the master plan's loop-design subgoal, not just this branch's plan, which gets archived at merge. Brent subtracts scores, so the optimizer maps `+inf` back to `1e100`, which qualifies the total's decision without reversing it.
+
+**2026-09-16 — the promotion trigger.** `## Trigger: a second module scoring by description length`, at `DEFERRED.md:595`. It is named for the event rather than filed under `hseg`, so it fires whichever member becomes the second consumer. It scopes promotion to the generic helpers (code lengths and Brent), not the whole module, and deliberately picks no home yet. The master plan's settled bullet, which said the trigger was never written down, now names it.

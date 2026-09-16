@@ -89,7 +89,7 @@ back unchanged, which `keep-model`/`reset-model` (`677-705`) exist to do.
   [`DEFERRED.md`](DEFERRED.md). No such heading exists — the file has no occurrence of
   "description length" at all, so the promotion path was never actually written down.
   Write that trigger as part of this revision's first subgoal, or restate the deferral
-  under `## Trigger: hseg design settling`, which is where it would surface.)*
+  under `## Trigger: hseg design settling`, which is where it would surface. Written 2026-09-16 on `feat/hmm-mdl` as `## Trigger: a second module scoring by description length`: named for the event rather than filed under `hseg`, since `dl` or `align` could be the second consumer, and scoped to the primitives rather than the whole module.)*
 - **The criterion stays the original's two-part code, and this revision does not answer
   whether it should.** Whether a refined one-part code (NML / stochastic complexity) is
   what this project should end up with is registered at

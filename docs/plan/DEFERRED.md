@@ -592,6 +592,39 @@ a second time.
   `[project.dependencies]`. Reporting stays text on stdout, which costs nothing to keep
   and is what a notebook, a log file and a CI transcript all read equally well.
 
+## Trigger: a second module scoring by description length
+
+- **Reconsider a shared home for the MDL primitives.** Decided 2026-09-16 on
+  `feat/hmm-mdl`: `_mdl.py` stays private to `pfsmgraph.hmm`. One consumer does not
+  justify a sixth distribution, and a home chosen from one consumer's needs would be a
+  guess. The trigger is the moment a **second** member needs to score something by
+  description length. `hseg` scoring segmentations is the case the master plan
+  anticipates, but `dl` or `align` would fire it just as well, so it is named for the
+  event and not filed under `hseg` design settling.
+
+  **Only the primitives would move, not the criterion.** `_int_code_length` (Rissanen's
+  universal prior), `_comb_code_length` (the composition code) and `_minimize` /
+  `_minimize_int` (Brent's method) know nothing about HMMs. `_data_description_length`
+  runs this package's forward pass and `_model_description_length` prices transition
+  rows and per-arc emission fibres, so both are specific to the arc-emission model and
+  stay in `hmm`. A second consumer would write its own two halves on shared primitives.
+  The optimizer moves cleanly for the same reason: the `1e100` sentinel it needs lives
+  in `_suggest_d`'s objective, not in `_minimize`.
+
+  **The candidates, and what each costs under
+  [ADR 0019](../design/adr/0019-declared-dependencies-follow-imports.md)**, which makes
+  declared dependencies follow imports. A sixth distribution adds a dependency edge to
+  every consumer and a package to release before any of them. `dataseq` adds no edge,
+  since every member already depends on it, but it widens a charter that is currently a
+  sequence container and an encoder. Choose once the second consumer's needs can be
+  compared with the first's, not before.
+
+  **What must not happen before then:** another member importing `pfsmgraph.hmm._mdl`,
+  which reaches into a private module across a distribution boundary and would declare no
+  dependency for it; or a second copy of the primitives, which would drift the way
+  `core.md` records the Viterbi backends' logarithms drifting before
+  `fix/hmm-viterbi-log2`.
+
 ## No trigger yet — revisit deliberately
 
 These have no event that will surface them. They need to be looked at on purpose.
