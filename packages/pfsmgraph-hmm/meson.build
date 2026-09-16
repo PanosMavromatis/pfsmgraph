@@ -64,6 +64,10 @@ py.install_sources(
     'src/pfsmgraph/hmm/_mdl.py',
     'src/pfsmgraph/hmm/_numeric.py',
     'src/pfsmgraph/hmm/_params.py',
+    # Topology moves for revision 04: state split now, state merge next. Builds
+    # candidates only, per ADR 0022; scoring and re-convergence live elsewhere.
+    # Not a DP kernel, so it has no lifecycle phases.
+    'src/pfsmgraph/hmm/_topology.py',
     'src/pfsmgraph/hmm/_viterbi.py',
     # ADR 0002 phase 3. Pure Python, but it still has to be listed: meson does
     # not glob, and an unlisted module is invisible to the editable finder and
