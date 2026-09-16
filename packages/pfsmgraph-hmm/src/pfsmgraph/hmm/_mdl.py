@@ -289,3 +289,159 @@ def _total_description_length(params, records, d):
     return _data_description_length(params, records, d) + _model_description_length(
         params, d
     )
+
+
+#: What ``update-total-dl`` (``hmm-trainer.lsh:430-433``) substitutes for the total of
+#: an impossible model. :func:`_total_description_length` does **not** use it -- it
+#: returns ``+inf``, which is correct wherever a score is only compared -- but
+#: :func:`_minimize` does arithmetic on scores, and there the two part company. Its
+#: parabolic fit subtracts function values, ``inf - inf`` is ``nan``, and ``nan``
+#: fails the step-size guard so the step silently collapses to ``-tol1``: the search
+#: creeps and converges *on an impossible d*. ``1e100 - 1e100`` is ``0``, which sends
+#: the same iteration down the golden-section branch instead, as the original went.
+#: So the sentinel is reintroduced here and only here, scoped to the one consumer
+#: that differences scores.
+_IMPOSSIBLE_TOTAL = 1e100
+
+#: The golden-section fraction, ``(3 - sqrt 5) / 2`` (``util.lsh:124``).
+_CGOLD = (3.0 - float(np.sqrt(5.0))) / 2.0
+
+#: Brent's absolute tolerance floor, protecting a minimum at exactly zero (``util.lsh:125``).
+_ZEPS = 1e-10
+
+#: ``suggest-d``'s search interval and starting probe (``hmm-trainer.lsh:445``).
+#: 3821 is the interior golden-section point of ``[1, 10000]``.
+D_LOW, D_START, D_HIGH = 1.0, 3821.0, 10000.0
+
+
+def _match_sign(a, b):
+    """``|a|`` carrying the sign of ``b``, with zero counted positive (``util.lsh:77-82``)."""
+    return abs(a) if b >= 0 else -abs(a)
+
+
+def _minimize(f, a, x, b, tol):
+    """Brent's method for a local minimum of ``f`` in ``[a, b]`` from ``x``.
+
+    ``minimize`` (``util.lsh:118-227``), itself Numerical Recipes' ``brent``:
+    golden-section steps with parabolic interpolation, returning ``(x, f(x))``.
+    Transliterated statement for statement, including its operation order, because
+    the probe sequence -- not only the answer -- is what reproduces the original's
+    choice of ``d`` (see :func:`_suggest_d`).
+
+    **One difference from Numerical Recipes is kept: there is no ``ITMAX``.** The
+    original loops until the bracket closes, and so does this. Brent's bracket
+    shrinks every iteration, so it terminates, but it is not bounded by a count.
+
+    **This finds a local minimum, and that is the original's behaviour rather than a
+    defect of the port.** Nothing here requires ``f(x)`` to be below ``f(a)`` and
+    ``f(b)``, so ``x`` is not a bracketing triple, and on a function with more than
+    one basin the search keeps whichever one its first steps slide into.
+
+    Never compiled -- ``util.c`` has no ``C_minimize`` -- so its ``(-float-)``
+    declarations were inert and it ran in the interpreter's doubles, unlike the
+    code-length primitives above.
+    """
+    u = 0.0
+    v = w = x
+    fx = f(x)
+    fv = fw = fx
+    xm = (a + b) / 2
+    tol1 = tol * abs(x) + _ZEPS
+    tol2 = 2 * tol1
+    d = 0.0
+    e = 0.0
+    while abs(x - xm) > tol2 - (b - a) / 2:
+        if abs(e) > tol1:
+            r = (x - w) * (fx - fv)
+            q = (x - v) * (fx - fw)
+            p = (x - v) * q - (x - w) * r
+            q = 2 * (q - r)
+            if q > 0:
+                p = -p
+            q = abs(q)
+            etemp = e
+            e = d
+            if abs(p) >= abs(0.5 * q * etemp) or p <= q * (a - x) or p >= q * (b - x):
+                e = (a - x) if x >= xm else (b - x)
+                d = _CGOLD * e
+            else:
+                d = p / q
+                u = x + d
+                if u - a < tol2 or b - u < tol2:
+                    d = _match_sign(tol1, xm - x)
+        else:
+            e = (a - x) if x >= xm else (b - x)
+            d = _CGOLD * e
+        u = (x + d) if abs(d) >= tol1 else (x + _match_sign(tol1, d))
+        fu = f(u)
+        if fu <= fx:
+            if u >= x:
+                a = x
+            else:
+                b = x
+            v, w, x = w, x, u
+            fv, fw, fx = fw, fx, fu
+        else:
+            if u < x:
+                a = u
+            else:
+                b = u
+            if fu <= fw or w == x:
+                v, w = w, u
+                fv, fw = fw, fu
+            elif fu <= fv or v == x or v == w:
+                v = u
+                fv = fu
+        xm = (a + b) / 2
+        tol1 = tol * abs(x) + _ZEPS
+        tol2 = 2 * tol1
+    return x, fx
+
+
+def _minimize_int(f, a, x, b):
+    """The integer minimizing ``f`` near Brent's real answer (``util.lsh:108-116``).
+
+    Runs :func:`_minimize` at a relative tolerance of ``1e-2``, then compares the
+    floor of its answer with the next integer up and keeps the lower. **A tie goes
+    to the larger integer**: the original tests ``f(floor) < f(floor + 1)``
+    strictly. Returns ``(n, f(n))`` with ``n`` a float.
+    """
+    real_x, _ = _minimize(f, a, x, b, 1e-2)
+    lower = float(np.floor(real_x))
+    upper = lower + 1.0
+    f_lower = f(lower)
+    f_upper = f(upper)
+    return (lower, f_lower) if f_lower < f_upper else (upper, f_upper)
+
+
+def _suggest_d(params, records):
+    """The quantization resolution ``d`` the original would choose: ``suggest-d``.
+
+    ``hmm-trainer.lsh:441-446``: minimise :func:`_total_description_length` over
+    integer ``d`` by :func:`_minimize_int` on ``[1, 10000]`` from 3821. ``d`` is the
+    rounding grid *and* an argument of the model code, so a coarser grid makes the
+    model cheaper to describe and the data dearer, and this is where that trade is
+    struck. It is re-run after every accepted move.
+
+    **It reproduces the original's choice, including where the original chose badly.**
+    The data half is not monotone in ``d`` -- rounding thresholds make it jump -- so
+    the total has several basins, and Brent keeps the one it slides into from 3821.
+    On all three tracked models this returns the stored ``d`` exactly (29, 3, 4), and
+    on two of them that is the global integer minimum. On ``m001_0001_001``, the
+    one-state model every search starts from, it is not: ``d = 13`` scores 3187.91
+    bits against ``d = 29``'s 3198.37, **10.46 bits lower**. Kept deliberately, so
+    the port stays checkable against the fixtures; whether the search loop should
+    use this or a global scan is that loop's design decision, not this function's.
+
+    An impossible ``d`` is scored ``1e100`` inside the search rather than ``+inf``
+    -- see :data:`_IMPOSSIBLE_TOTAL` for why the difference is not cosmetic here.
+    Returns ``d`` as a float with an integer value.
+    """
+    records = list(records)
+
+    def objective(d):
+        total = _total_description_length(params, records, d)
+        return _IMPOSSIBLE_TOTAL if total == np.inf else total
+
+    d, _ = _minimize_int(objective, D_LOW, D_START, D_HIGH)
+    return d

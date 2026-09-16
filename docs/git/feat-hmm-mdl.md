@@ -14,7 +14,7 @@ Write `_mdl.py`, the minimum-description-length criterion revision 04's topology
 - ~~`int_code_length` and `comb_code_length`, overflow-safe~~ — landed 2026-09-16, see Notes
 - ~~The model description length~~ — landed 2026-09-16, see Notes
 - ~~The total, validated against `_total_dl`~~ — landed 2026-09-16, see Notes
-- `suggest-d`, with those models' stored `d` as the oracle
+- ~~`suggest-d`, with those models' stored `d` as the oracle~~ — landed 2026-09-16, see Notes
 - The `DEFERRED.md` trigger for promoting `_mdl.py` to a shared home, which the draft cited and which does not exist
 
 ## Context
@@ -44,3 +44,5 @@ Two things the move turned up. The five helpers the moved section needed (`SEED`
 The reserved-block exclusion is worth 12, 25 and 105 bits on the three models. That is not a rounding detail — 105 bits is 24% of `m008`'s model cost, and the whole `m001` run moves 58 → 142 bits across four accepted splits. Two tests pin each decision against the variant a future reader would most plausibly "fix" it to, since excluding the reserved block looks like an oversight and `1 + n_states` looks like an off-by-one. Mutation check: four mutants, all caught (7, 4, 2, 4 failures).
 
 **2026-09-16 — the total.** `_total_description_length(params, records, d) -> float`, the one function the search calls. The return is a bare float by decision: a refined one-part code, which PRD §8 leaves open, has no data/model split, so a record would bake the two-part shape into the seam. `_total_dl` reproduced to 0.013 bits. Mutation check: 4 mutants, all caught — including a `1e100` sentinel, which only one test sees, because it sorts impossible models last exactly as `+inf` does and differs only in ranking two impossible models against each other.
+
+**2026-09-16 — choosing `d`.** `_suggest_d` ports `suggest-d` as Brent's method and returns all three stored `d` exactly. It keeps the original's local minimum on the one-state model (29 where 13 is 10.46 bits cheaper), and the choice between that and a global scan is now written into the master plan's loop-design subgoal, not just this branch's plan, which gets archived at merge. Brent subtracts scores, so the optimizer maps `+inf` back to `1e100`, which qualifies the total's decision without reversing it.

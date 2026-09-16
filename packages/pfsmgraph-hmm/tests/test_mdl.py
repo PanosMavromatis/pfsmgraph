@@ -11,7 +11,7 @@ be written down; :func:`math.comb`, which evaluates the binomial the
 implementation deliberately never forms; and a ``lgamma`` closed form, which
 computes the same quantity by a route sharing no code with the loop under test.
 
-Eight sections:
+Nine sections:
 
 - **Exact values**, where float arithmetic is exact and ``==`` is the right
   assertion rather than a tolerance.
@@ -31,6 +31,8 @@ Eight sections:
 - **The total**, against the `_total_dl` each model stores -- a fourth oracle,
   at four decimals rather than the log's `%g`, and the only one that constrains
   both halves at once.
+- **Choosing `d`**, against each model's stored `d`, with the original's local
+  minimum and the optimizer's `1e100` sentinel both pinned as decisions.
 """
 
 from __future__ import annotations
@@ -49,7 +51,11 @@ from pfsmgraph.hmm._mdl import (
     _data_description_length,
     _int_code_length,
     _model_description_length,
+    _IMPOSSIBLE_TOTAL,
+    _minimize,
+    _minimize_int,
     _quantize,
+    _suggest_d,
     _total_description_length,
 )
 
@@ -646,3 +652,121 @@ def test_the_total_rejects_a_precision_either_half_would(d):
     rng = np.random.default_rng(SEED)
     with pytest.raises(ValueError, match="d must be positive and finite"):
         _total_description_length(_random_params(rng, 3, 3), _random_corpus(rng, 3, (20,)), d)
+
+
+# === choosing d ==================================================================
+#
+# `suggest-d` is Brent's method over the total, so the stored `d` is the outcome of
+# a search rather than of a formula. Reproducing it exactly means reproducing the
+# probe sequence, which is why the optimizer is transliterated statement for
+# statement and why these tests assert `==` on the answer.
+
+MODELS = ["m001_0001_001", "m001_0005_005", "m008_0001_008"]
+
+
+@pytest.mark.parametrize("model", MODELS)
+def test_suggest_d_chooses_the_d_the_original_stored(model):
+    directory = FIXTURES / f"{model}.hmm"
+    got = _suggest_d(load_params(directory), [load_corpus_record()])
+    assert got == read_scalar(directory / "d")
+    assert type(got) is float and got.is_integer()
+
+
+def test_suggest_d_keeps_the_originals_local_minimum_on_the_one_state_model():
+    """Pins a decision: the port reproduces where the original chose badly.
+
+    The data half is not monotone in `d`, so the total has several basins and Brent
+    keeps the one it slides into from 3821. On the one-state model -- where every
+    search starts -- `d = 13` is more than ten bits cheaper than the stored 29.
+    Replacing Brent with a global scan would make this test fail, which is the
+    point: that is a search-loop design decision, and it should arrive as one.
+    """
+    directory = FIXTURES / "m001_0001_001.hmm"
+    params, records = load_params(directory), [load_corpus_record()]
+    assert _suggest_d(params, records) == 29.0
+    assert (
+        _total_description_length(params, records, 13.0)
+        < _total_description_length(params, records, 29.0) - 10.0
+    )
+
+
+def _rare_symbol_model():
+    """One state whose first symbol has probability 1e-4.
+
+    `floor(1e-4 * d + 0.5)` is zero below `d = 5000`, so a record containing that
+    symbol is impossible there -- including at the search's starting probe, 3821.
+    """
+    n_user = 3
+    output = np.zeros((1, 1, USER_BASE + n_user))
+    output[0, 0, USER_BASE:] = [1e-4, 0.5 - 5e-5, 0.5 - 5e-5]
+    params = HMMParams(np.ones(1), np.ones((1, 1)), output, _vocabulary(USER_BASE + n_user))
+    records = [SequenceRecord(np.array([USER_BASE, USER_BASE + 1, USER_BASE + 2]))]
+    return params, records
+
+
+def test_suggest_d_scores_an_impossible_d_with_the_originals_sentinel_not_inf():
+    """`_total_description_length` returns `inf`; the optimizer must not see it.
+
+    Brent's parabolic fit subtracts function values, and `inf - inf` is `nan`, which
+    fails the step-size guard and collapses the step to `-tol1`. So the same search
+    over raw `inf` takes a different probe path from the original's. Asserted by
+    running both and requiring they differ, which is what shows the sentinel is in
+    use rather than merely defined.
+    """
+    params, records = _rare_symbol_model()
+    assert _total_description_length(params, records, 3821.0) == np.inf
+
+    chosen = _suggest_d(params, records)
+    assert np.isfinite(_total_description_length(params, records, chosen))
+
+    raw, _ = _minimize_int(
+        lambda d: _total_description_length(params, records, d), 1.0, 3821.0, 10000.0
+    )
+    assert raw != chosen
+
+
+def test_raw_inf_can_drive_brent_to_an_impossible_point_where_the_sentinel_does_not():
+    """The failure the sentinel exists for, on an objective that exhibits it plainly.
+
+    Impossible below 9000, a parabola above. From 3821 every early probe is `inf`,
+    and with raw `inf` the search creeps to an impossible answer.
+    """
+
+    def raw(x):
+        return np.inf if x < 9000.0 else (x - 9005.0) ** 2
+
+    def sentinel(x):
+        return _IMPOSSIBLE_TOTAL if x < 9000.0 else (x - 9005.0) ** 2
+
+    _, f_raw = _minimize(raw, 1.0, 3821.0, 10000.0, 1e-2)
+    x_sentinel, f_sentinel = _minimize(sentinel, 1.0, 3821.0, 10000.0, 1e-2)
+    assert f_raw == np.inf
+    assert x_sentinel >= 9000.0 and f_sentinel < 100.0
+
+
+def test_a_tie_between_the_two_integers_goes_to_the_larger():
+    """`util.lsh:113` tests `f(floor) < f(floor + 1)` strictly, so a tie keeps the upper.
+
+    The objective is flat across a wide floor, so the two integers tie wherever
+    Brent's real answer lands. That matters: its tolerance is *relative*, `1e-2 *
+    |x|`, so near 5000 it promises only about fifty units, and a test that assumed
+    it landed at a chosen half-integer would be testing luck rather than the rule.
+    """
+
+    def flat_bottomed(x):
+        return max(0.0, abs(x - 5000.0) - 200.0)
+
+    real_x, _ = _minimize(flat_bottomed, 1.0, 3821.0, 10000.0, 1e-2)
+    lower = float(np.floor(real_x))
+    assert flat_bottomed(lower) == flat_bottomed(lower + 1.0) == 0.0
+
+    chosen, f_chosen = _minimize_int(flat_bottomed, 1.0, 3821.0, 10000.0)
+    assert chosen == lower + 1.0
+    assert f_chosen == 0.0
+
+
+def test_brent_finds_the_minimum_of_a_single_basin_to_its_tolerance():
+    """The ordinary case, so a transliteration slip cannot hide behind the fixtures."""
+    x, fx = _minimize(lambda x: (x - 4242.4) ** 2 + 7.0, 1.0, 3821.0, 10000.0, 1e-2)
+    assert abs(x - 4242.4) < 1e-2 * 4242.4
+    assert fx == pytest.approx(7.0, abs=1e-6 * 4242.4**2)
