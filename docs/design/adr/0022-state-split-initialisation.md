@@ -117,7 +117,7 @@ the differences being judged.
   against a median of about 30-40 under the default stop in the measurement.
 - **The draw order changes.** The original drew `2S + 2` emission fibres. A split now draws
   one `u_j` per live predecessor plus one fibre per live outbound arc of each twin. Their
-  order is part of the reproducibility contract, which the branch plan's goal 4 settles.
+  order is fixed under **Resolved**.
 - **Rounding still plays a part where the seed is small.** A 1% seed separated every
   single-predecessor split measured. Whether it always does so within the budget of §4 is
   measured only on the corpora below.
@@ -186,7 +186,35 @@ per arm.
 
 - **The minimum EM budget after a split**: its size, and whether it is a cycle count or a
   change in the stop rule. It belongs to `try-split` and the search loop (§4).
-- **The draw order of a split's random numbers**, part of the reproducibility contract
-  (branch plan goal 4).
 - **Whether `w` and the 1% seed should be exposed as parameters.** They are fixed here; the
   measurement did not separate `w = 0.01` from `0.1` beyond rounding luck.
+
+## Resolved
+
+- **The draw order and whose generator a split uses** (2026-09-16, `feat/hmm-split-state`
+  goal 4). **The number of draws depends only on `S`, in array order, and every trial gets
+  its own generator.**
+
+  The split takes a required keyword `rng: numpy.random.Generator`, with no default and no
+  module state, as `rand_p_vector` does. It draws, in this order:
+
+  1. `u = rng.uniform(-0.5, 0.5, size=S)`: one value per predecessor `j = 0..S-1`, whether
+     or not `T[j, s] > 0`.
+  2. For twin `s`, one `rand_p_vector(n_symbols - USER_BASE, 0.1, rng)` per destination
+     `j = 0..S`.
+  3. The same for twin `p`, over `j = 0..S`.
+
+  Values drawn for dead arcs are discarded. A split therefore consumes exactly
+  `S + 2·(S+1)·(n_symbols − USER_BASE)` uniforms. Drawing only for live arcs would make the
+  count depend on the topology, so removing one arc anywhere would shift every later draw,
+  and two nearly identical models would get unrelated candidates from the same seed.
+
+  The search also takes a `Generator`, and gives each trial its own child tied to the
+  trial's identity (round, state, trial number) rather than to execution order. That keeps
+  trials reproducible if they run in parallel or are reordered. **`Generator.spawn(n)` alone
+  does not guarantee this**: measured on numpy 2.4.6, a child does not depend on how much its
+  parent has drawn, but it does depend on how many times the parent has already spawned.
+  The search must therefore spawn in a fixed structure before any trial runs (one call per
+  round, one child per trial, in canonical (state, trial) order), or build each child from
+  `SeedSequence(entropy, spawn_key=(round, state, trial))`. Which one is the search loop's
+  choice.
