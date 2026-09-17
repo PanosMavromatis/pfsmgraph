@@ -1,6 +1,6 @@
 # feat/hmm-merge-states
 
-**Status**: active
+**Status**: merged — PR #46 — 2026-09-17
 **Created**: 2026-09-16
 **Subgoal**: Implement state merge — `docs/plan/TODO.md`, revision 04-hmm-v0.3.0
 
