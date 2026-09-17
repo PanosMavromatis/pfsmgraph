@@ -6,9 +6,9 @@ Shared project knowledge for any coding agent working in this repository.
 
 **`dataseq` and `hmm` are implemented and released — `dataseq` at 0.1.0 (2026-09-02) and `hmm` at 0.2.0 (2026-09-16, after 0.1.0 on 2026-09-13); the other three members are still empty scaffolding.** In place: the uv workspace root `pyproject.toml` (virtual — no `[project]` table), `uv.lock`, all five `packages/*` members with their own `pyproject.toml`, the `meson.build` files for `align` and `hmm` (`align`'s extension block still dormant, `hmm`'s live since the first `.pyx` landed 2026-09-09), and an empty `pfsmgraph/<pkg>/__init__.py` for the three members that have no code yet (plus `dl/rnn/` and `dl/transformer/`). The ADRs in `docs/design/adr/` are authoritative for the decisions they cover — the twelve initial records from the PRD, plus 0013 (how this family documents its public surfaces) and 0014 (how imported migration source is retained), both added 2026-09-01; the PRD remains the narrative design document.
 
-**What `dataseq` now contains.** Six modules under `packages/pfsmgraph-dataseq/src/pfsmgraph/dataseq/` (the container landed 2026-08-31, the encoder API 2026-09-01) and 74 tests — the first tests in this repository, and 74 of the suite's 3088 today; 2962 are `hmm`'s and the remaining 52 are the repo-root backend-matrix, API-docs, release-runbook and meson-source tests. `_reserved.py` hard-codes the ADR 0011 block as module constants, with no class or parameter that could relocate it; `_vocabulary.py` holds the `Vocabulary` protocol and `SymbolTable`, a frozen first-appearance-ordered implementation that encodes strictly and decodes *totally*, reserved codes included; `_record.py` and `_dataset.py` are the ragged container, whose records carry true lengths and never padding; `_collate.py` is `pad_collate`, where padding is introduced and always returned with its mask. The container imports neither torch nor pandas — verified in a subprocess — and its one runtime dependency is `numpy`.
+**What `dataseq` now contains.** Six modules under `packages/pfsmgraph-dataseq/src/pfsmgraph/dataseq/` (the container landed 2026-08-31, the encoder API 2026-09-01) and 74 tests — the first tests in this repository, and 74 of the suite's 3099 today; 2973 are `hmm`'s and the remaining 52 are the repo-root backend-matrix, API-docs, release-runbook and meson-source tests. `_reserved.py` hard-codes the ADR 0011 block as module constants, with no class or parameter that could relocate it; `_vocabulary.py` holds the `Vocabulary` protocol and `SymbolTable`, a frozen first-appearance-ordered implementation that encodes strictly and decodes *totally*, reserved codes included; `_record.py` and `_dataset.py` are the ragged container, whose records carry true lengths and never padding; `_collate.py` is `pad_collate`, where padding is introduced and always returned with its mask. The container imports neither torch nor pandas — verified in a subprocess — and its one runtime dependency is `numpy`.
 
-**What `hmm` now contains.** Fifteen Python modules, two Cython kernels, and 2962 tests. The
+**What `hmm` now contains.** Fifteen Python modules, two Cython kernels, and 2973 tests. The
 fifteenth is `_search.py`, written 2026-09-17 on `feat/hmm-search-loop` under
 [ADR 0023](../design/adr/0023-topology-search-loop.md): `_search(records, *, start, seed,
 max_rounds, patience, ...)`, **a port of `Training/hmm-train-new-nw`'s headless
@@ -28,7 +28,26 @@ limit is measured and deliberately not engineered around**: near the optimum a c
 is a step function of its converged parameters, because the best integer `d` steps as EM runs on
 and each step moves the model half by 58-71 bits at nine states, so rankings closer than that
 are decided by where EM stopped; acceptance has no margin because a margin cannot fix it (ADR
-0023, Open). The
+0023, Open). **Its `log=` is the Lush training log ported** (`feat/hmm-search-log`,
+`update-training-log`/`training-log-line`, `hmm-trainer.lsh:457-477`): a header, a row for the
+starting model, **one row per round**, and a closing sentence naming the stop. The port keeps the
+original's column order and its three move forms -- `n ^`, `i v j`, `-` -- and leaves its bytes
+behind, a departure measured first by round-tripping all seven oracle lines byte-for-byte through
+the Lush field widths. `test-data-dl` is dropped, since the original never assigned it. Four
+columns are new and could not have existed there: `Round`, `Candidates`, `Runner-Up` and
+`Comments`, because the original's user ran one trial at a time by hand, so no round of it ever
+ranked candidates. **The two description-length halves are not `TrialResult.data_bits` and the
+remainder** -- that field is the *unrounded* corpus length, so the difference would carry the
+whole quantization gap into the model column, 1.5 to 29 bits on the tracked models against a 58-bit
+model half. They come from `_model_description_length`, which reads no corpus, with the data half
+as `total - model`. The `Round` column is `index + 1` where `SearchResult.rounds[r].index` is `r`,
+deliberately: the column counts the walk's rows, of which 0 is the start, while the field is also
+the round's seed key. The format's oracle is the layout and never the values, since line 1 of all
+three logs carries Brent's `d = 29` where the scan returns 13. **The first real run found the
+column earning itself**: every round's `Runner-Up` read `+0`, because the two split trials of a
+one-state start converge to *bit-identical* parameters from candidates that differ before EM, so
+`sorted`'s stability decided the round -- measured on four 200-symbol records at a 30-cycle floor,
+which is no claim about the full corpus at ADR 0023 section 6's 200. The
 fourteenth is `_trials.py`, opened 2026-09-17 on `feat/hmm-scored-primitives` with
 `_try_split(params, records, state, *, rng, min_cycles, ...)`, the port of `try-split`: split,
 re-converge under a minimum EM budget, choose `d` (by `_scan_d` since ADR 0023, by `_suggest_d`
@@ -227,8 +246,9 @@ such phase and ADR 0021 forbids substituting one
 `feat/hmm-convergence-backend`, 2026-09-17). **Its `log=` takes a text stream**
 (`feat/hmm-training-log`), writing a header, a row per convergence check and a stop line,
 flushed per line; it is `run-converge` made observable, not the Lush training log, which is
-per-topology history for revision 04, and whose `save-training-log` is model persistence
-(`DEFERRED.md`). Each backend row names a **batched** kernel,
+per-topology history and **is now `_search`'s own `log=`** (`feat/hmm-search-log`), and whose
+`save-training-log` is model persistence (`DEFERRED.md`). A search never forwards this stream
+down, which is why the two never interleave. Each backend row names a **batched** kernel,
 `_e_step_batch`, fed `pad_collate`'s padded `(B, L)` codes `batch_size` records at a time
 (`feat/hmm-batched-training`); **it returns counts per record, never summed**, because
 `(c₀ + c₁) + c₂` differs from `c₀ + (c₁ + c₂)` in about a fifth of random triples, and the
@@ -653,7 +673,7 @@ Still to do, in PRD order (§11): `hmm` (Lush translation), then `align`, then `
 Toolchain: **uv** (workspace) + **pytest**. Requires `uv` and Python ≥ 3.10.
 
 - `uv sync` — create/refresh the venv; installs all five members editable (plain `.pth`) plus the `dev` group (`pytest`).
-- `uv run pytest` — run the suite (3088 tests: 74 in `packages/pfsmgraph-dataseq/tests/`, 2962 in `packages/pfsmgraph-hmm/tests/`, and 52 in the repo-root `tests/` — 23 covering the ADR 0003 backend matrix, 11 executing documented code blocks against their pasted output per ADR 0013, 2 checking that `docs/ops/release.md` names only recipes the root `justfile` defines, and 16 asserting each `meson.build`'s `install_sources` matches the package on disk). That last figure was 7 until 2026-09-04: it is parameterised over `packages/*/meson.build`, so it grew by itself when the three pure members got theirs, and that growth **is** the 271 → 280 — no test was written for the change that occasioned it. That verifier reads `docs/api/*/*.md` **and `packages/*/README.md`**: a member README becomes a PyPI long description under an immutable version, so it is the one documentation surface where drift cannot be corrected in place. Every run opens with the backend header. Two narrow skips are by design: `test_torch_interop.py` verifies the `DataLoader` integration and skips when torch is absent, since `dataseq` does not depend on torch; and the 229 numba-cuda tests (59 in `test_viterbi.py`, 25 in `test_viterbi_batch.py`, 55 in `test_forward_backward_backends.py`, 88 in `test_baum_welch_backends.py`, and 1 each in `test_trials.py` and `test_search.py`: every shared test's `cuda` parameter plus each file's launch-geometry tests) skip without a CUDA device, with the header reading `cuda ✗ (no CUDA device detected)` — set `PFSMGRAPH_REQUIRE_BACKENDS=cuda` where a GPU is expected, so a lost device fails the run instead.
+- `uv run pytest` — run the suite (3099 tests: 74 in `packages/pfsmgraph-dataseq/tests/`, 2973 in `packages/pfsmgraph-hmm/tests/`, and 52 in the repo-root `tests/` — 23 covering the ADR 0003 backend matrix, 11 executing documented code blocks against their pasted output per ADR 0013, 2 checking that `docs/ops/release.md` names only recipes the root `justfile` defines, and 16 asserting each `meson.build`'s `install_sources` matches the package on disk). That last figure was 7 until 2026-09-04: it is parameterised over `packages/*/meson.build`, so it grew by itself when the three pure members got theirs, and that growth **is** the 271 → 280 — no test was written for the change that occasioned it. That verifier reads `docs/api/*/*.md` **and `packages/*/README.md`**: a member README becomes a PyPI long description under an immutable version, so it is the one documentation surface where drift cannot be corrected in place. Every run opens with the backend header. Two narrow skips are by design: `test_torch_interop.py` verifies the `DataLoader` integration and skips when torch is absent, since `dataseq` does not depend on torch; and the 229 numba-cuda tests (59 in `test_viterbi.py`, 25 in `test_viterbi_batch.py`, 55 in `test_forward_backward_backends.py`, 88 in `test_baum_welch_backends.py`, and 1 each in `test_trials.py` and `test_search.py`: every shared test's `cuda` parameter plus each file's launch-geometry tests) skip without a CUDA device, with the header reading `cuda ✗ (no CUDA device detected)` — set `PFSMGRAPH_REQUIRE_BACKENDS=cuda` where a GPU is expected, so a lost device fails the run instead.
 - `uv build --package pfsmgraph-<pkg>` — build one member's sdist + wheel.
 - `uv lock` — refresh `uv.lock` (committed; one lockfile for the whole family).
 

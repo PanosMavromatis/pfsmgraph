@@ -159,6 +159,16 @@ it, on every backend. Nothing is kept on the result; every number printed is alr
 original's `run-converge` made observable, not its training log, which recorded one line
 per accepted split or merge and belongs with topology search.
 
+That other log now exists, and this page is deliberately the wrong place to look for it.
+The topology search takes a `log=` of its own and writes one row per round, carrying the
+model size, the split or merge, both halves of the description length and `d` — the
+original's columns. It is not documented here because the search is **private**: nothing
+under `pfsmgraph.hmm` exports it, and [the public surface](README.md#the-public-surface)
+is still exactly ten names. A search never passes this page's stream down to
+`baum_welch` either, so the two logs cannot interleave: a round re-converges dozens of
+candidates, and forwarding would bury the row that says what the search did under a
+convergence block per rejected move.
+
 ## `BaumWelchResult`
 
 ```python

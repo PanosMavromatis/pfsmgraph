@@ -45,7 +45,14 @@ at a time by hand.
 
 ## Goals
 
-- [~] Port the training log to standard output as the search's own progress report. `update-training-log` and `training-log-line` (`hmm-trainer.lsh:457-477`) append one line per accepted move, holding the size, the split (`n ^`) or merge (`i v j`) marker, `data-dl`, `model-dl`, `total-dl` and `d`. Drop `test-data-dl`, which the original never assigned (all seven logged lines read `0`). Every one of those quantities is produced by `_mdl.py` and the search loop alone, so this is a port of a format rather than of a computation.
+- [x] Port the training log to standard output as the search's own progress report. `update-training-log` and `training-log-line` (`hmm-trainer.lsh:457-477`) append one line per accepted move, holding the size, the split (`n ^`) or merge (`i v j`) marker, `data-dl`, `model-dl`, `total-dl` and `d`. Drop `test-data-dl`, which the original never assigned (all seven logged lines read `0`). Every one of those quantities is produced by `_mdl.py` and the search loop alone, so this is a port of a format rather than of a computation.
+  > **Done:** `_search` takes a `log=` text stream: a header, a row for the starting model,
+  > one row per round, and a closing sentence naming the stop rule. Format ported from
+  > `training-log-line`, verified byte-for-byte against all seven oracle lines *before*
+  > departing from those bytes for a table. 11 tests, mutation-checked against nine
+  > defects, two of which exposed genuine gaps. `docs/api/hmm/` is deliberately unwritten
+  > -- nothing is exported -- and that surfaced a master-plan gap, now its own subgoal:
+  > no item of revision 04 decides whether the search is exported at all.
   > **Q:** Does the search's log report rejected moves, or only the accepted one per round?
   > **A:** Accepted, preceded by a per-round summary naming the candidate count and the
   > runner-up's margin. A near-tie is precisely what ADR 0023's Open item says the criterion
@@ -64,6 +71,16 @@ at a time by hand.
   > line 1. Take the model half from `_model_description_length(params, d)`, which reads no
   > corpus at all, and derive the data half as `total - model`: exact, and consistent with the
   > printed total by construction.
+  > **Q:** `_search` is private and `hmm.__all__` is unchanged at ten names, so there is no
+  > public surface to document. What should the `docs/api/hmm/` subgoal produce?
+  > **A:** Defer the page and close the pointer. Mark it `[-]` with the reason, and amend
+  > `baum_welch.md`'s one dangling sentence so it stops pointing at nothing. The export
+  > decision should be made on its own merits, not as a side effect of a docs subgoal.
+  > **Q:** Should the master plan record a decision about whether revision 04 exports the
+  > topology search at all?
+  > **A:** Yes -- add a revision-04 subgoal. No existing subgoal makes it public, so 0.3.0
+  > as planned ships "topology search by state merge and split" with a ten-name `__all__`.
+  > Either answer is fine; what is missing is that it was never asked.
   > **Q:** Does the interleaved `round n: ...` summary line read well beside the move rows?
   > **A:** No -- two line shapes for one event makes the output awkward to scan. Each round
   > emits exactly **one** row instead, with the summary folded in as columns: `Round  Size
@@ -124,9 +141,25 @@ at a time by hand.
     > `Move.result`. The existing `_Script` puts a bare `object()` there, which is fine
     > while the walk only compares totals but would raise under a log, since `_halves`
     > calls `_model_description_length`. The new tests build real results instead.
-  - [ ] Document whatever this exports in `docs/api/hmm/`, with executed blocks per ADR 0013. Note that a log's output is host-independent here only if the numbers in the example are, which is the constraint `docs/benchmarks/` exists to take off these pages.
-  - [ ] Sync `docs/agents/core.md`, **last**, in one commit. Three counts are already stale
-        as of the format tests -- `2962` twice and `3088` once, now 2973 and 3099 -- and the
+  - [-] Document whatever this exports in `docs/api/hmm/`, with executed blocks per ADR 0013. Note that a log's output is host-independent here only if the numbers in the example are, which is the constraint `docs/benchmarks/` exists to take off these pages.
+    > **Deferred:** there is nothing exported to document. `_search` is underscore-prefixed
+    > and `pfsmgraph.hmm.__all__` is the same ten names it has carried since
+    > `viterbi_batch`, so the README's own rule decides it -- "anything underscore-prefixed
+    > ... is private, out of contract, and may change without notice" -- and its table has
+    > no eleventh row to write. ADR 0013 scopes `docs/api/` to public surfaces. The page is
+    > owed if and when the search is exported, which the new master-plan subgoal settles.
+    > **Done:** the one thing that *was* owed is closed. `baum_welch.md` ended its `log=`
+    > section pointing at a training log that "belongs with topology search" -- a forward
+    > reference with no other end, the same defect goal 2 of this branch exists to fix for
+    > `hmm-trainer-view.lsh`. It now says the search's log exists, why this page is the
+    > wrong place for it, and that the two streams cannot interleave. Doc tests still 11.
+    > **Note:** two staleness findings handed to the audit subgoal rather than fixed here.
+    > `docs/api/hmm/README.md` names six private modules (`_params`, `_viterbi`,
+    > `_baum_welch`, `_forward_backward`, `_backends`, `_numeric`) where there are now
+    > **fifteen** -- `_mdl`, `_topology`, `_trials`, `_search` and the four kernels are
+    > missing. Its public-surface *table* is correct; only the prose around it is not.
+  - [x] Sync `docs/agents/core.md`, **last**, in one commit. Three counts are already stale
+        as of the format tests -- `2962` twice and `3088` twice, now 2973 and 3099 -- and the
         docs subgoal above moves them again, since `tests/test_api_docs.py` executes every
         block a new page adds. The prose owes an update too: core.md's `baum_welch` paragraph
         says its `log=` is "not the Lush training log, **which is per-topology history for
