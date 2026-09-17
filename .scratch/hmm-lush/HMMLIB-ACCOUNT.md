@@ -450,7 +450,7 @@ or merely tolerated is not recoverable from the tree — the `begin`/`end` codes
 model the *means* to learn a boundary, which is at least consistent with intent.
 **Provenance unknown.**
 
-## 11. There is no headless entry point
+## 11. How a training run was driven
 
 Both training scripts under `Training/` end the same way:
 
@@ -461,11 +461,29 @@ Both training scripts under `Training/` end the same way:
 ```
 
 `hmm-trainer-view.lsh` is that window and nothing else: 237 lines of `WindowObject`
-subclass whose buttons are `Try Split`, `Suggest Split`, `Try Merge`, `Suggest Merge`,
-`Suggest Move`, `Add`, `Converge`, `Continue for `, `Keep model`, `Reset model`,
-`Update DL`, `Suggest d` and `Update View`. It is presentation only — every button calls a
-trainer method and then `update-view` — so it migrates nowhere, but it is the best
-available statement of the intended workflow.
+subclass whose **fifteen** buttons are, in source order, `Try Split`, `Suggest Split`,
+`Try Merge`, `Suggest Merge`, `Continue for `, `Suggest Move`, `Keep model`,
+`Reset model`, `Update View`, `Add`, `Converge`, `Update DL`, `Suggest d`, `Keep d` and
+`Reset d`. It is presentation only — every button calls a trainer method and then
+`update-view` — so it migrates nowhere, but it is the best available statement of the
+intended workflow. Section 16 is the record of that non-migration.
+
+*(The list read thirteen until `feat/hmm-search-log` corrected it on 2026-09-17. The
+count was **already known**: the correction block below this section recorded it on
+`feat/hmm-search-loop`, and ADR 0023's evidence section states it too. What neither did
+was apply it to the list, so for a day the section's own text and its own footnote
+disagreed and a reader of the list alone got thirteen — a correction filed beside a claim
+rather than into it.*
+
+*The omission was not neutral. `Keep d` / `Reset d` call `keep-d` / `reset-d` and mirror
+`Keep model` / `Reset model`, so they are the second half of the commit-and-rollback
+pattern over a mutable working copy — and `keep-model` opens with `(==> this reset-d)`,
+giving `d` the model's own dirty/commit lifecycle.
+[ADR 0017](../../docs/design/adr/0017-frozen-parameter-object-for-hmm.md) declines to
+inherit that split on the grounds that its motivation was "two buttons in a GUI that
+migrates nowhere". There are four, and the second pair is the stronger evidence, since `d`
+is a single integer and a working copy for one number is the pattern applied past the
+point where it buys anything.)*
 
 **Topology search was driven by hand.** The library offers `suggest-split`,
 `suggest-merge` and `suggest-move`, which score candidates, but nothing in the tree loops
@@ -478,8 +496,11 @@ run began with a single-state model and grew it by splitting.
 
 *(Corrected 2026-09-17, on `feat/hmm-search-loop`. The two claims above — "no headless entry
 point" and "nothing in the tree loops over them automatically" — are **false**, and were
-written from the two GUI scripts alone. `Training/` also holds `hmm-train-new-nw` and
-`hmm-train-load-nw`, tracked beside them, which build the trainer without `(ogre)` and end*
+written from the two GUI scripts alone. This section was titled "There is no headless entry
+point" until `feat/hmm-search-log` retitled it; the old heading is kept here because a
+withdrawn claim is easier to weigh against what replaced it than to find in a diff.
+`Training/` also holds `hmm-train-new-nw` and `hmm-train-load-nw`, tracked beside them,
+which build the trainer without `(ogre)` and end*
 
 ```lisp
 (repeat (val (nth 4 argv))
@@ -498,7 +519,7 @@ was left to a person. An all-impossible round leaves `best-size` at 0 and sets t
 size 0. What *is* new work in revision 04 is therefore narrower than this section said: an
 acceptance test, a stopping rule and trajectory selection are departures from a loop that
 exists, not designs with no precedent. The view also has fifteen buttons, not thirteen:
-the list above omits `Keep d` and `Reset d`.)*
+the list above omitted `Keep d` and `Reset d`, and was corrected on `feat/hmm-search-log`.)*
 
 ## 12. What is compiled
 
@@ -599,6 +620,60 @@ Constructing an `hmm-trainer` also requires a `dsource-seq`, since line 66 calls
 So there is no way to obtain the object that owns `update-viterbi-path` without either
 training a model or, at minimum, computing a description length over a corpus. A decode-only
 use of this library is not expressible in its own terms.
+
+## 16. What migrated nowhere: `hmm-trainer-view.lsh`
+
+Three of the four files in the source table are ported. `hmm-trainer-view.lsh` (237 lines)
+is not, and this section exists so that the omission reads as a decision rather than as
+something nobody got to. It is the only file in `Code/HMMlib/` with no destination.
+
+**Dropping it loses no capability, and that is a claim about its code rather than about
+its purpose.** Each of the fifteen buttons in §11 is a lambda that calls one `hmm-trainer`
+method and then `update-view`. Not one computes a quantity the trainer does not already
+compute; not one holds state the trainer does not already hold; not one sequences anything
+— the sequencing was the person pressing them. The window is a set of handles onto methods
+plus a rendering of slots, and every one of those methods is ported, or departed from on
+purpose and said so. There is no algorithm in this file to lose.
+
+**What is lost is not code but a statement of intent, and it is the more complete of the
+two the library has.** Beside `Training/hmm-train-new-nw` and `hmm-train-load-nw`, this
+file is one of only two written statements of the workflow that
+[ADR 0023](../../docs/design/adr/0023-topology-search-loop.md)'s search loop reproduces.
+The scripts state the loop — `suggest-move` then `keep-model`, repeated a fixed number of
+times — and nothing else. The buttons state everything a person could do *between* two
+iterations of that loop, and the two must be read together: `Continue for ` runs the
+scripts' loop from inside the window, commented "Simulates repeated sequence of button
+presses", which is the library saying in its own words that the loop is the automation of
+these buttons. ADR 0023 read them as a requirements list for that reason, and the reading
+is why the port has `_suggest_move` and `keep-model`'s acceptance rule as separate things.
+
+**Its layout is evidence too, and revision 04 ported that rather than the widget.** The
+window's `Data DL` / `Model DL` / `Total DL` / `Test Data DL` row and its
+`Topology Search History` pane are the same quantities and the same per-accepted-move
+history that `training-log-line` (`hmm-trainer.lsh:462-474`) writes to a model's
+`_training_log`. So the pane and the file are two renderings of one thing, and what
+replaces both here is a third: `_search`'s `log=` writes a row per round to a text stream,
+keeping the original's column order and its three move markers.
+
+**That nothing replaces the window is itself a decision**, recorded in
+`docs/plan/DEFERRED.md` under `## Trigger: a second module needing training progress
+reporting` and dated 2026-09-03. Training reports to standard output and nothing else, on
+the assumption that a notebook's output cell can be browsed while a run continues, so a
+long run needs no live widget to stay observable. A dashboard is deferred until a *second*
+module needs progress reported — most likely `dl` acquiring a training loop — and until
+then no GUI or plotting framework enters any member's dependencies. The deferral names
+this file as its consequence; this section is that pointer's other end.
+
+**Two things this section is not saying.** It is not that the file was unimportant: it was
+read twice, and both readings changed the port. The first established that it is
+presentation only, which is what let [ADR 0017](../../docs/design/adr/0017-frozen-parameter-object-for-hmm.md)
+decline the `hmm`/`hmm-param` working-copy split — its motivation is the `Keep model` /
+`Reset model` and `Keep d` / `Reset d` buttons, and a frozen parameter value has no use for
+either pair. The second gave ADR 0023 its requirements list. And it is **not** that the
+library had no headless driver. §11 said that and was wrong, corrected on the day the
+search loop landed: `hmm-train-new-nw` runs the loop with no window at all. The view is
+redundant *with* that driver, not a substitute for something the library lacked — which is
+the difference between dropping a convenience and dropping the only copy of something.
 
 ## Appendix: measurements
 
