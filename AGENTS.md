@@ -259,8 +259,14 @@ before solving. A port that hands the homogeneous system to a dense solver fails
 and `(I - Pᵀ)` has the same null space and needs the same fix. The trick supplies **exactly
 one** equation, so it rescues a one-dimensional null space and no more: a **reducible** chain
 (two closed communicating classes) has nullity 2 and stays singular, which
-`stationary_distribution` reports as a `ValueError` naming the cause rather than numpy's bare
-`LinAlgError`. That matters because revision 04 searches topology by state merge and split, so
+`stationary_distribution` reports as a `ValueError` naming the classes. **Since 2026-09-17
+that is decided structurally, by `closed_classes`, before any solve**, because the solve's
+own singularity turned out not to be a reliable witness: a probability that is not
+representable (`[[1,0,0],[0,⅔,⅓],[0,1,0]]`) lifts an exactly singular block off singularity by
+an ulp, and `numpy.linalg.solve` then returns one of the stationary distributions silently,
+in 18 of 254 random reducible chains. The same labels give transient states an exact `0.0`
+in `state_p`, where the solve left rounding up to `1.8e-14`, some of it negative; the state
+merge weights by that mass and refuses a pair with none (`feat/hmm-merge-states`, goals 3-5). That matters because revision 04 searches topology by state merge and split, so
 a disconnected component is a plausible *search outcome*, and ADR 0017 makes `state_p` a
 cached property, so the failure surfaces on an attribute access. The Lush `LU-solve` /
 `LU-decomposition` / `LU-back-substitution` trio is replaced by `numpy.linalg.solve` rather

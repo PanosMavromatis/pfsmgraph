@@ -187,11 +187,24 @@ longer has.
 >>> split
 HMMParams(n_states=2, n_symbols=8)
 >>> split.state_p
-ValueError: transition matrix is reducible: (P.T - I) has a null space of dimension > 1, so the stationary distribution is not unique and replacing one row with the normalization cannot determine it
+ValueError: transition matrix is reducible: it has 2 closed communicating classes ({0}, {1}), so its stationary distribution is not unique
 ```
 
 Two states that never leave themselves have no single stationary distribution. The
 decode does not read `state_p`, so `viterbi` works on such a model.
+
+Reducibility is decided from which arcs are live, never from the solve, because a
+probability that is not representable (`2/3`, say) can make an exactly singular system
+solve anyway and return one of the stationary distributions without complaint.
+
+**A state the chain leaves and never re-enters carries exactly `0.0`**, not the rounding a
+solve would leave there:
+
+```python
+>>> drain = HMMParams([1.0, 0.0], [[0.0, 1.0], [0.0, 1.0]], output_p, vocab)
+>>> drain.state_p
+array([0., 1.])
+```
 
 ### Equality is identity
 

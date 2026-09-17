@@ -21,6 +21,7 @@ import pfsmgraph.hmm
 from pfsmgraph.hmm import _numeric
 from pfsmgraph.hmm._numeric import (
     bits,
+    closed_classes,
     entropy,
     rand_p_vector,
     safe_divide,
@@ -364,12 +365,92 @@ def test_a_reducible_chain_is_refused():
         stationary_distribution(_REDUCIBLE)
 
 
-def test_the_reducible_error_keeps_the_numerical_cause():
-    """`raise ... from err`, so the LinAlgError is still reachable for debugging."""
-    with pytest.raises(ValueError) as excinfo:
+def test_the_reducible_error_names_every_closed_class():
+    """Decided structurally before any solve, so there is no numerical cause to chain."""
+    with pytest.raises(ValueError, match=r"2 closed communicating classes \(\{0, 1\}, \{2, 3\}\)") as excinfo:
         stationary_distribution(_REDUCIBLE)
 
-    assert isinstance(excinfo.value.__cause__, np.linalg.LinAlgError)
+    assert excinfo.value.__cause__ is None
+
+
+# Two closed classes, {0} and {1, 2}. 2/3 is not representable, so the {1, 2}
+# block of the row-replaced system misses exact singularity by an ulp.
+_SILENTLY_SOLVABLE = np.array([[1.0, 0.0, 0.0], [0.0, 2 / 3, 1 / 3], [0.0, 1.0, 0.0]])
+
+
+def test_a_reducible_chain_the_solve_accepts_is_still_refused():
+    """The premise is asserted first: the row-replaced system really does solve.
+
+    Without it the test would pass on a numerical rank test too, and it is that
+    rank test's silence on this chain that made the structural check necessary.
+    """
+    a = _SILENTLY_SOLVABLE.T - np.eye(3)
+    a[0, :] = 1.0
+    np.linalg.solve(a, np.array([1.0, 0.0, 0.0]))  # returns, rather than raising
+
+    with pytest.raises(ValueError, match=r"2 closed communicating classes \(\{0\}, \{1, 2\}\)"):
+        stationary_distribution(_SILENTLY_SOLVABLE)
+
+
+def _sparse_chains(count, seed):
+    """Random chains with many exactly dead arcs, so transient states and several
+    closed classes both occur."""
+    rng = np.random.default_rng(seed)
+    for _ in range(count):
+        size = int(rng.integers(1, 9))
+        chain = rng.dirichlet(np.ones(size), size=size)
+        chain = np.where(rng.random((size, size)) < rng.uniform(0.0, 0.85), 0.0, chain)
+        for i in np.flatnonzero(chain.sum(axis=1) == 0):
+            chain[i, rng.integers(size)] = 1.0
+        yield chain / chain.sum(axis=1, keepdims=True)
+
+
+def _classes_by_matrix_power(chain):
+    """An oracle sharing no code with `closed_classes`: reachability as the
+    support of `(I + A)^S`, and classes as sets rather than labels."""
+    size = chain.shape[0]
+    step = (np.eye(size) + (chain > 0)).astype(np.float64)
+    reach = np.linalg.matrix_power(np.minimum(step, 1.0), size) > 0
+    recurrent = [i for i in range(size) if all(reach[j, i] for j in np.flatnonzero(reach[i]))]
+    classes = {frozenset(int(j) for j in np.flatnonzero(reach[i])) for i in recurrent}
+    return set(range(size)) - set(recurrent), classes
+
+
+def test_closed_classes_labels_each_class_in_order_of_its_lowest_state():
+    assert closed_classes(_REDUCIBLE).tolist() == [0, 0, 1, 1]
+    assert closed_classes(np.array([[0.0, 0.5, 0.5], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])).tolist() == [-1, 0, 1]
+    assert closed_classes(np.array([[1.0]])).tolist() == [0]
+
+
+@pytest.mark.parametrize("seed", range(3))
+def test_closed_classes_agrees_with_reachability_by_matrix_power(seed):
+    for chain in _sparse_chains(100, seed):
+        labels = closed_classes(chain)
+        transient, classes = _classes_by_matrix_power(chain)
+        assert set(np.flatnonzero(labels < 0).tolist()) == transient
+        assert {frozenset(np.flatnonzero(labels == c).tolist()) for c in range(labels.max() + 1)} == classes
+        lowest = [min(np.flatnonzero(labels == c)) for c in range(labels.max() + 1)]
+        assert lowest == sorted(lowest)
+
+
+def test_transient_states_carry_exactly_zero_stationary_mass():
+    """Not `-0.0` and not rounding. The premise is counted: the raw solve left
+    something other than a positive zero on a transient state at least once."""
+    noisy = 0
+    for chain in _sparse_chains(1000, seed=20260917):
+        labels = closed_classes(chain)
+        if labels.max() != 0 or labels.min() >= 0:
+            continue
+        a = chain.T - np.eye(chain.shape[0])
+        a[0, :] = 1.0
+        raw = np.linalg.solve(a, np.eye(chain.shape[0])[0])
+        transient = labels < 0
+        noisy += int(np.any((raw[transient] != 0) | np.signbit(raw[transient])))
+        pi = stationary_distribution(chain)
+        assert np.all(pi[transient] == 0.0)
+        assert not np.any(np.signbit(pi[transient]))
+        assert np.array_equal(pi[~transient], raw[~transient])
+    assert noisy > 0
 
 
 def test_a_non_square_matrix_is_refused():
@@ -381,6 +462,8 @@ def test_a_non_square_matrix_is_refused():
     """
     with pytest.raises(ValueError, match="square"):
         stationary_distribution(np.zeros((3, 5)))
+    with pytest.raises(ValueError, match="square"):
+        closed_classes(np.zeros((3, 5)))
 
 
 def test_a_frozen_transition_matrix_is_accepted():
@@ -579,6 +662,7 @@ def test_the_numeric_helpers_are_private_to_the_package():
     """
     for name in (
         "bits",
+        "closed_classes",
         "entropy",
         "rand_p_vector",
         "safe_divide",
