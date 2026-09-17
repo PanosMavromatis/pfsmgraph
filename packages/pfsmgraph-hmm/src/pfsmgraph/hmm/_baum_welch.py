@@ -44,6 +44,7 @@ flat concatenated corpus is the special case of a single record, and trains
 identically. The stopping rule is the original's and so is its weakness: it
 watches only the size of each batch's change, so a start close enough to a
 symmetric saddle stops *on* the saddle, and an exactly uniform start is one.
+``min_cycles`` holds the rule off for a start known to sit near such a point.
 
 **The data description length at a precision ``d`` is the same forward pass over
 rounded parameters**, which is what the original's ``update-data-dl`` is. Rounding
@@ -173,6 +174,7 @@ def baum_welch(
     change_bits: float = CHANGE_BITS,
     patience: int = PATIENCE,
     max_cycles: int | None = None,
+    min_cycles: int = 0,
     log: TextIO | None = None,
 ) -> BaumWelchResult:
     """Baum-Welch from ``params`` over ``records`` until ``run-converge`` stops.
@@ -213,6 +215,13 @@ def baum_welch(
         device other than the CPU, and it is probed before any work: nothing falls
         back to the CPU. ``"cuda"`` runs on numba-cuda's current device, which
         ``device`` does not select, so it takes only ``None``.
+    :param min_cycles: the fewest cycles to run before the stopping rule may stop
+        the loop, for a start that sits near a fixed point of EM, such as a state
+        split (ADR 0022 section 4). Checks still happen every ``batch_cycles``
+        cycles, so the floor takes effect at the first check at or past it; the
+        unchanged count keeps running beneath it, so a run already quiet stops at
+        that check. ``max_cycles`` still wins when it is smaller. ``0``, the
+        default, is the original's rule.
     :param log: a text stream to report progress on, such as ``sys.stdout``;
         ``None``, the default, writes nothing. A header and cycle 0's bits, then
         a row at each convergence check -- cycle, bits, change since the previous
@@ -242,6 +251,8 @@ def baum_welch(
         )
     if max_cycles is not None and max_cycles < 0:
         raise ValueError(f"max_cycles must be non-negative, got {max_cycles}")
+    if min_cycles < 0:
+        raise ValueError(f"min_cycles must be non-negative, got {min_cycles}")
     if batch_size is not None and batch_size < 1:
         raise ValueError(f"batch_size must be at least 1 or None, got {batch_size}")
     if device is not None and not isinstance(device, str):
@@ -270,7 +281,7 @@ def baum_welch(
     old_bits = None
     width = None
     cycles = 0
-    while unchanged < patience:
+    while unchanged < patience or cycles < min_cycles:
         for _ in range(batch_cycles):
             if max_cycles is not None and cycles >= max_cycles:
                 result = _finish(params, history, records, cycles, False, degenerate)

@@ -68,6 +68,10 @@ py.install_sources(
     # candidates only, per ADR 0022; scoring and re-convergence live elsewhere.
     # Not a DP kernel, so it has no lifecycle phases.
     'src/pfsmgraph/hmm/_topology.py',
+    # Scored trials of a topology move for revision 04: try-split. Re-converges a
+    # candidate, chooses its d and scores it through the MDL total. Not a DP
+    # kernel, so it has no lifecycle phases.
+    'src/pfsmgraph/hmm/_trials.py',
     'src/pfsmgraph/hmm/_viterbi.py',
     # ADR 0002 phase 3. Pure Python, but it still has to be listed: meson does
     # not glob, and an unlisted module is invisible to the editable finder and
