@@ -43,7 +43,9 @@ the appendix.
 admits a behaviour that may never have been exercised, it is marked **provenance
 unknown** rather than asserted as a bug that bit. That marking carries more weight in this
 account than in `ACCOUNT.md`, because the training entry points are interactive (§11) and
-nothing in the tree records which buttons were pressed.
+nothing in the tree records which buttons were pressed. *(Corrected 2026-09-17: they are
+interactive **and** headless — see §11 — but the headless ones record only the trajectory they
+kept, not the trials they rejected.)*
 
 ---
 
@@ -474,6 +476,30 @@ design decision being made for the first time, not a translation.
 `hmm-train-new` also fixes the starting point: `model-starting-size` defaults to **1**. A
 run began with a single-state model and grew it by splitting.
 
+*(Corrected 2026-09-17, on `feat/hmm-search-loop`. The two claims above — "no headless entry
+point" and "nothing in the tree loops over them automatically" — are **false**, and were
+written from the two GUI scripts alone. `Training/` also holds `hmm-train-new-nw` and
+`hmm-train-load-nw`, tracked beside them, which build the trainer without `(ogre)` and end*
+
+```lisp
+(repeat (val (nth 4 argv))
+  (==> trainer suggest-move)
+  (==> trainer keep-model))
+```
+
+*and the view's `Continue for ` button runs the same loop, commented "Simulates repeated
+sequence of button presses". So there is a driver, and its semantics are the port's starting
+point: `suggest-move` scores every merge and then every split (`*min-split-trials*` = 2 per
+state), keeps the strict-`<` best and restores the incumbent after each trial; `keep-model`
+then commits that best **unconditionally**, even when its total exceeds the incumbent's; and
+nothing stops the loop but the move count on the command line. Each keep saves a numbered
+model with `_total_dl` and a training-log line, so choosing the best model from the trajectory
+was left to a person. An all-impossible round leaves `best-size` at 0 and sets the model to
+size 0. What *is* new work in revision 04 is therefore narrower than this section said: an
+acceptance test, a stopping rule and trajectory selection are departures from a loop that
+exists, not designs with no precedent. The view also has fifteen buttons, not thirteen:
+the list above omits `Keep d` and `Reset d`.)*
+
 ## 12. What is compiled
 
 `hmm-trainer.lsh:1075-1100` lists what `dhc-make` compiles, and the omissions are the
@@ -520,7 +546,10 @@ error to hide — they are similar enough to skim and different enough to matter
 - **No log-domain forward pass.** Scaling is used instead, and only Viterbi works in bits.
   The two halves of the library use different numerical strategies for the same underlying
   problem.
-- **No automatic topology search** (§11). Only scored suggestions and a human.
+- **No acceptance test or stopping rule for topology search** (§11). *(Corrected
+  2026-09-17: this read "No automatic topology search… Only scored suggestions and a human";
+  the `-nw` scripts loop `suggest-move`/`keep-model` a fixed number of times, keeping every
+  best neighbour unconditionally.)*
 - **No test suite.** `Code/test.lsh` and `Code/test-compile.lsh` are load-and-compile
   smoke scripts, not assertions.
 - **No separation between decode and training.** Viterbi is a method on `hmm-trainer`, so

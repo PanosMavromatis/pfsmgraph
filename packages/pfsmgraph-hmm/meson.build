@@ -64,6 +64,10 @@ py.install_sources(
     'src/pfsmgraph/hmm/_mdl.py',
     'src/pfsmgraph/hmm/_numeric.py',
     'src/pfsmgraph/hmm/_params.py',
+    # The topology search for revision 04, per ADR 0023: a walk over merges and
+    # splits that keeps the best model visited. Not a DP kernel, so it has no
+    # lifecycle phases.
+    'src/pfsmgraph/hmm/_search.py',
     # Topology moves for revision 04: state split and state merge. Builds
     # candidates only, per ADR 0022; scoring and re-convergence live elsewhere.
     # Not a DP kernel, so it has no lifecycle phases.

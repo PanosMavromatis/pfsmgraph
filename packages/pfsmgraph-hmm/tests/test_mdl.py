@@ -11,7 +11,7 @@ be written down; :func:`math.comb`, which evaluates the binomial the
 implementation deliberately never forms; and a ``lgamma`` closed form, which
 computes the same quantity by a route sharing no code with the loop under test.
 
-Nine sections:
+Ten sections:
 
 - **Exact values**, where float arithmetic is exact and ``==`` is the right
   assertion rather than a tolerance.
@@ -33,6 +33,9 @@ Nine sections:
   both halves at once.
 - **Choosing `d`**, against each model's stored `d`, with the original's local
   minimum and the optimizer's `1e100` sentinel both pinned as decisions.
+- **The bounded scan** the search chooses `d` with instead (ADR 0023 section 5):
+  exhaustive agreement where the bound says to stop, the lower bound it stops on,
+  the assumption it rests on, and the cases the fixtures do not exhibit.
 """
 
 from __future__ import annotations
@@ -55,6 +58,8 @@ from pfsmgraph.hmm._mdl import (
     _minimize,
     _minimize_int,
     _quantize,
+    _d_model_lower_bound,
+    _scan_d,
     _suggest_d,
     _total_description_length,
 )
@@ -672,22 +677,24 @@ def test_suggest_d_chooses_the_d_the_original_stored(model):
     assert type(got) is float and got.is_integer()
 
 
-def test_suggest_d_keeps_the_originals_local_minimum_on_the_one_state_model():
-    """Pins a decision: the port reproduces where the original chose badly.
+def test_the_search_leaves_brents_local_minimum_for_the_scans_global_one():
+    """Pins a decision, and the switch it made (ADR 0023 section 5).
 
     The data half is not monotone in `d`, so the total has several basins and Brent
     keeps the one it slides into from 3821. On the one-state model -- where every
-    search starts -- `d = 13` is more than ten bits cheaper than the stored 29.
-    Replacing Brent with a global scan would make this test fail, which is the
-    point: that is a search-loop design decision, and it should arrive as one.
+    search starts -- that is the stored 29, while `d = 13` is more than ten bits
+    cheaper. `_suggest_d` still reproduces the original's choice; the search no longer
+    uses it, and the scan it uses instead finds 13. This test read `== 29.0` and
+    nothing else until that decision was made.
     """
     directory = FIXTURES / "m001_0001_001.hmm"
     params, records = load_params(directory), [load_corpus_record()]
+    unrounded = _corpus_description_length(*_arrays(params), records)
     assert _suggest_d(params, records) == 29.0
-    assert (
-        _total_description_length(params, records, 13.0)
-        < _total_description_length(params, records, 29.0) - 10.0
-    )
+    d, total = _scan_d(params, records, unrounded, backend="cython")
+    assert d == 13.0
+    assert total == _total_description_length(params, records, 13.0)
+    assert total < _total_description_length(params, records, 29.0) - 10.0
 
 
 def _rare_symbol_model():
@@ -770,3 +777,150 @@ def test_brent_finds_the_minimum_of_a_single_basin_to_its_tolerance():
     x, fx = _minimize(lambda x: (x - 4242.4) ** 2 + 7.0, 1.0, 3821.0, 10000.0, 1e-2)
     assert abs(x - 4242.4) < 1e-2 * 4242.4
     assert fx == pytest.approx(7.0, abs=1e-6 * 4242.4**2)
+
+
+# ---------------------------------------------------------------------------
+# The bounded scan (ADR 0023 section 5).
+#
+# The scan is exact only relative to its stopping bound, so each fixture test checks
+# both halves of that claim: no d it skipped below the stop scores lower, and the bound
+# at the stop already exceeds the best, which is what excuses every d above it. The
+# forward passes run on `cython`, whose scale factors are bit-identical to numpy's, so
+# this is a choice of speed and not of result.
+
+SCAN_SLACK_UP_TO = 300
+
+
+def _arrays(params):
+    return params.init_state_p, params.transition_p, params.output_p
+
+
+@pytest.mark.parametrize(
+    ("model", "expected_d"), [("m001_0001_001", 13.0), ("m001_0005_005", 3.0), ("m008_0001_008", 4.0)]
+)
+def test_the_scan_finds_the_lowest_total_below_the_point_its_bound_excuses(model, expected_d):
+    params, records = load_params(FIXTURES / f"{model}.hmm"), [load_corpus_record()]
+    unrounded = _corpus_description_length(*_arrays(params), records)
+    d, total = _scan_d(params, records, unrounded, backend="cython")
+    assert d == expected_d
+
+    stop = 1.0
+    user = params.n_symbols - USER_BASE
+    while unrounded + _d_model_lower_bound(params.n_states, user, stop) < total:
+        stop += 1.0
+    exhaustive = {
+        float(k): _total_description_length(params, records, float(k), backend="cython")
+        for k in range(1, int(stop))
+    }
+    assert min(exhaustive.values()) == total
+    assert min(exhaustive, key=exhaustive.get) == d
+
+
+@pytest.mark.parametrize("model", MODELS)
+def test_rounding_never_lowers_the_fixtures_data_length_below_the_unrounded_one(model):
+    """The assumption the scan's stop rests on, measured where ADR 0023 measured it."""
+    params, records = load_params(FIXTURES / f"{model}.hmm"), [load_corpus_record()]
+    unrounded = _corpus_description_length(*_arrays(params), records)
+    for d in range(1, SCAN_SLACK_UP_TO + 1):
+        assert _data_description_length(params, records, float(d), backend="cython") >= unrounded
+
+
+def test_rounding_never_lowers_a_one_state_data_length_after_em():
+    """Exact at one state: the likelihood is concave and EM reaches its maximum.
+
+    So no rounded model can score the corpus better, whatever the corpus. Checked on
+    random corpora and alphabets rather than the fixture alone.
+    """
+    from pfsmgraph.hmm import baum_welch
+
+    rng = np.random.default_rng(20260917)
+    for n_user in (2, 3, 7):
+        records = _random_corpus(rng, n_user, (37, 5, 80))
+        start = _random_params(rng, 1, n_user)
+        fitted = baum_welch(start, records).params
+        unrounded = _corpus_description_length(*_arrays(fitted), records)
+        for d in range(1, 120):
+            assert _data_description_length(fitted, records, float(d)) >= unrounded
+
+
+def test_the_model_lower_bound_is_below_the_model_length_and_never_falls():
+    rng = np.random.default_rng(7)
+    for size in (1, 2, 3, 5, 8):
+        params = _random_params(rng, size, 4)
+        previous = -np.inf
+        for d in range(1, 400):
+            bound = _d_model_lower_bound(size, 4, float(d))
+            assert bound <= _model_description_length(params, float(d))
+            assert bound >= previous
+            previous = bound
+
+
+def test_the_model_lower_bound_counts_every_rows_largest_entry_once_d_reaches_s():
+    """The per-arc term is what makes the scan stop early; without it the bound is useless.
+
+    A row whose mass is spread evenly over `S` states is the tight case: each entry is
+    `1/S`, so `p * S = 1` survives rounding at `d = S` and every row keeps one arc.
+    """
+    size, n_user = 4, 3
+    output = np.zeros((size, size, USER_BASE + n_user))
+    output[:, :, USER_BASE:] = 1.0 / n_user
+    params = HMMParams(
+        np.full(size, 1.0 / size),
+        np.full((size, size), 1.0 / size),
+        output,
+        _vocabulary(USER_BASE + n_user),
+    )
+    below = _d_model_lower_bound(size, n_user, float(size - 1))
+    at = _d_model_lower_bound(size, n_user, float(size))
+    assert at - below > size * _comb_code_length(float(size - 1), 1 + n_user)
+    assert at <= _model_description_length(params, float(size))
+
+
+def test_the_scan_passes_over_impossible_d_without_a_sentinel():
+    """The case Brent needed `1e100` for: every d below 5000 is impossible here.
+
+    The scan only compares, so `+inf` totals are passed over and the first possible d
+    is found, where the original's search needed its sentinel to avoid creeping.
+    """
+    params, records = _rare_symbol_model()
+    unrounded = _corpus_description_length(*_arrays(params), records)
+    d, total = _scan_d(params, records, unrounded)
+    assert d == 5000.0
+    assert np.isfinite(total)
+    assert _total_description_length(params, records, 4999.0) == np.inf
+
+
+def test_the_scan_keeps_the_smallest_d_on_a_tie_and_d_one_when_every_d_is_impossible(monkeypatch):
+    from pfsmgraph.hmm import _mdl
+
+    params = _random_params(np.random.default_rng(3), 2, 3)
+    records = _random_corpus(np.random.default_rng(4), 3, (10,))
+
+    monkeypatch.setattr(_mdl, "_total_description_length", lambda *_, **__: 5.0)
+    assert _scan_d(params, records, 0.0) == (1.0, 5.0)
+
+    seen = []
+
+    def impossible(params, records, d, **keywords):
+        seen.append(d)
+        return np.inf
+
+    monkeypatch.setattr(_mdl, "_total_description_length", impossible)
+    assert _scan_d(params, records, 0.0) == (1.0, np.inf)
+    assert seen == [float(k) for k in range(1, 10001)]
+
+
+def test_the_scan_rejects_a_data_length_that_is_not_a_number():
+    params = _random_params(np.random.default_rng(5), 1, 2)
+    with pytest.raises(ValueError, match="data_bits"):
+        _scan_d(params, [], float("nan"))
+    with pytest.raises(ValueError, match="data_bits"):
+        _scan_d(params, [], None)
+
+
+@pytest.mark.parametrize("model", MODELS)
+def test_the_score_backend_does_not_change_the_total(model):
+    params, records = load_params(FIXTURES / f"{model}.hmm"), [load_corpus_record()]
+    for d in (1.0, 4.0, 13.0, 3821.0):
+        reference = _total_description_length(params, records, d)
+        assert _total_description_length(params, records, d, backend="cython") == reference
