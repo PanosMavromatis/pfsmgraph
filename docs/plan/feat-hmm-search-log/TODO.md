@@ -45,9 +45,27 @@ at a time by hand.
 
 ## Goals
 
-- [ ] Port the training log to standard output as the search's own progress report. `update-training-log` and `training-log-line` (`hmm-trainer.lsh:457-477`) append one line per accepted move, holding the size, the split (`n ^`) or merge (`i v j`) marker, `data-dl`, `model-dl`, `total-dl` and `d`. Drop `test-data-dl`, which the original never assigned (all seven logged lines read `0`). Every one of those quantities is produced by `_mdl.py` and the search loop alone, so this is a port of a format rather than of a computation.
-  - [ ] Decide whether **rejected** moves are reported. The original records only accepted ones, and `_search` rejects most of what it scores; a search that reported every candidate would say far more about the run than the original's log ever did, which is either the improvement this goal is for or noise that buries the accepted line.
-  - [ ] Decide what happens to the **nested** `baum_welch(..., log=)` block. It already writes a header, a row per convergence check and a stop line, and a search re-converges every candidate — so a search that passes its stream down emits one such block per rejected move. Decide whether the search silences it, forwards it, or makes it selectable, and say why in the docstring rather than only here.
+- [~] Port the training log to standard output as the search's own progress report. `update-training-log` and `training-log-line` (`hmm-trainer.lsh:457-477`) append one line per accepted move, holding the size, the split (`n ^`) or merge (`i v j`) marker, `data-dl`, `model-dl`, `total-dl` and `d`. Drop `test-data-dl`, which the original never assigned (all seven logged lines read `0`). Every one of those quantities is produced by `_mdl.py` and the search loop alone, so this is a port of a format rather than of a computation.
+  > **Q:** Does the search's log report rejected moves, or only the accepted one per round?
+  > **A:** Accepted, preceded by a per-round summary naming the candidate count and the
+  > runner-up's margin. A near-tie is precisely what ADR 0023's Open item says the criterion
+  > cannot decide -- rankings closer than the 58-71 bits one integer step of `d` moves the
+  > model half are settled by where EM stopped -- so the margin is the one number the
+  > original's log could not have carried, its user having run one trial at a time by hand.
+  > **Q:** What happens to the nested `baum_welch(..., log=)` block, which a search would emit
+  > once per re-converged candidate?
+  > **A:** Silence it: `_search` never passes `log=` down. Its stream is about topology moves
+  > and EM's is about convergence inside one candidate, and `baum_welch`'s `log=` is already
+  > public for anyone wanting the latter. Say so in the docstring, not only here.
+  > **Note:** The three number columns cost no second forward pass, but not the obvious way.
+  > `TrialResult.data_bits` is the **unrounded** corpus length, which `d` never touched, so
+  > printing it beside `total - data_bits` would put the whole quantization gap into the model
+  > column -- 1.5 to 29 bits on the tracked models, against a model half that is 58 bits on
+  > line 1. Take the model half from `_model_description_length(params, d)`, which reads no
+  > corpus at all, and derive the data half as `total - model`: exact, and consistent with the
+  > printed total by construction.
+  - [x] Decide whether **rejected** moves are reported. The original records only accepted ones, and `_search` rejects most of what it scores; a search that reported every candidate would say far more about the run than the original's log ever did, which is either the improvement this goal is for or noise that buries the accepted line.
+  - [x] Decide what happens to the **nested** `baum_welch(..., log=)` block. It already writes a header, a row per convergence check and a stop line, and a search re-converges every candidate — so a search that passes its stream down emits one such block per rejected move. Decide whether the search silences it, forwards it, or makes it selectable, and say why in the docstring rather than only here.
   - [ ] Implement it on `_search`, beside `backend=` / `score_backend=`, reusing or deliberately not reusing `_baum_welch.py:350-382`'s `_log_start` / `_log_row` / `_write` helpers. Flushing per line is already that module's rule and a search is the longer-running caller, so it matters more here.
   - [ ] Test the **format** against the three `_training_log` oracles — column order, the three marker forms (`n ^`, `i v j`, `-`), and that a start row precedes every move — never the values. Add a merge-accepting case, which no oracle has.
   - [ ] Document whatever this exports in `docs/api/hmm/`, with executed blocks per ADR 0013. Note that a log's output is host-independent here only if the numbers in the example are, which is the constraint `docs/benchmarks/` exists to take off these pages.

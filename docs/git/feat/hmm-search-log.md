@@ -27,7 +27,7 @@ This branch executes the two master-plan subgoals that own those halves.
 
 ## Context
 
-- Master plan `docs/plan/TODO.md:219` and `:220` — the two subgoals, under
+- Master plan `docs/plan/TODO.md:219` and `:221` — the two subgoals, under
   `## Subgoals — revision 04-hmm-v0.3.0`.
 - `.scratch/hmm-lush/Code/HMMlib/hmm-trainer.lsh:457-477` — `update-training-log` and
   `training-log-line`, the format being ported; `:677-690` — `keep-model`, which is what
