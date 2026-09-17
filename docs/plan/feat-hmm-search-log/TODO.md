@@ -64,9 +64,40 @@ at a time by hand.
   > line 1. Take the model half from `_model_description_length(params, d)`, which reads no
   > corpus at all, and derive the data half as `total - model`: exact, and consistent with the
   > printed total by construction.
+  > **Q:** Does the interleaved `round n: ...` summary line read well beside the move rows?
+  > **A:** No -- two line shapes for one event makes the output awkward to scan. Each round
+  > emits exactly **one** row instead, with the summary folded in as columns: `Round  Size
+  > Move  Data DL  Model DL  Total DL  d  Candidates  Runner-Up  Comments`. The `stopped:`
+  > line stays a bare sentence at the very end, where the visual disruption is the point --
+  > it marks that the process has terminated.
+  > **Note:** This is where the port leaves the original's *bytes* behind, and the departure
+  > was measured before it was taken. All seven oracle lines round-trip byte-for-byte through
+  > the Lush field widths (`%3d`, the 13-character marker, three `%-9g`, one `%-5g`); a table
+  > carrying four more columns cannot also be that. What the oracles still constrain -- and
+  > so what the format test asserts -- is the **column order** and the three marker forms
+  > `n ^`, `i v j` and `-`, which is what the subgoal asked for in the first place.
   - [x] Decide whether **rejected** moves are reported. The original records only accepted ones, and `_search` rejects most of what it scores; a search that reported every candidate would say far more about the run than the original's log ever did, which is either the improvement this goal is for or noise that buries the accepted line.
   - [x] Decide what happens to the **nested** `baum_welch(..., log=)` block. It already writes a header, a row per convergence check and a stop line, and a search re-converges every candidate — so a search that passes its stream down emits one such block per rejected move. Decide whether the search silences it, forwards it, or makes it selectable, and say why in the docstring rather than only here.
-  - [ ] Implement it on `_search`, beside `backend=` / `score_backend=`, reusing or deliberately not reusing `_baum_welch.py:350-382`'s `_log_start` / `_log_row` / `_write` helpers. Flushing per line is already that module's rule and a search is the longer-running caller, so it matters more here.
+  - [x] Implement it on `_search`, beside `backend=` / `score_backend=`, reusing or deliberately not reusing `_baum_welch.py:350-382`'s `_log_start` / `_log_row` / `_write` helpers. Flushing per line is already that module's rule and a search is the longer-running caller, so it matters more here.
+    > **Note:** Only `_write` is reused from `_baum_welch`, and the split is principled.
+    > `_write` encodes a *policy* -- flush every line -- which both logs share and which
+    > matters more here, a round costing seconds where an EM cycle costs milliseconds.
+    > `_log_start` and `_log_row` encode a *layout* with no column in common with this one,
+    > so reusing them would mean parameterising until nothing of either was left.
+    > **Note:** The `Round` column is `index + 1`, deliberately out of step with
+    > `SearchResult.rounds[r].index == r`. The column counts the walk's rows, of which 0 is
+    > the starting model; the field stays 0-based because it is also the round's seed key,
+    > `spawn_key + (1, r)` (ADR 0023 §2), and renumbering it would silently re-seed every
+    > search. `_log_move_row`'s docstring carries this.
+    > **Note:** The `Runner-Up` column earned itself on its first real run. Over four
+    > 200-symbol records of `set02a_200`, every round printed a margin of `+0`: the two
+    > split trials of the one-state start converge to **bit-identical parameters**, from
+    > candidates that genuinely differ before EM (max transition delta 1.3e-3, the 1% seed
+    > working as ADR 0022 specifies) and after different cycle counts, 50 and 60. So the
+    > criterion did not fail to separate them -- there was nothing to separate, and the
+    > round's choice fell to `sorted`'s stability. Measured at `split_min_cycles=30` on a
+    > corpus slice, so it is no claim about the full corpus at ADR 0023 §6's 200-cycle
+    > floor; it is a claim that the column reports something the original's log could not.
   - [ ] Test the **format** against the three `_training_log` oracles — column order, the three marker forms (`n ^`, `i v j`, `-`), and that a start row precedes every move — never the values. Add a merge-accepting case, which no oracle has.
   - [ ] Document whatever this exports in `docs/api/hmm/`, with executed blocks per ADR 0013. Note that a log's output is host-independent here only if the numbers in the example are, which is the constraint `docs/benchmarks/` exists to take off these pages.
 
