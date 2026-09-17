@@ -1,7 +1,7 @@
 # 0024. The topology search stays interpreted, and every forward pass it runs takes a named backend
 
-- **Status:** Proposed — held until **Open** chooses how `baum_welch`'s convergence check
-  names its backend.
+- **Status:** Accepted — Proposed 2026-09-17 and accepted the same day, when **Resolved**
+  chose a separate `score_backend=` on `baum_welch`.
 - **Date:** 2026-09-17
 - **Source:** none in the PRD — postdates it. Raised on `main` after PR #48
   (`feat/hmm-search-loop`) merged, in revision `04-hmm-v0.3.0`, as three questions: whether
@@ -63,8 +63,11 @@ implementation that has to be held equal to the first.
 ### 2. Every forward pass the search runs takes a named backend
 
 The convergence check inside `baum_welch` takes a `forward_backward` phase by name, as the
-scan already does, and the trials and the search pass theirs through. **How it is named is
-Open**; the constraints on either answer are decided here:
+scan already does, and the trials and the search pass theirs through. **It is named by a
+separate `score_backend=` on `baum_welch`**, resolved against `forward_backward`'s table
+before any work, as `backend=` is against `baum_welch`'s. The trials and `_search` already
+take a `score_backend` for the scan and forward it, so one name governs every forward pass a
+search runs. It holds these constraints:
 
 - **No result changes on python, cython, cpu_parallel or cuda.** The check's quantity is
   bit-identical across those phases, so every `unchanged` count, every stop and every
@@ -72,8 +75,10 @@ Open**; the constraints on either answer are decided here:
   `SearchResult` equality, against the check on `"python"`.
 - **The default stays `"python"`**, so every existing call, test and executed output in
   `docs/api/` is unchanged unless a caller asks.
-- **`torch` gets no forward phase**, and nothing substitutes one for it (ADR 0021). Under
-  `backend="torch"` the check stays on a phase `forward_backward` actually has.
+- **`torch` gets no forward phase**, and nothing substitutes one for it (ADR 0021).
+  `backend="torch"` pairs with any phase `forward_backward` has, and `score_backend="torch"`
+  is refused with the `ValueError` `_resolve` already raises for a phase an algorithm has not
+  reached.
 - **The contract sentence in `BaumWelchResult` is rewritten**, together with the comments at
   `_trials.py:170` and `_search.py:175` that rely on it, and `docs/api/hmm/baum_welch.md`
   documents the choice with executed output.
@@ -123,7 +128,7 @@ documented as interchangeable in result and differing in speed, with two facts a
 
 ### Negative / costs
 
-- **`baum_welch`'s public signature may grow**, depending on Open, and a published parameter
+- **`baum_welch`'s public signature grows by one keyword**, and a published parameter
   cannot be withdrawn without a breaking release.
 - **A search is still serial.** A round costs roughly its trial count times a few tenths of a
   second after §2, and the merge count grows with `S²`.
@@ -142,6 +147,11 @@ documented as interchangeable in result and differing in speed, with two facts a
   revision whose remaining goals are the training log, the docs audit and the release.
 - **Leaving the check on numpy.** Rejected on the measurement: it is the largest cost in a
   round, and it is the reference only by a sentence that described what the code did.
+- **Deriving the check's phase from `backend=`.** Rejected 2026-09-17. It needs no signature
+  change, but it maps a request for one algorithm's backend onto another algorithm's phase,
+  and onto `"python"` under `"torch"`: the substitution ADR 0021 forbids, done silently. It
+  would also make two combinations impossible to ask for: Cython EM with a `cpu_parallel` or
+  `cuda` check, and torch EM with a compiled check.
 - **Computing the check on the E-step's own bits.** Rejected: `torch`'s per-cycle entries are
   its own, within tolerance, so the stopping rule would then depend on the backend.
 
@@ -174,16 +184,6 @@ documented as interchangeable in result and differing in speed, with two facts a
 
 ## Open
 
-- **How the check names its phase**, which holds this record at Proposed:
-  - **(a) A separate `score_backend=` on `baum_welch`**, defaulting to `"python"` and
-    validated before any work, mirroring the trials and the search. Explicit, consistent with
-    ADR 0023 §7, and a new public keyword.
-  - **(b) Derived from `backend=`**: the same name where `forward_backward` has that phase,
-    `"python"` under `"torch"`. No signature change, but an implicit rule that maps one
-    backend's request onto another phase, which sits uneasily with ADR 0021's
-    no-substitution rule.
-
-  The trials' precedent and ADR 0021 favour (a). Decide it, then mark this record Accepted.
 - **The measured round after §2**, replacing the estimate above.
 - **Whether a search on `torch` actually leaves the serial path** on the tracked fixtures,
   measured rather than inferred from ADR 0023's step sensitivity.
@@ -191,5 +191,14 @@ documented as interchangeable in result and differing in speed, with two facts a
   read:** the profiler tracked as `search_round_profile.py`; the `DEFERRED.md` trigger of §3;
   §4's guidance in `docs/api/hmm/baum_welch.md` with executed output; a qualifying note under
   `HMMLIB-ACCOUNT.md` §12 pointing at the profile; and a pointer from ADR 0023 §7 to §2 here,
-  which extends it to the convergence check. The master plan's revision 04 goal for this
-  record lists them as acceptance criteria.
+  which extends it to the convergence check. The branch plan `feat-hmm-convergence-backend`
+  lists them as goals, moved there from the master plan's revision 04 goal for this record.
+
+## Resolved
+
+- **How the check names its phase.** Settled 2026-09-17 on `feat/hmm-convergence-backend`:
+  a separate `score_backend=` on `baum_welch`, defaulting to `"python"`, and not a phase
+  derived from `backend=` (see *Alternatives considered*). The trials' precedent decided it.
+  `_trials.py` already carried the keyword but passed it only to `_scan_d`, so the check was
+  the one forward pass a named phase did not reach. Under ADR 0021, a separate name is how a
+  caller asks for a phase, and nothing chooses one for them.

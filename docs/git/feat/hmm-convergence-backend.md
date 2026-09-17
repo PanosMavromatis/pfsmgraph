@@ -33,7 +33,7 @@ backend row, no compiled search.
 
 ## Context
 
-- ADR 0024 (Proposed, 2026-09-17) — the decision and its Open items.
+- ADR 0024 (Accepted 2026-09-17, choosing `score_backend=`) — the decision and its Open items.
 - ADR 0023 §7 — gave the scan the search's backend; this extends it to the check.
 - ADR 0021 — named backends, no substitution; weighs against option (b).
 - ADR 0020 — the bit-identity of python, cython, cpu_parallel and cuda.
