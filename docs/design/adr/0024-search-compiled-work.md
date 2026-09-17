@@ -106,9 +106,12 @@ trigger, "a topology search too slow to run at the model sizes in use", carrying
 When the search becomes public, and in `docs/api/hmm/baum_welch.md` now, the backends are
 documented as interchangeable in result and differing in speed, with two facts a caller needs:
 
-- **`backend="torch"` can change the search's path.** Its E-step is held only to ADR 0020's
-  tolerance, and ADR 0023's Open item measured that a candidate's total steps by 58–71 bits
-  when EM stops slightly elsewhere and the best `d` moves. No other phase can.
+- **`backend="torch"` is the only phase whose result can differ at all**, since its E-step is
+  held to ADR 0020's tolerance rather than to equality, and ADR 0023's Open item measured
+  that a candidate's total steps by 58–71 bits when EM stops slightly elsewhere and the best
+  `d` moves. Measured on the tracked fixtures it did not: 66 candidates, identical `d`,
+  identical cycles and bit-identical totals (see **Resolved**). It is also 350–400 times
+  slower than `cython` there, on the CPU, because `_search` takes no `device=`.
 - **At the model sizes measured, Cython is the fastest phase.** The parallel phases split one
   timestep across its cells, and with `S <= 8` a parallel region or device launch per timestep
   costs more than the work inside it.
@@ -184,14 +187,25 @@ documented as interchangeable in result and differing in speed, with two facts a
   method was compiled, since "search *drives* compiled work … so leaving the driver
   interpreted costs little". §1 agrees for the driver. The profile qualifies the conclusion:
   the driver was running the one uncompiled forward pass.
+- **Whether a torch search leaves the serial path** (`torch_search_path.py`, 2026-09-17,
+  4-vCPU Xeon, `score_backend="cython"` throughout so only the E-step differs). One
+  `_suggest_move` round from each saved model, split floor 200, seed
+  `SeedSequence(1, spawn_key=(1, 0))`, and the 3-round search from the one-state start:
+
+  | Round from | Candidates | cython | torch | EM cycles summed | `d` differs | Totals |
+  |---|---|---|---|---|---|---|
+  | `m001_0001_001`, S = 1 | 2 | 0 s | 124 s | 400 / 400 | 0 | tie, 2 of 2 |
+  | `m001_0005_005`, S = 5 | 20 | 2 s | 742 s | 2,340 / 2,340 | 0 | tie, 20 of 20 |
+  | `m008_0001_008`, S = 8 | 44 | 8 s | 2,768 s | 8,500 / 8,500 | 0 | tie, 44 of 44 |
+  | 3-round search from S = 1 | 3 rounds | 2 s | 802 s | same at every round | 0 | same moves, best 1774.0328 |
+
+  The unrounded data lengths differed by at most 1e-11 bits.
 - **Bit-identity of the phases**: ADR 0020, `test_forward_backward_backends.py` (on
   `tobytes()`), and `docs/api/hmm/baum_welch.md`'s executed comparison of compiled and
   reference `description_lengths`.
 
 ## Open
 
-- **Whether a search on `torch` actually leaves the serial path** on the tracked fixtures,
-  measured rather than inferred from ADR 0023's step sensitivity.
 - **Owed with the implementation, so the record's claims are checkable where they are
   read:** the profiler tracked as `search_round_profile.py`; the `DEFERRED.md` trigger of §3;
   §4's guidance in `docs/api/hmm/baum_welch.md` with executed output; a qualifying note under
@@ -207,3 +221,15 @@ documented as interchangeable in result and differing in speed, with two facts a
   `_trials.py` already carried the keyword but passed it only to `_scan_d`, so the check was
   the one forward pass a named phase did not reach. Under ADR 0021, a separate name is how a
   caller asks for a phase, and nothing chooses one for them.
+- **Whether a torch search leaves the serial path.** Measured 2026-09-17 on the tracked
+  fixtures (`torch_search_path.py`, figures under **Evidence**) and, on these, **it does
+  not**. With `score_backend="cython"` on both sides, so that only the E-step differs, all
+  66 candidates chose the same `d`, converged in the same number of EM cycles, and scored
+  **bit-identical** totals, so every ranking, winner and move agreed — including at `m008`,
+  where the winner led the runner-up by 0.0513 bits. The unrounded data lengths differed by
+  at most 1e-11 bits, which is torch's tolerance; the total absorbs it because the criterion
+  quantizes the parameters at `d` before scoring, and `TrialResult` keeps both quantities so
+  the difference is visible in `data_bits` and gone from `total_bits`. ADR 0023's step
+  sensitivity needs EM to stop somewhere materially different, which an ulp is not. Torch
+  stays the only phase that *could* differ, so §4 keeps the caution and attaches the
+  measurement to it.
