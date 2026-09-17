@@ -1,6 +1,6 @@
 # feat/hmm-search-log
 
-**Status**: active
+**Status**: merged — PR #50 — 2026-09-17
 **Created**: 2026-09-17
 **Subgoal**: Two — report search progress on standard output, and record `hmm-trainer-view.lsh`'s non-migration — `docs/plan/TODO.md`, revision 04-hmm-v0.3.0
 
