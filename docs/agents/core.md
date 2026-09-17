@@ -28,7 +28,13 @@ test pins against. An impossible candidate is a `Move` with no result at `+inf`,
 all-impossible round is an ordinary list rather than the original's crash; a pair of two transient
 states is not a candidate and is filtered by `closed_classes` first. Split trial `(s, t)` draws from
 `SeedSequence(entropy, spawn_key=round_key + (s, t))`, so its candidate is rebuildable from its
-identity alone. Acceptance against the incumbent is still the search loop's. Its 32 tests pin the composition, not the parts,
+identity alone. Acceptance against the incumbent is still the search loop's. **A merge round
+costs its pair count, and scoring dominates each trial** (`merge_round_cost.py`, 2026-09-17,
+4-vCPU host, `set11a_dInt`): 0.7 to 200 s for 1 to 120 pairs at `S = 2..16`, a log-log slope of
+1.17 against pairs, 1.3 to 1.7 s per pair. Within a trial `_suggest_d` takes 53-62% and `cython`
+EM 35-44%, because `_suggest_d`'s Brent evaluations run the numpy forward pass and take no
+`backend=`. Pruning pairs, as the alignment seed would, and a compiled forward pass inside the
+total are therefore separate savings, and the second roughly halves every trial. Its 32 tests pin the composition, not the parts,
 and **their first floor was vacuous**: the case converged in 180 cycles unfloored, so a floor of
 20 left a dropped `min_cycles` passing everything; assert that a threshold binds before trusting
 a test that passes it through. The
@@ -529,7 +535,7 @@ claim about the three members that have no code yet, and the test count is a cla
 belonging to other projects, and now also Python of our own — a runnable transliteration of
 the Lush original under `.scratch/hmm-lush/translation/`, written as a reading aid for the
 merge, and since 2026-09-14 the measurement scripts behind ADR 0020 under
-`.scratch/hmm-lush/measurements/`, joined 2026-09-15 by `viterbi_batch_speed.py`, the per-phase batch timings, which unlike the ADR 0020 scripts imports the public `pfsmgraph.hmm`. `param_representation_move_cost.py` followed on 2026-09-16, splitting a topology move's cost into building the candidate and scoring it; building is about 0.005% of the total, which is what settles the parameter representation's dense options on cost. `split_symmetry_breaking.py` joined the same day on `feat/hmm-split-state`, comparing how a split state's twins are told apart: the original's outbound redraw against a per-predecessor inbound perturbation. It is the evidence for [ADR 0022](../design/adr/0022-state-split-initialisation.md). Those are tracked so a decision record's evidence can
+`.scratch/hmm-lush/measurements/`, joined 2026-09-15 by `viterbi_batch_speed.py`, the per-phase batch timings, which unlike the ADR 0020 scripts imports the public `pfsmgraph.hmm`. `param_representation_move_cost.py` followed on 2026-09-16, splitting a topology move's cost into building the candidate and scoring it; building is about 0.005% of the total, which is what settles the parameter representation's dense options on cost. `split_symmetry_breaking.py` joined the same day on `feat/hmm-split-state`, comparing how a split state's twins are told apart: the original's outbound redraw against a per-predecessor inbound perturbation. It is the evidence for [ADR 0022](../design/adr/0022-state-split-initialisation.md). `merge_round_cost.py` joined on 2026-09-17 on `feat/hmm-scored-primitives`, timing a `suggest-merge` round and its phases against model size. Those are tracked so a decision record's evidence can
 be re-run rather than only read. They sit outside `tests/` because they measure the
 alternatives the record rejected.
 
