@@ -1,4 +1,4 @@
-"""The state split, against the invariants ADR 0022 makes contract.
+"""The state split and the state merge, against the invariants their decisions make contract.
 
 **Every test here reaches a private function**, labelled rather than hidden as
 ADR 0003 asks: ``_topology`` is private to ``pfsmgraph.hmm`` and nothing in it is
@@ -24,6 +24,16 @@ Sections:
 - **Reproducibility**: the same generator state gives a bit-identical candidate,
   and the draws follow ADR 0022's contract in count and in order.
 - **The domain**: what ``state`` may be.
+- **The merge**: each array against the incumbent's, exactly where the
+  arithmetic allows; the result as a model; the merge as an exact *lumping* of
+  the stationary chain; its domain; and a split-then-merge round trip.
+
+The merge has an oracle in the original only up to the three places it departs
+from ``merge-states`` (the branch plan for ``feat/hmm-merge-states``, goals
+2-4), so it too is tested by properties. The lumping is the one that is not a
+restatement of the formulas: weighting a merged state's outbound arcs by
+stationary mass makes the stationary flow on every arc and symbol add up
+exactly, which an independent stationary solve of the result can check.
 """
 
 from __future__ import annotations
@@ -37,9 +47,15 @@ from pfsmgraph.dataseq import USER_BASE, SequenceRecord, SymbolTable
 from pfsmgraph.hmm import HMMParams, viterbi
 from pfsmgraph.hmm import _topology
 from pfsmgraph.hmm._mdl import _corpus_description_length
-from pfsmgraph.hmm._numeric import rand_p_vector
+from pfsmgraph.hmm._numeric import closed_classes, rand_p_vector
 from pfsmgraph.hmm._viterbi import _viterbi
-from pfsmgraph.hmm._topology import _INBOUND_WIDTH, _SEED_NOISE, _SEED_WEIGHT, _split_state
+from pfsmgraph.hmm._topology import (
+    _INBOUND_WIDTH,
+    _SEED_NOISE,
+    _SEED_WEIGHT,
+    _merge_states,
+    _split_state,
+)
 
 from _lush_fixtures import FIXTURES, SAVED_MODELS, load_corpus_record, load_params
 
@@ -458,3 +474,277 @@ def test_a_state_that_is_not_an_integer_raises_type_error(three_states, state):
 def test_a_numpy_integer_state_is_accepted(three_states):
     result = _split_state(three_states, np.int64(2), rng=np.random.default_rng(SEED))
     assert result.n_states == 4
+
+
+# --- the merge --------------------------------------------------------------------
+
+#: Relative tolerance for quantities that pass through a stationary solve or a
+#: fibre average, which divides a sum by its own total.
+MERGE_RTOL = 1e-11
+MERGE_ATOL = 1e-14
+
+
+def _transient_params(rng, size, n_transient, n_user):
+    """A model with one closed class over its last ``size - n_transient`` states and
+    ``n_transient`` transient states that lead into it, with dead arcs, zero fibres on
+    some dead arcs, and some zero initial probabilities."""
+    core = np.arange(n_transient, size)
+    transition = np.zeros((size, size))
+    for i in core:
+        row = rng.dirichlet(np.ones(core.size)) * (rng.random(core.size) < 0.6)
+        row[(i - n_transient + 1) % core.size] += 0.2  # a cycle keeps the core closed
+        transition[i, core] = row
+    for i in range(n_transient):
+        row = rng.dirichlet(np.ones(size)) * (rng.random(size) < 0.5)
+        row[rng.choice(core)] += 0.2  # every transient state leaks into the core
+        transition[i] = row
+    transition /= transition.sum(axis=1, keepdims=True)
+    labels = closed_classes(transition)
+    assert labels.max() == 0 and np.flatnonzero(labels < 0).tolist() == list(range(n_transient))
+    output = np.zeros((size, size, USER_BASE + n_user))
+    output[..., USER_BASE:] = rng.dirichlet(np.full(n_user, 0.5), size=(size, size))
+    output[(transition == 0) & (rng.random((size, size)) < 0.5)] = 0.0
+    init = rng.dirichlet(np.ones(size)) * (rng.random(size) < 0.7)
+    init[core[0]] += 0.1
+    return HMMParams(init / init.sum(), transition, output, _vocabulary(n_user))
+
+
+def _merge_incumbents():
+    rng = np.random.default_rng([SEED, 1])
+    cases = [
+        pytest.param(_transient_params(rng, size, n_transient, n_user), id=f"random-S{size}-T{n_transient}")
+        for size, n_transient, n_user in ((3, 1, 3), (5, 2, 4), (8, 3, 6))
+    ]
+    for name in SAVED_MODELS:
+        params = load_params(FIXTURES / name)
+        cases.append(pytest.param(params, id=name.removesuffix(".hmm")))
+    return cases
+
+
+def _merge_pairs(transients):
+    """Every pair with at least one recurrent state, and with exactly
+    ``transients`` transient ones if that is given."""
+    out = []
+    for case in _merge_incumbents():
+        params = case.values[0]
+        transient = closed_classes(params.transition_p) < 0
+        for a in range(params.n_states):
+            for b in range(a + 1, params.n_states):
+                count = int(transient[a]) + int(transient[b])
+                if count < 2 and transients in (None, count):
+                    out.append(pytest.param((params, a, b), id=f"{case.id}-{a}+{b}"))
+    return out
+
+
+@pytest.fixture(scope="module", params=_merge_pairs(None))
+def merge(request):
+    params, a, b = request.param
+    return params, a, b, _merge_states(params, a, b)
+
+
+def _keep(params, b):
+    return np.flatnonzero(np.arange(params.n_states) != b)
+
+
+def _new_index(params, b):
+    """Where each old state other than ``b`` lands; sending ``b`` to ``a`` is the caller's."""
+    return np.arange(params.n_states) - (np.arange(params.n_states) > b)
+
+
+# what each array becomes
+
+
+def test_a_merge_has_one_state_fewer_and_the_same_vocabulary(merge):
+    params, _, _, result = merge
+    assert result.n_states == params.n_states - 1
+    assert result.n_symbols == params.n_symbols
+    assert result.vocabulary is params.vocabulary
+
+
+def test_a_merge_does_not_depend_on_the_order_of_the_pair(merge):
+    params, a, b, result = merge
+    swapped = _merge_states(params, b, a)
+    for name in ("init_state_p", "transition_p", "output_p"):
+        assert np.array_equal(getattr(swapped, name), getattr(result, name))
+
+
+def test_the_merged_state_sums_the_pair_initial_probability_and_the_rest_keep_theirs(merge):
+    """ADR 0022 section 1: the original's `:262` read `state_p` for every other state."""
+    params, a, b, result = merge
+    keep = _keep(params, b)
+    others = keep != a
+    assert np.array_equal(result.init_state_p[others], params.init_state_p[keep][others])
+    assert result.init_state_p[a] == params.init_state_p[a] + params.init_state_p[b]
+
+
+def test_arcs_and_fibres_that_touch_neither_state_are_unchanged(merge):
+    params, a, b, result = merge
+    keep = _keep(params, b)
+    others = np.flatnonzero(keep != a)
+    old = keep[others]
+    assert np.array_equal(result.transition_p[np.ix_(others, others)], params.transition_p[np.ix_(old, old)])
+    assert np.array_equal(result.output_p[np.ix_(others, others)], params.output_p[np.ix_(old, old)])
+
+
+def test_every_arc_into_the_merged_state_sums_the_pair_arcs(merge):
+    params, a, b, result = merge
+    keep = _keep(params, b)
+    others = np.flatnonzero(keep != a)
+    old = keep[others]
+    expected = params.transition_p[old, a] + params.transition_p[old, b]
+    assert np.array_equal(result.transition_p[others, a], expected)
+
+
+@pytest.mark.parametrize("pair", _merge_pairs(1))
+def test_a_transient_partner_contributes_nothing_to_the_merged_row(pair):
+    """Its weight is exactly 0 and the other's exactly 1, so the row is the recurrent
+    state's with the pair's columns collapsed, bit for bit. The fibres divide
+    `T*O` by `T` and so agree only to rounding."""
+    params, a, b = pair
+    result = _merge_states(params, a, b)
+    r = b if closed_classes(params.transition_p)[a] < 0 else a
+    keep = _keep(params, b)
+    expected = params.transition_p[r, keep].copy()
+    expected[a] = params.transition_p[r, a] + params.transition_p[r, b]
+    assert np.array_equal(result.transition_p[a], expected)
+    others = np.flatnonzero(keep != a)
+    live = result.transition_p[a, others] > 0
+    assert np.allclose(
+        result.output_p[a, others[live]], params.output_p[r, keep[others][live]], rtol=MERGE_RTOL, atol=0
+    )
+
+
+# the result as a model
+
+
+def test_a_merge_leaves_every_distribution_normalised(merge):
+    _, _, _, result = merge
+    assert abs(result.init_state_p.sum() - 1.0) <= SUM_TOL
+    assert np.all(np.abs(result.transition_p.sum(axis=1) - 1.0) <= SUM_TOL)
+    live = result.transition_p > 0
+    assert np.all(np.abs(result.output_p[live].sum(axis=-1) - 1.0) <= SUM_TOL)
+    assert np.all(result.output_p[..., :USER_BASE] == 0.0)
+
+
+def test_a_dead_arc_in_the_merge_has_an_all_zero_fibre(merge):
+    params, a, b, result = merge
+    dead = result.transition_p == 0
+    touched = np.zeros_like(dead)
+    touched[a, :] = touched[:, a] = True
+    assert np.all(result.output_p[dead & touched] == 0.0)
+
+
+# the merge as a lumping of the stationary chain
+
+
+def test_the_merged_state_takes_the_pair_stationary_mass(merge):
+    params, a, b, result = merge
+    lumped = params.state_p[_keep(params, b)].copy()
+    lumped[a] = params.state_p[a] + params.state_p[b]
+    assert np.allclose(result.state_p, lumped, rtol=MERGE_RTOL, atol=MERGE_ATOL)
+
+
+def test_the_stationary_flow_on_every_arc_and_symbol_adds_up(merge):
+    """`pi[i] * T[i, j] * O[i, j, k]` summed over the old arcs each new arc stands for.
+
+    This is what checks the three blocks together, including the self-loop's four
+    arcs, without restating any of their formulas."""
+    params, a, b, result = merge
+    old_flow = params.state_p[:, None, None] * params.transition_p[..., None] * params.output_p
+    new_index = _new_index(params, b)
+    new_index[b] = a
+    expected = np.zeros((result.n_states, result.n_states, result.n_symbols))
+    np.add.at(expected, (new_index[:, None], new_index[None, :]), old_flow)
+    new_flow = result.state_p[:, None, None] * result.transition_p[..., None] * result.output_p
+    assert np.allclose(new_flow, expected, rtol=MERGE_RTOL, atol=MERGE_ATOL)
+
+
+# the domain of the merge
+
+
+@pytest.fixture(scope="module")
+def with_transients():
+    return _transient_params(np.random.default_rng([SEED, 2]), 5, 2, 4)
+
+
+@pytest.mark.parametrize("pair", [(1, 1), (4, 4)])
+def test_a_state_cannot_be_merged_with_itself(with_transients, pair):
+    with pytest.raises(ValueError, match="with itself"):
+        _merge_states(with_transients, *pair)
+
+
+@pytest.mark.parametrize("pair", [(-1, 2), (2, 5), (7, 0)])
+def test_a_merge_outside_the_model_raises_value_error(with_transients, pair):
+    with pytest.raises(ValueError, match=r"must lie in \[0, 5\)"):
+        _merge_states(with_transients, *pair)
+
+
+@pytest.mark.parametrize("pair", [(1.0, 2), (2, True), ("1", 2), (None, 2)])
+def test_a_merge_of_a_non_integer_raises_type_error(with_transients, pair):
+    with pytest.raises(TypeError, match="must be an integer"):
+        _merge_states(with_transients, *pair)
+
+
+def test_a_merge_accepts_numpy_integers(with_transients):
+    assert _merge_states(with_transients, np.int64(2), np.int32(4)).n_states == 4
+
+
+def test_two_transient_states_are_refused(with_transients):
+    """The original's `safe-/` built an all-zero row here, which `HMMParams` rejects."""
+    assert closed_classes(with_transients.transition_p)[:2].tolist() == [-1, -1]
+    with pytest.raises(ValueError, match="cannot merge states 0 and 1: both are transient"):
+        _merge_states(with_transients, 1, 0)
+
+
+def test_a_reducible_incumbent_is_refused():
+    vocabulary = _vocabulary(3)
+    output = np.zeros((4, 4, USER_BASE + 3))
+    output[..., USER_BASE:] = 1 / 3
+    params = HMMParams(
+        np.full(4, 0.25),
+        [[0.0, 1.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 1.0], [0.0, 0.0, 1.0, 0.0]],
+        output,
+        vocabulary,
+    )
+    with pytest.raises(ValueError, match="reducible"):
+        _merge_states(params, 0, 2)
+
+
+# a split undone by a merge
+
+
+def _round_trip_cases():
+    out = []
+    for case in _merge_incumbents():
+        params = case.values[0]
+        for s in range(params.n_states):
+            out.append(pytest.param((params, s), id=f"{case.id}-s{s}"))
+    out.append(pytest.param((load_params(FIXTURES / "m001_0001_001.hmm"), 0), id="m001_0001_001-s0"))
+    return out
+
+
+@pytest.mark.parametrize("case", _round_trip_cases())
+def test_merging_the_twins_of_an_unseeded_split_restores_the_incumbent(case, monkeypatch):
+    """Exact where the split's halves sum back by Sterbenz's lemma; within rounding
+    where a fibre average or the stationary weights enter.
+
+    A transient state's twins are both transient, so that split cannot be undone."""
+    params, s = case
+    monkeypatch.setattr(_topology, "_SEED_WEIGHT", 0.0)
+    split = _split_state(params, s, rng=np.random.default_rng([SEED, s]))
+    size = params.n_states
+    if closed_classes(params.transition_p)[s] < 0:
+        with pytest.raises(ValueError, match="both are transient"):
+            _merge_states(split, s, size)
+        return
+
+    restored = _merge_states(split, size, s)
+    assert np.array_equal(restored.init_state_p, params.init_state_p)
+    others = np.flatnonzero(np.arange(size) != s)
+    assert np.array_equal(restored.transition_p[others, s], params.transition_p[others, s])
+    assert np.array_equal(
+        restored.transition_p[np.ix_(others, others)], params.transition_p[np.ix_(others, others)]
+    )
+    assert np.allclose(restored.transition_p, params.transition_p, rtol=MERGE_RTOL, atol=MERGE_ATOL)
+    live = params.transition_p > 0
+    assert np.allclose(restored.output_p[live], params.output_p[live], rtol=MERGE_RTOL, atol=MERGE_ATOL)
