@@ -35,6 +35,7 @@ Numbers are permanent and never reused. To add one, copy
 | [0021](0021-runtime-backend-selection.md) | A backend is chosen per call, defaults to `python`, and is never substituted | Accepted | 2026-09-14 | — |
 | [0022](0022-state-split-initialisation.md) | A state split preserves what was learned, and breaks symmetry on inbound arcs | Accepted | 2026-09-16 | — |
 | [0023](0023-topology-search-loop.md) | The topology search walks the original's loop and returns the best model it visits | Accepted | 2026-09-17 | — |
+| [0024](0024-search-compiled-work.md) | The topology search stays interpreted, and every forward pass it runs takes a named backend | Proposed | 2026-09-17 | — |
 
 † Was qualified in practice by 0012 until the first Cython kernel landed. Both are now
 superseded by 0018, which replaces the per-package backend with a family-wide one; the
@@ -104,13 +105,20 @@ release order follows what is declared, so `hmm` releases before `align`.
   dead end, `d` is chosen by a bounded exact scan rather than Brent's local minimum, a
   split gets 200 EM cycles, and the total's forward pass takes the search's backend. Read
   it before touching the search, `_trials.py`'s choice of `d`, or `_mdl.py`'s signatures.
+- **0024** reads after 0023 and is Proposed. It keeps the search, the trials and the surgery
+  interpreted, since a profile put 84% of a round in a numpy forward pass inside
+  `baum_welch`'s convergence check rather than in the search's own code, and requires that
+  check to take a named backend as the scan does; how it is named is its Open item. It also
+  defers parallelizing the search, along trials within a round, and states the conditions
+  under which that stays bit-identical to the serial run. Read it before compiling or
+  parallelizing anything above the kernels, or changing `baum_welch`'s signature.
 
 ## Coverage of the PRD decision table
 
 Every decision D1–D11 in PRD §2 is covered: D1–D2 and D3–D4 by 0005, D5 by 0006, D6 by
 0007, D7–D8 by 0008 (both now superseded by 0018), D9 by 0009, D10 by 0010, D11 by 0011. The inherited §1.2 decisions
-are covered by 0001–0004. 0012, 0013, 0014, 0015, 0016, 0017, 0018, 0019, 0020, 0021, 0022 and 0023 have no PRD counterpart —
-all twelve postdate the document; 0012 qualifies §6.1 and 0018 overrides it, 0013 settles a question §9 never
+are covered by 0001–0004. 0012, 0013, 0014, 0015, 0016, 0017, 0018, 0019, 0020, 0021, 0022, 0023 and 0024 have no PRD counterpart —
+all thirteen postdate the document; 0012 qualifies §6.1 and 0018 overrides it, 0013 settles a question §9 never
 raised, 0014 covers a working-area policy the PRD does not describe at all, 0015 answers a
 question the PRD did not know it had left open: which HMM formulation `pfsmgraph-hmm`
 implements, 0016 amends the phase count §1.2/§6 originally described as three, and 0017
@@ -119,5 +127,6 @@ settles a class-architecture question the PRD leaves to the migration — whethe
 qualifies the release order §3.4 and §11 derive from the graph, and 0020 is a numeric
 contract for a recurrence the PRD names only as "Baum-Welch", 0021 settles the runtime
 backend-selection question that 0003 deliberately left open, 0022 departs from the
-imported split surgery the PRD names only as "state merge and split", and 0023 settles the
-search strategy the PRD names only as "topology search".
+imported split surgery the PRD names only as "state merge and split", 0023 settles the
+search strategy the PRD names only as "topology search", and 0024 settles where that
+search's compiled work lives.
