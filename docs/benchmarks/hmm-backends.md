@@ -214,8 +214,8 @@ path torch: 3 rounds in 802 s
   model here has 1 to 8 states. The parallel phases are built for the opposite regime, and
   `viterbi_batch` measurements on the same L4 show `cuda` winning from `S = 64`.
 - **Torch ran on the CPU**, because the private search takes no `device=`. A torch search on
-  a GPU is therefore not measured here, and plumbing `device=` through the search waits on a
-  model size where a GPU E-step beats `cython`.
+  a GPU is therefore not measured here; plumbing `device=` through the search is deferred
+  under that trigger in [`docs/plan/DEFERRED.md`](../plan/DEFERRED.md).
 - **`cuda` and `cpu_parallel` were not re-timed for this page.** The per-forward-pass figures
   quoted in the guidance table come from `total_forward_cost.py` as recorded in ADR 0024 §4.
 - **A tie is not a proof.** Torch agreeing on 66 candidates bounds the perturbation at these
