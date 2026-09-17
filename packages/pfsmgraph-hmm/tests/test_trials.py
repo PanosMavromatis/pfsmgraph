@@ -467,3 +467,30 @@ def test_a_ranked_split_is_rebuilt_from_its_identity_alone(case):
     for got, want in zip(_arrays(move.result.params), _arrays(alone.params)):
         assert got.tobytes() == want.tobytes()
     assert move.total_bits == alone.total_bits
+
+
+# --- the check's phase ------------------------------------------------------------
+
+
+def _assert_same_trial(ours, reference):
+    """Field by field: ``HMMParams`` holds arrays, so dataclass ``==`` is ambiguous."""
+    for got, want in zip(_arrays(ours.params), _arrays(reference.params)):
+        assert got.tobytes() == want.tobytes()
+    assert (ours.d, ours.total_bits, ours.data_bits, ours.cycles, ours.converged) == (
+        reference.d, reference.total_bits, reference.data_bits, reference.cycles,
+        reference.converged,
+    )
+
+
+def test_the_check_phase_changes_no_trial(case, merge_case, score_backend):
+    """ADR 0024 section 2: ``score_backend`` reaches EM's check and the scan, and every
+    phase is bit-identical, so both trials are ``==`` their default-phase fixtures."""
+    params, records, _, trial = case
+    ours = _try_split(
+        params, records, STATE, rng=np.random.default_rng(SEED + 1), min_cycles=MIN_CYCLES,
+        score_backend=score_backend,
+    )
+    _assert_same_trial(ours, trial)
+
+    params, records, _, trial = merge_case
+    _assert_same_trial(_try_merge(params, records, *PAIR, score_backend=score_backend), trial)

@@ -26,7 +26,7 @@ from __future__ import annotations
 import pytest
 
 from pfsmgraph.hmm import backends
-from pfsmgraph.hmm._backends import _TABLE
+from pfsmgraph.hmm._backends import _TABLE, _status
 
 
 @pytest.fixture(scope="module", params=[row.name for row in _TABLE["viterbi"]])
@@ -35,4 +35,17 @@ def backend(request):
     status = {s.name: s for s in backends("viterbi")}[request.param]
     if not status.available:
         pytest.skip(f"backend {status.name!r} unavailable: {status.reason}")
+    return request.param
+
+
+@pytest.fixture(scope="module", params=[row.name for row in _TABLE["forward_backward"]])
+def score_backend(request):
+    """One `forward_backward` phase name for `score_backend=`, or a skip naming why it
+    cannot run here. `torch` has no row in that table, so it is never a parameter.
+
+    Read through the private `_status`, because `backends()` answers only for public
+    calls and `forward_backward` is not one."""
+    status = {s.name: s for s in _status("forward_backward")}[request.param]
+    if not status.available:
+        pytest.skip(f"phase {status.name!r} unavailable: {status.reason}")
     return request.param
