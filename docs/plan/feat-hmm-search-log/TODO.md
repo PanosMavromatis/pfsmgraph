@@ -98,8 +98,39 @@ at a time by hand.
     > round's choice fell to `sorted`'s stability. Measured at `split_min_cycles=30` on a
     > corpus slice, so it is no claim about the full corpus at ADR 0023 §6's 200-cycle
     > floor; it is a claim that the column reports something the original's log could not.
-  - [ ] Test the **format** against the three `_training_log` oracles — column order, the three marker forms (`n ^`, `i v j`, `-`), and that a start row precedes every move — never the values. Add a merge-accepting case, which no oracle has.
+  - [x] Test the **format** against the three `_training_log` oracles — column order, the three marker forms (`n ^`, `i v j`, `-`), and that a start row precedes every move — never the values. Add a merge-accepting case, which no oracle has.
+    > **Note:** 11 tests, `test_search.py` 37 -> 48, suite 3088 -> 3099. The oracle is used
+    > twice over: `_oracle_rows` parses all seven lines, and
+    > `test_the_oracle_identifies_its_own_column_order` asserts `data-dl + model-dl ==
+    > total-dl` on each, which is what makes the column *order* recoverable from the files
+    > rather than only from `training-log-line`'s source. No printed value is pinned.
+    > **Note:** The oracle's tolerance is measured, not guessed: `%g` rounds each field to
+    > six significant digits independently, so the halves miss their own printed total by
+    > up to **3.4e-6** relative and `rel=1e-6` fails on four of the seven lines. Our own
+    > rows need no tolerance at all and get none -- the source values are known, so the
+    > assertion compares the emitted text to `f"{expected:g}"` exactly. The first draft
+    > used `rel=1e-6` on our rows and failed, two tests below a docstring warning about
+    > precisely that.
+    > **Note:** Mutation-checked against **nine** defects, all killed -- but two survived
+    > the first pass and are the reason two tests exist. Swapping `Data DL` and `Model DL`
+    > inside `_log_move_row` passed everything, because the start row and the move row are
+    > laid out by two separate calls and only the first was pinned. And negating the
+    > runner-up margin passed, because the only scripted round had one candidate and so
+    > printed `-` rather than a number: **a sign is only pinned by a case that has one.**
+    > **Note:** The merge row is scripted, not searched for. Every logged move in all three
+    > oracles is a split, asserted as `{"-", "0 ^", "2 ^"}`, so whether this corpus would
+    > ever accept a merge is a fact about the corpus where this is a test about the format.
+    > **Note:** Scripting a round *and* passing `log=` needs real `HMMParams` in each
+    > `Move.result`. The existing `_Script` puts a bare `object()` there, which is fine
+    > while the walk only compares totals but would raise under a log, since `_halves`
+    > calls `_model_description_length`. The new tests build real results instead.
   - [ ] Document whatever this exports in `docs/api/hmm/`, with executed blocks per ADR 0013. Note that a log's output is host-independent here only if the numbers in the example are, which is the constraint `docs/benchmarks/` exists to take off these pages.
+  - [ ] Sync `docs/agents/core.md`, **last**, in one commit. Three counts are already stale
+        as of the format tests -- `2962` twice and `3088` once, now 2973 and 3099 -- and the
+        docs subgoal above moves them again, since `tests/test_api_docs.py` executes every
+        block a new page adds. The prose owes an update too: core.md's `baum_welch` paragraph
+        says its `log=` is "not the Lush training log, **which is per-topology history for
+        revision 04**", a forward reference this branch discharges.
 
 - [ ] Record that `hmm-trainer-view.lsh` (237 lines) migrated **nowhere**, and why, so the omission reads as a decision rather than an oversight. It is the only file in `Code/HMMlib/` with no destination.
   - [ ] Decide where the record lives. Four places already name the file and none of them *is* the record: `HMMLIB-ACCOUNT.md` §11 (which says "it migrates nowhere" in passing, inside a section whose headline claim carries a 2026-09-17 correction), `DEFERRED.md:580` (which cites this revision for the reason), ADR 0017 and ADR 0023. The test is where a reader asking "what happened to the GUI?" would actually look.

@@ -23,25 +23,30 @@ choice of ``d``, so most of this file tests properties and constructed cases:
 
 from __future__ import annotations
 
+import io
+
 import numpy as np
 import pytest
 
 from pfsmgraph.dataseq import USER_BASE, SequenceRecord, SymbolTable
 from pfsmgraph.hmm import HMMParams, baum_welch
 from pfsmgraph.hmm import _search as search_module
-from pfsmgraph.hmm._mdl import _scan_d
+from pfsmgraph.hmm._mdl import _model_description_length, _scan_d
 from pfsmgraph.hmm._numeric import rand_p_vector
 from pfsmgraph.hmm._search import (
     SPLIT_MIN_CYCLES,
     START_NOISE_WIDTH,
+    _COLUMNS,
     Round,
     SearchResult,
+    _log_start_row,
+    _marker,
     _one_state_model,
     _search,
 )
 from pfsmgraph.hmm._trials import Move, TrialResult
 
-from _lush_fixtures import FIXTURES, load_corpus_record, load_params
+from _lush_fixtures import FIXTURES, SAVED_MODELS, load_corpus_record, load_params
 
 SEED = 20260917
 N_USER = 3
@@ -442,3 +447,242 @@ def test_the_start_passes_score_backend_to_baum_welch(monkeypatch):
         score_backend="cython",
     )
     assert [keywords.get("score_backend") for keywords in seen] == ["cython"]
+
+
+# ---------------------------------------------------------------------------
+# The log's format.
+#
+# **The oracle is the layout, never the values.** Line 1 of all three tracked
+# ``_training_log`` files carries ``d = 29``, Brent's local minimum, where ADR 0023
+# section 5's bounded scan returns 13 on the same one-state model -- 10.46 bits cheaper.
+# A test pinning printed numbers would pin a defect this project deliberately fixed.
+
+
+def _oracle_rows():
+    """Every line of the three tracked ``_training_log`` files, parsed.
+
+    Yields ``(name, raw, size, marker, numbers)``, the marker rendered in the form
+    :func:`~._search._marker` produces so the two compare directly.
+    """
+    for name in SAVED_MODELS:
+        for raw in (FIXTURES / name / "_training_log").read_text().splitlines():
+            fields = raw.split()
+            size = int(fields[0])
+            if fields[1] == "-":
+                yield name, raw, size, "-", fields[2:]
+            elif fields[2] == "^":
+                yield name, raw, size, f"{int(fields[1])} ^", fields[3:]
+            else:
+                yield name, raw, size, f"{int(fields[1])} v {int(fields[3])}", fields[4:]
+
+
+def _log_of(**keywords):
+    """Run a search with a log attached, and return ``(result, text)``."""
+    log = io.StringIO()
+    result = _search(
+        _corpus(), seed=np.random.SeedSequence(SEED), backend="cython",
+        score_backend="cython", log=log, **keywords,
+    )
+    return result, log.getvalue()
+
+
+def _data_rows(text):
+    """The rows between the header and the closing sentence."""
+    lines = text.splitlines()
+    assert lines[-1].lstrip().startswith("stopped:"), lines[-1]
+    return lines[1:-1]
+
+
+@pytest.fixture(scope="module")
+def two_state_params():
+    """A real two-state model, so a constructed merge has something coherent to merge."""
+    result = _search(
+        _corpus(), start=VOCABULARY, seed=np.random.SeedSequence(SEED),
+        max_rounds=1, patience=1, backend="cython", score_backend="cython",
+    )
+    assert result.rounds[0].move.kind == "split"
+    return result.rounds[0].move.result.params
+
+
+def test_the_oracle_identifies_its_own_column_order():
+    """The original's field order is recoverable from the files, not only from its source.
+
+    ``data-dl + model-dl == total-dl`` says which three of the numeric fields are which
+    and in what order, which is what makes the column order an *oracle* rather than a
+    transcription of ``training-log-line``. **The tolerance is measured, not guessed**:
+    ``%g`` rounds each field to six significant digits independently, so the printed
+    halves miss their printed total by up to 3.4e-6 relative, and ``rel=1e-6`` fails on
+    four of the seven lines. Same shape as the four-decimal model fixtures, where
+    ``5e-5`` is exactly attainable and fails by less than an ulp.
+    """
+    rows = list(_oracle_rows())
+    assert len(rows) == 7
+    for name, raw, size, _marker_text, numbers in rows:
+        data, model, total, d, test_data = (float(value) for value in numbers)
+        assert size >= 1, raw
+        assert data + model == pytest.approx(total, rel=1e-5), (name, raw)
+        assert d == int(d) and d >= 1, raw
+        # ``test-data-dl``, the column the port drops: never assigned by the original.
+        assert test_data == 0.0, raw
+
+
+def test_the_ported_columns_follow_the_original_order():
+    """``_COLUMNS`` carries ``training-log-line``'s fields in its order, less the dropped one."""
+    labels = [label for label, _, _ in _COLUMNS]
+    assert labels[1:7] == ["Size", "Move", "Data DL", "Model DL", "Total DL", "d"]
+    # The four with no counterpart: the original's user ran one trial at a time by
+    # hand, so no round of it ranked candidates or lost to a runner-up.
+    assert labels[0] == "Round"
+    assert labels[7:] == ["Candidates", "Runner-Up", "Comments"]
+
+
+def test_the_marker_forms_are_the_original_s_three():
+    """``n ^``, ``i v j``, ``-`` -- and the oracles exhibit only two of them."""
+    assert _marker(Move("split", (7,), 0, None, 0.0)) == "7 ^"
+    assert _marker(Move("merge", (2, 5), 0, None, 0.0)) == "2 v 5"
+    # No merge was ever logged, which is why the merge row below is constructed.
+    assert {row[3] for row in _oracle_rows()} == {"-", "0 ^", "2 ^"}
+
+
+def test_a_start_row_precedes_every_move():
+    result, text = _log_of(start=VOCABULARY, max_rounds=2, patience=2)
+    rows = _data_rows(text)
+    assert len(rows) == len(result.rounds) + 1
+    start, *moves = rows
+    assert start.split()[2] == "-"
+    for row in moves:
+        # A split row reads ``n ^`` and a merge ``i v j``, so field 3 is the operator.
+        assert row.split()[3] in {"^", "v"}, row
+
+
+def test_the_round_column_is_the_row_number_not_the_round_index():
+    """Deliberately out of step, and pinned so it stays deliberate.
+
+    The column counts the walk's rows, of which 0 is the starting model.
+    ``SearchResult.rounds[r].index`` stays ``r`` because it is also the round's seed
+    component -- round ``r`` draws from ``spawn_key + (1, r)`` (ADR 0023 section 2) --
+    so renumbering it to match the column would silently re-seed every search.
+    """
+    result, text = _log_of(start=VOCABULARY, max_rounds=2, patience=2)
+    columns = [int(row.split()[0]) for row in _data_rows(text)]
+    assert columns == [0, *[round_.index + 1 for round_ in result.rounds]]
+    assert [round_.index for round_ in result.rounds] == list(range(len(result.rounds)))
+
+
+def test_a_merge_row_uses_the_original_s_i_v_j_form(monkeypatch, start_total, two_state_params):
+    """The case no oracle has: every logged move in all three files is a split.
+
+    The merge is scripted rather than searched for, because whether this corpus ever
+    accepts one is a fact about the corpus and this is a test about the format.
+    """
+    one_state = start_total.start
+    monkeypatch.setattr(
+        search_module, "_suggest_move",
+        lambda params, records, **keywords: [
+            Move("merge", (0, 1), 0, one_state, one_state.total_bits)
+        ],
+    )
+    _, text = _log_of(start=two_state_params, max_rounds=1, patience=1)
+    rows = _data_rows(text)
+    assert len(rows) == 2
+    assert rows[0].split()[2] == "-"
+    # Round 1, one state after the merge, and the original's ``i v j``.
+    assert rows[1].split()[:5] == ["1", "1", "0", "v", "1"]
+
+
+def test_a_move_row_places_its_columns_in_the_original_s_order(
+    monkeypatch, start_total, two_state_params
+):
+    """The move row's own columns, pinned separately from the start row's.
+
+    **Found by mutation.** Swapping ``Data DL`` and ``Model DL`` inside
+    ``_log_move_row`` survived all nine tests here, because the start row and the move
+    row are laid out by two separate calls and only the first was pinned. Pinning one
+    row says nothing about the other.
+    """
+    one_state = start_total.start
+    monkeypatch.setattr(
+        search_module, "_suggest_move",
+        lambda params, records, **keywords: [
+            Move("merge", (0, 1), 0, one_state, one_state.total_bits)
+        ],
+    )
+    _, text = _log_of(start=two_state_params, max_rounds=1, patience=1)
+    fields = _data_rows(text)[1].split()
+    model_bits = _model_description_length(one_state.params, one_state.d)
+    assert fields[5:9] == [
+        f"{one_state.total_bits - model_bits:g}",
+        f"{model_bits:g}",
+        f"{one_state.total_bits:g}",
+        f"{one_state.d:g}",
+    ]
+    # Candidates, then a runner-up column reading ``-`` because the round had only one
+    # candidate, then an empty Comments the row's rstrip removes.
+    assert fields[9:] == ["1", "-"]
+
+
+def test_the_runner_up_column_is_what_the_round_gave_up(monkeypatch, start_total, two_state_params):
+    """The margin is the runner-up's total *minus* the winner's, so it is never negative.
+
+    **Found by mutation.** Negating the subtraction survived every other test here,
+    because the only scripted round had a single candidate and so printed ``-`` rather
+    than a number. A sign is only pinned by a case that has one.
+    """
+    winner = start_total.start
+    runner_up = TrialResult(
+        winner.params, winner.d, winner.total_bits + 12.5,
+        winner.data_bits, winner.cycles, winner.converged,
+    )
+    monkeypatch.setattr(
+        search_module, "_suggest_move",
+        lambda params, records, **keywords: [  # ranked, as ``_suggest_move`` returns them
+            Move("merge", (0, 1), 0, winner, winner.total_bits),
+            Move("split", (0,), 0, runner_up, runner_up.total_bits),
+        ],
+    )
+    _, text = _log_of(start=two_state_params, max_rounds=1, patience=1)
+    fields = _data_rows(text)[1].split()
+    assert fields[9:] == ["2", "+12.5"]
+
+
+def test_the_printed_halves_are_taken_at_d_and_not_from_data_bits(start_total):
+    """The decomposition trap, pinned on a case where it is 2.5 bits wide.
+
+    ``TrialResult.data_bits`` is the corpus length of the *unrounded* parameters, which
+    ``d`` never touched, so printing it beside ``total - data_bits`` would push the
+    whole quantization gap into the model column.
+    """
+    result = start_total.start
+    log = io.StringIO()
+    _log_start_row(log, result)
+    data_text, model_text, total_text = log.getvalue().split()[3:6]
+    model_bits = _model_description_length(result.params, result.d)
+    # Compared as *text*, so there is no tolerance to get wrong. The oracle test above
+    # needs one because it compares the original's independently rounded fields to each
+    # other; here the source values are known, so ``%g`` of them is the exact expectation.
+    assert model_text == f"{model_bits:g}"
+    assert data_text == f"{result.total_bits - model_bits:g}"
+    assert total_text == f"{result.total_bits:g}"
+    # The trap: the unrounded corpus length is 2.57 bits away on this corpus, and 1.5 to
+    # 29 bits away on the three tracked models.
+    assert abs(float(data_text) - result.data_bits) > 1.0
+
+
+def test_the_nested_convergence_log_is_silenced():
+    """``baum_welch``'s ``log=`` is never passed down, so no EM block reaches this stream.
+
+    Checked on the text rather than by a spy, because the EM runs that matter are
+    ``_trials``', not the one call this module makes.
+    """
+    _, text = _log_of(start=VOCABULARY, max_rounds=1, patience=1)
+    for fragment in ("cycle", "change", "quiet", "converged after", "max_cycles"):
+        assert fragment not in text, fragment
+
+
+def test_no_log_writes_nothing():
+    """``log=None`` is the default and reports nothing at all."""
+    result = _search(
+        _corpus(), start=VOCABULARY, seed=np.random.SeedSequence(SEED),
+        max_rounds=1, patience=1, backend="cython", score_backend="cython",
+    )
+    assert len(result.rounds) == 1
