@@ -191,6 +191,9 @@ per arm.
 
 - **The minimum EM budget after a split**: its size, and whether it is a cycle count or a
   change in the stop rule. It belongs to `try-split` and the search loop (§4).
+  *(Resolved 2026-09-17 by [ADR 0023](0023-topology-search-loop.md) §6: a cycle count,
+  `min_cycles`, defaulting to 200 in the search. On `m008_0001_008` a floor of 100 or less
+  separated none of 16 split trials and 200 separated all of them.)*
 - **Whether `w` and the 1% seed should be exposed as parameters.** They are fixed here; the
   measurement did not separate `w = 0.01` from `0.1` beyond rounding luck.
 
