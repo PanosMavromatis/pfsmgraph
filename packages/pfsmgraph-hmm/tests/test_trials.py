@@ -1,4 +1,4 @@
-"""Tests for ``_trials._try_split``, the scored split trial.
+"""Tests for ``_trials``: ``_try_split`` and ``_try_merge``, the scored trials.
 
 The trial is a composition -- ADR 0022's split, ``baum_welch`` under a minimum
 budget, ``_suggest_d``, ``_total_description_length`` -- each tested in its own
@@ -22,8 +22,8 @@ from pfsmgraph.hmm._mdl import (
     _suggest_d,
     _total_description_length,
 )
-from pfsmgraph.hmm._topology import _split_state
-from pfsmgraph.hmm._trials import TrialResult, _try_split
+from pfsmgraph.hmm._topology import _merge_states, _split_state
+from pfsmgraph.hmm._trials import TrialResult, _try_merge, _try_split
 
 SEED = 20260917
 # Above the 180 cycles this case converges in without a floor, so the floor binds.
@@ -142,3 +142,95 @@ def test_backend_batch_size_and_floor_reach_baum_welch(case, monkeypatch):
         batch_size=1,
     )
     assert seen == {"backend": "python", "batch_size": 1, "min_cycles": 7}
+
+
+# --- try-merge -------------------------------------------------------------------
+
+PAIR = (0, 2)
+
+
+@pytest.fixture(scope="module")
+def merge_case():
+    rng = np.random.default_rng(SEED + 2)
+    params = _random_params(rng, 3, 3)
+    records = _random_corpus(rng, 3, (60, 40))
+    before = tuple(array.tobytes() for array in _arrays(params))
+    return params, records, before, _try_merge(params, records, *PAIR)
+
+
+def test_the_merge_trial_is_merge_then_baum_welch_bit_for_bit(merge_case):
+    params, records, _, trial = merge_case
+    expected = baum_welch(_merge_states(params, *PAIR), records)
+
+    for got, want in zip(_arrays(trial.params), _arrays(expected.params)):
+        assert got.tobytes() == want.tobytes()
+    assert trial.cycles == expected.cycles and trial.converged == expected.converged
+
+
+def test_the_merge_score_is_the_total_at_the_chosen_d_and_is_called(merge_case, monkeypatch):
+    params, records, _, trial = merge_case
+    assert trial.d == _suggest_d(trial.params, records)
+    assert trial.total_bits == _total_description_length(trial.params, records, trial.d)
+
+    monkeypatch.setattr(_trials, "_total_description_length", lambda *_: 1234.5)
+    assert _try_merge(params, records, *PAIR).total_bits == 1234.5
+
+
+def test_the_merge_data_bits_is_the_unrounded_corpus_length(merge_case):
+    _, records, _, trial = merge_case
+    assert trial.data_bits == _corpus_description_length(*_arrays(trial.params), records)
+    assert trial.data_bits != _data_description_length(trial.params, records, trial.d)
+
+
+def test_the_merge_candidate_has_one_fewer_state_and_the_incumbent_is_untouched(merge_case):
+    params, _, before, trial = merge_case
+    assert trial.params.n_states == params.n_states - 1
+    assert tuple(array.tobytes() for array in _arrays(params)) == before
+
+
+def test_the_order_of_the_pair_does_not_matter(merge_case):
+    # So ranking can enumerate unordered pairs, as suggest-merge does.
+    params, records, _, trial = merge_case
+    swapped = _try_merge(params, records, *reversed(PAIR))
+    for got, want in zip(_arrays(swapped.params), _arrays(trial.params)):
+        assert got.tobytes() == want.tobytes()
+    assert (swapped.d, swapped.total_bits, swapped.data_bits) == (
+        trial.d,
+        trial.total_bits,
+        trial.data_bits,
+    )
+
+
+def test_a_pair_of_two_transient_states_is_refused(merge_case):
+    # States 0 and 1 drain into the absorbing state 2, so both carry no
+    # stationary mass; suggest-merge filters such a pair before trying it.
+    _, records, _, _ = merge_case
+    output = np.zeros((3, 3, USER_BASE + 3))
+    output[:, :, USER_BASE:] = 1 / 3
+    params = HMMParams(
+        [1.0, 0.0, 0.0],
+        [[0.5, 0.5, 0.0], [0.0, 0.5, 0.5], [0.0, 0.0, 1.0]],
+        output,
+        SymbolTable(["s0", "s1", "s2"]),
+    )
+    with pytest.raises(ValueError, match="both are transient"):
+        _try_merge(params, records, 0, 1)
+
+
+def test_the_merge_floor_defaults_to_the_original_rule_and_is_passed_through(
+    merge_case, monkeypatch
+):
+    params, records, _, _ = merge_case
+    seen = []
+
+    def spy(candidate, records, **keywords):
+        seen.append(keywords)
+        return baum_welch(candidate, records, min_cycles=keywords["min_cycles"])
+
+    monkeypatch.setattr(_trials, "baum_welch", spy)
+    _try_merge(params, records, *PAIR)
+    _try_merge(params, records, *PAIR, min_cycles=7, backend="python", batch_size=1)
+    assert seen == [
+        {"backend": "python", "batch_size": None, "min_cycles": 0},
+        {"backend": "python", "batch_size": 1, "min_cycles": 7},
+    ]

@@ -1,4 +1,4 @@
-"""Scored trials of a topology move for the revision 04 search: ``try-split``.
+"""Scored trials of a topology move for the revision 04 search: ``try-split`` and ``try-merge``.
 
 Private to ``pfsmgraph.hmm``: nothing here is re-exported from the package's
 ``__init__``. A trial builds one candidate with :mod:`._topology`, re-converges it
@@ -16,6 +16,14 @@ judged. What the original also did per trial and this does not -- a Viterbi path
 the trials file, the GUI's guards -- is recorded in the branch plan for
 ``feat/hmm-scored-primitives``, goal 1.
 
+**``try-merge`` (``:858-881``) is the same eleven lines with a different surgery**, so
+both trials share :func:`_re_converge_and_score`. The candidate is
+:func:`~._topology._merge_states`, whose three departures from ``merge-states`` its
+docstring records, and its weights stay stationary mass rather than E-step occupancy:
+on every tracked model, trained flat or per record, the two agree to 0.003 and no state
+is transient (the branch plan, goal 3). A merge takes no minimum EM budget by default,
+since unlike a split it does not start at the incumbent's likelihood.
+
 **The score is obtained by calling** :func:`~._mdl._total_description_length`, never
 by assembling it, so a later change of criterion (PRD section 8) substitutes one
 function. ``d`` comes from :func:`~._mdl._suggest_d`, the original's Brent search
@@ -31,7 +39,7 @@ import numpy as np
 from ._baum_welch import baum_welch
 from ._mdl import _suggest_d, _total_description_length
 from ._params import HMMParams
-from ._topology import _split_state
+from ._topology import _merge_states, _split_state
 
 __all__: list[str] = []
 
@@ -80,7 +88,44 @@ def _try_split(
         which the split preserves exactly before its seed.
     """
     records = list(records)
-    candidate = _split_state(params, state, rng=rng)
+    return _re_converge_and_score(
+        _split_state(params, state, rng=rng), records, min_cycles, backend, batch_size
+    )
+
+
+def _try_merge(
+    params: HMMParams,
+    records,
+    first: int,
+    second: int,
+    *,
+    min_cycles: int = 0,
+    backend: str = "python",
+    batch_size: int | None = None,
+) -> TrialResult:
+    """Merge ``first`` and ``second``, re-converge the candidate, choose its ``d`` and score it.
+
+    :param params: the incumbent model, with ``S`` states.
+    :param records: the corpus, any sequence of ``SequenceRecord``.
+    :param first: one state of the pair; the order of the two does not matter.
+    :param second: the other state, distinct from ``first``.
+    :param min_cycles: the fewest EM cycles before the stopping rule may fire; ``0``,
+        the default, is the original's rule.
+    :param backend: passed to :func:`~._baum_welch.baum_welch`.
+    :param batch_size: passed to :func:`~._baum_welch.baum_welch`.
+    :returns: the ``S - 1``-state candidate, re-converged and scored.
+    :raises ValueError: from :func:`~._topology._merge_states`, including for a pair of
+        two transient states, which ``suggest-merge`` filters out before trying them.
+    :raises ImpossibleSequenceError: when a record has no path under the candidate.
+    """
+    records = list(records)
+    return _re_converge_and_score(
+        _merge_states(params, first, second), records, min_cycles, backend, batch_size
+    )
+
+
+def _re_converge_and_score(candidate, records, min_cycles, backend, batch_size):
+    """What both trials do after their surgery: ``run-converge``, ``suggest-d``, the score."""
     converged = baum_welch(
         candidate, records, backend=backend, batch_size=batch_size, min_cycles=min_cycles
     )
