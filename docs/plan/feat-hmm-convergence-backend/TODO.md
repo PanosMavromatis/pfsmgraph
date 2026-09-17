@@ -4,25 +4,22 @@
 **Created**: 2026-09-17
 **Subgoal**: Settle how the topology search uses the compiled backends, and accept ADR 0024 — `docs/plan/TODO.md`, revision 04-hmm-v0.3.0
 
+## Context
+
+[ADR 0024](../../design/adr/0024-search-compiled-work.md) was drafted 2026-09-17 at Proposed. This work comes **before the `docs/api/` audit** because it may add a public keyword to `baum_welch`, and before the training log because that goal designs around `baum_welch(..., log=)`. Three questions were asked after PR #48: does the search layer need compiling (no, ADR 0024 §1); how Cython relates to the parallel phases in a full search (they are alternatives chosen per call by name, not layers, and all but `torch` are bit-identical; §2 and §4); and should parallelizing the search be recorded for later (yes, along trials; §3). The profile that answered the first is the Note under goal 4, and it found the round's real cost: `baum_welch`'s convergence check runs the numpy forward pass whatever `backend=` says (`_baum_welch.py:302`, `_finish` at `:320`), which ADR 0023 §7's `score_backend=` could not reach. This **qualifies the release goal's expectation** from `HMMLIB-ACCOUNT.md` §12, that leaving the driver interpreted "costs little": true of the driver, which was running the one uncompiled forward pass.
+
+The nine goals below are the master plan goal's acceptance criteria, moved here verbatim when the branch opened, so that this file is the whole target of `/hitl-step`.
+
 ## Goals
 
-- [ ] Decide ADR 0024's Open item and accept the record
-  - [ ] Choose **(a)** a separate `score_backend=` on `baum_welch`, default `"python"`, validated before any work (the trials' precedent, ADR 0021; recommended by the ADR), or **(b)** the check's phase derived from `backend=`, `"python"` under `"torch"`
-  - [ ] Record the answer in ADR 0024 and mark it Accepted in the record and its `adr/README.md` row
-- [ ] Implement the check's phase
-  - [ ] `baum_welch`'s check (`_baum_welch.py:302`) and `_finish` (`:320`) take the chosen phase
-  - [ ] `_re_converge_and_score` (`_trials.py:165-173`) and `_search` (`_search.py:174`) pass `score_backend` through
-  - [ ] Rewrite `BaumWelchResult`'s "reference forward pass on every backend" sentence and the comments at `_trials.py:170` and `_search.py:175`; no kernel and no backend row
-- [ ] Test it
-  - [ ] `BaumWelchResult` fields `==` with the check on each available `forward_backward` phase against `"python"`
-  - [ ] A trial's and a search's results `==` likewise
-  - [ ] With (a): an invalid or `torch` check phase is refused before any work
-  - [ ] The default leaves every existing test and executed output unchanged
-- [ ] Measure it
-  - [ ] Track `.scratch/hmm-lush/measurements/search_round_profile.py` with the master plan Note's setup, re-run the round, and replace ADR 0024's "about 2 s, not yet measured"
-  - [ ] Measure whether a search on `backend="torch"` leaves the serial path on the tracked fixtures, and record it in ADR 0024
-- [ ] Document it in `docs/api/hmm/baum_welch.md` with executed output: the new choice if any; python/cython/cpu_parallel/cuda identical in result and differing in speed; `torch` held to a tolerance and able to change a search's path; Cython fastest at `S <= 8`, with the numbers
-- [ ] Record the follow-through
-  - [ ] `DEFERRED.md` trigger "a topology search too slow to run at the model sizes in use" with ADR 0024 §3's content
-  - [ ] A qualifying note under `HMMLIB-ACCOUNT.md` §12, and a pointer from ADR 0023 §7 to ADR 0024 §2
-  - [ ] Sync `core.md` (the new script, test counts, `baum_welch`'s signature if it changes, 0024's status) and rebuild `AGENTS.md`
+- [ ] Decide ADR 0024's Open item: **(a)** a separate `score_backend=` on `baum_welch`, default `"python"`, validated before any work, mirroring the trials; or **(b)** derive the check's phase from `backend=`, `"python"` under `"torch"`, with no signature change but an implicit mapping at odds with ADR 0021's no-substitution rule. The ADR notes that (a) has the precedent. Record the answer in the ADR and mark it Accepted in the record and its `adr/README.md` row.
+- [ ] Implement it: the check at `_baum_welch.py:302` and `_finish` (`:320`) take the chosen phase; `_re_converge_and_score` (`_trials.py:165-173`) and `_search` (`_search.py:174`) pass their `score_backend` through. Rewrite the contract sentence in `BaumWelchResult`'s docstring ("the check at the end of each batch, and so the last entry, is the reference forward pass on every backend", added in `58942fe` as a description, never argued) and the comments at `_trials.py:170` and `_search.py:175` that rely on it. Adds no kernel and no backend row, so the `dp-compile` gate does not arm and the backend header is unchanged.
+- [ ] Test it: `BaumWelchResult` (params, `description_lengths`, `cycles`, `converged`, `degenerate_states`) is `==` with the check on each available `forward_backward` phase against `"python"`; a trial's and a search's results are `==` likewise; an invalid or `torch` phase for the check is refused before any work if (a) is chosen; and the default leaves every existing test and executed output unchanged.
+- [ ] Measure it: track the profiler as `.scratch/hmm-lush/measurements/search_round_profile.py` (same setup as the Note below), re-run the round after the change, and replace ADR 0024's "about 2 s, not yet measured" with the figure.
+  > **Note:** Profile of one `_suggest_move` round (2026-09-17, 4-vCPU host, `m001_0005_005`, corpus as one record, `backend="cython"`, `score_backend="cython"`, `split_min_cycles=200`, two split trials per state, seed `SeedSequence(1, spawn_key=(1, 0))`): 20 moves in **12.7 s**. The numpy `_forward_backward` took **10.6 s** cumulative over 236 calls (84%), of which `safe_divide` 6.3 s over 606,622 calls, one per timestep, most of it `broadcast_shapes` and allocation rather than arithmetic. `_corpus_step`, the Cython E-step with its count sums, took 1.15 s; the search, surgery, `HMMParams` validation and `_scan_d` shared the remaining ~1 s. This is the second numpy forward pass found hiding in the scoring path, after `_suggest_d`'s 53-62% (`merge_round_cost.py`); threading `backend=` through the trials could not reach this one, because `baum_welch` makes the call itself. The script that produced it was an untracked session scratch file, so this goal rewrites it rather than copying it.
+- [ ] Measure whether a search on `backend="torch"` actually leaves the serial path on the tracked fixtures (ADR 0024 Open), rather than inferring it from ADR 0023's step sensitivity, and record the finding in ADR 0024 in place of that Open item.
+- [ ] Document it in `docs/api/hmm/baum_welch.md` with executed output (ADR 0013): the new choice if any, that python/cython/cpu_parallel/cuda return identical results and differ only in speed, that `torch` is held to a tolerance and can change a search's path, and that Cython is the fastest phase at the sizes measured (`S <= 8`; `cpu_parallel` 18-24 ms and `cuda` about 500 ms per corpus forward pass, `total_forward_cost.py`). Carry the same guidance forward to whatever page documents the search when it becomes public.
+- [ ] Add the `DEFERRED.md` trigger "a topology search too slow to run at the model sizes in use" with ADR 0024 §3's content: the axis is trials within a round, not kernel cells; results are bit-identical to the serial run when gathered in enumeration order, because seeds are keyed by trial identity `(1, r, s, t)` and the ranking is a stable sort whose order is the tie-break; the hazards are processes × `cpu_parallel` threads oversubscribing and processes sharing one GPU, so at small `S` the shape is processes over serial `cython` kernels; and the test owed is a parallel `SearchResult` `==` the serial one on a seed that exercises ties.
+- [ ] Add a qualifying note under `HMMLIB-ACCOUNT.md` §12 pointing at ADR 0024's profile, and a pointer from ADR 0023 §7 to ADR 0024 §2, which extends it to the convergence check.
+- [ ] Sync `core.md` (0024's status once Accepted, the new script, test counts, `baum_welch`'s signature if it changes) and rebuild `AGENTS.md`.
+  > **Note:** The ADR count of 24 and 0024's summary already landed on `main` in `d0cc0fe`, with the record itself, so what remains is keeping that summary true to the decision.

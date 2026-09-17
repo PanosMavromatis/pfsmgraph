@@ -39,7 +39,7 @@ backend row, no compiled search.
 - ADR 0020 — the bit-identity of python, cython, cpu_parallel and cuda.
 - PR #48 (`feat/hmm-search-loop`) — the search this plumbs.
 - Master plan `docs/plan/TODO.md`, revision 04-hmm-v0.3.0, the goal after the search loop,
-  whose profile Note carries the setup.
+  whose profile now sits under goal 4 of the branch plan.
 - `.scratch/hmm-lush/HMMLIB-ACCOUNT.md` §12 — "leaving the driver interpreted costs little",
   which the profile qualifies.
 
