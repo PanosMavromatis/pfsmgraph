@@ -1,6 +1,6 @@
 # feat/hmm-convergence-backend
 
-**Status**: active
+**Status**: merged — PR #49 — 2026-09-17
 **Created**: 2026-09-17
 **Subgoal**: Settle how the topology search uses the compiled backends, and accept ADR 0024 — `docs/plan/TODO.md`, revision 04-hmm-v0.3.0
 
