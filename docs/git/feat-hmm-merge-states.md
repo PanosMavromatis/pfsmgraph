@@ -14,6 +14,7 @@ Port `merge-states` (`hmm-param.lsh:218-369`), the second of revision 04's two t
 - Confirm the `:262` fix ADR 0022 §1 already decides, and whether it needs an ADR amendment
 - Decide the reducible-chain case: reject at proposal time or allow to raise, given that the merge itself consumes `state_p`
 - Decide what a merge does with arrays `HMMParams` rejects (an all-zero transition row), and where `safe_divide` gets its first consumers
+- Fix `stationary_distribution`, which solves some reducible chains silently, with a structural closed-class helper in `_numeric` that the merge reuses for its weights (goal 3)
 - Implement `_merge_states` with property tests, including a split-then-merge round trip; update `core.md`
 
 ## Context
@@ -21,7 +22,7 @@ Port `merge-states` (`hmm-param.lsh:218-369`), the second of revision 04's two t
 - Master plan: revision 04-hmm-v0.3.0, "Implement state merge" (`docs/plan/TODO.md`)
 - `feat/hmm-split-state` (PR #45) landed `_topology.py` and [ADR 0022](../design/adr/0022-state-split-initialisation.md). Its goal 6 moved `try-merge`/`suggest-merge` to the scored-primitives subgoal, so this branch delivers the move alone
 - `HMMLIB-ACCOUNT.md` §5 describes the surgery and records the `:262` defect beside `:172`
-- `stationary_distribution` raises `ValueError` on a reducible chain, and `HMMParams.state_p` is a `cached_property`, so the failure surfaces on attribute access
+- `stationary_distribution` raises `ValueError` on most reducible chains, though goal 3 found 18 of 254 random ones solved silently, and `HMMParams.state_p` is a `cached_property`, so the failure surfaces on attribute access
 - `HMMParams` rejects a zero transition row with no exemption and validates no fibre on a dead arc
 - `safe_divide` has had no consumer since 0.1.0; the original's `safe-/` calls in the merge are among its fifteen call sites
 - `_topology.py` is already in `meson.build`'s `install_sources`, so no build change is expected
