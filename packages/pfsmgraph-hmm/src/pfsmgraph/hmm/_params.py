@@ -276,10 +276,12 @@ class HMMParams:
     def state_p(self) -> np.ndarray:
         """``(S,)``. The stationary distribution of :attr:`transition_p`.
 
-        The original's ``state-p`` slot, computed rather than stored. Raises
-        ``ValueError`` for a reducible chain -- two closed communicating classes
-        give ``(P.T - I)`` a null space of dimension 2, which replacing one row
-        with the normalization cannot determine. That failure therefore surfaces
+        The original's ``state-p`` slot, computed rather than stored. Transient
+        states carry exactly ``0.0``. Raises ``ValueError`` for a reducible chain
+        -- two closed communicating classes, decided from the live arcs rather
+        than from the solve, give ``(P.T - I)`` a null space of dimension 2,
+        which replacing one row with the normalization cannot determine. That
+        failure therefore surfaces
         on an attribute access, which is a consequence of ADR 0017 making this
         derived and is why the message names the cause.
         """

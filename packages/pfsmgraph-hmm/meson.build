@@ -64,7 +64,7 @@ py.install_sources(
     'src/pfsmgraph/hmm/_mdl.py',
     'src/pfsmgraph/hmm/_numeric.py',
     'src/pfsmgraph/hmm/_params.py',
-    # Topology moves for revision 04: state split now, state merge next. Builds
+    # Topology moves for revision 04: state split and state merge. Builds
     # candidates only, per ADR 0022; scoring and re-convergence live elsewhere.
     # Not a DP kernel, so it has no lifecycle phases.
     'src/pfsmgraph/hmm/_topology.py',

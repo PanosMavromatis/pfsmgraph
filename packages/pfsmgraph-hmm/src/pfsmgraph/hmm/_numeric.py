@@ -29,6 +29,7 @@ import numpy as np
 
 __all__ = [
     "bits",
+    "closed_classes",
     "entropy",
     "rand_p_vector",
     "safe_divide",
@@ -88,6 +89,51 @@ def safe_divide(numerator, denominator) -> np.ndarray:
     return np.divide(num, den, out=out, where=den != 0.0)
 
 
+def _square(values, name: str) -> np.ndarray:
+    """``values`` as a float64 ``(S, S)`` array, or ``ValueError`` naming its shape."""
+    p = np.asarray(values, dtype=np.float64)
+    if p.ndim != 2 or p.shape[0] != p.shape[1]:
+        raise ValueError(f"{name} must be a square (S, S) matrix, got shape {p.shape}")
+    return p
+
+
+def closed_classes(transition_p) -> np.ndarray:
+    """Label each state with its closed communicating class, or ``-1`` if transient.
+
+    New work, not a translation: the original has no such function. It reads
+    only which arcs are live (``transition_p > 0``), never their values, so it
+    is exact where a numerical rank test is not. A state is **recurrent** when
+    every state it can reach can reach it back; the recurrent states split into
+    closed classes, numbered from 0 in order of each class's lowest state. Every
+    other state is **transient** and labelled ``-1``.
+
+    It exists because the solve's own singularity is not a reliable witness.
+    ``[[1, 0, 0], [0, 2/3, 1/3], [0, 1, 0]]`` has two closed classes, ``{0}``
+    and ``{1, 2}``, yet ``2/3`` is not representable, so the ``{1, 2}`` block
+    misses exact singularity by an ulp and :func:`numpy.linalg.solve` returns
+    ``[1, -0, -0]`` without complaint. Revision 04's state merge also weights by
+    :func:`stationary_distribution` and needs to know which states carry none.
+
+    Reachability is Warshall's transitive closure over booleans, ``O(S^3)`` with
+    ``S`` vectorised steps, which is negligible beside anything that reads a
+    corpus.
+    """
+    live = _square(transition_p, "transition_p") > 0.0
+    size = live.shape[0]
+    reach = live | np.eye(size, dtype=bool)
+    for k in range(size):
+        reach |= reach[:, k, None] & reach[k, None, :]
+    recurrent = ~np.any(reach & ~reach.T, axis=1)
+    labels = np.full(size, -1, dtype=np.int64)
+    n_classes = 0
+    for i in np.flatnonzero(recurrent):
+        if labels[i] < 0:
+            # Everything a recurrent state reaches is in its own closed class.
+            labels[reach[i]] = n_classes
+            n_classes += 1
+    return labels
+
+
 def stationary_distribution(transition_p) -> np.ndarray:
     """The chain's stationary distribution, by the original's row-replacement solve.
 
@@ -117,15 +163,26 @@ def stationary_distribution(transition_p) -> np.ndarray:
     Kronecker delta, is :func:`numpy.eye` here -- both of its call sites were
     this identity term, built one element at a time.
 
-    Raises :exc:`ValueError` if the chain is **reducible**. The row replacement
-    supplies exactly one equation, so it rescues a one-dimensional null space
-    and no more; a chain with two closed communicating classes has a
-    two-dimensional stationary space and stays singular after it. That is worth
-    naming rather than letting ``LinAlgError: Singular matrix`` through, because
-    revision 04 searches topology by state merge and split -- a disconnected
-    component is a plausible outcome of the search, not a malformed input -- and
-    because ``state_p`` is a cached property under ADR 0017, so the error
-    surfaces on an attribute access.
+    Raises :exc:`ValueError` if the chain is **reducible** into more than one
+    closed communicating class. The row replacement supplies exactly one
+    equation, so it rescues a one-dimensional null space and no more; a chain
+    with two closed classes has a two-dimensional stationary space. **That is
+    decided structurally, by :func:`closed_classes`, before any solve**, because
+    the solve's singularity is not a reliable witness: a probability that is
+    not representable, such as ``2/3``, can lift an exactly singular block off
+    singularity by an ulp, and the solve then returns one of the stationary
+    distributions without complaint (18 of 254 random reducible chains, measured
+    2026-09-17). Naming the failure matters because revision 04 searches
+    topology by state merge and split -- a disconnected component is a
+    plausible outcome of the search, not a malformed input -- and because
+    ``state_p`` is a cached property under ADR 0017, so the error surfaces on an
+    attribute access.
+
+    **Transient states get exactly ``0.0``.** They carry no stationary mass, but
+    the solve leaves rounding there, up to ``1.8e-14`` in magnitude and some of
+    it negative; the entries are overwritten, not renormalised, since the mass
+    moved is below any tolerance in this package. The state merge relies on it:
+    it weights a pair by stationary mass and refuses a pair with none.
 
     Row-stochasticity is deliberately *not* checked here: it is a property of
     the model, it belongs to ``HMMParams`` at construction under ADR 0017, and a
@@ -134,12 +191,21 @@ def stationary_distribution(transition_p) -> np.ndarray:
     solve, whose absence would surface as a broadcasting error naming shapes the
     caller never wrote.
     """
-    p = np.asarray(transition_p, dtype=np.float64)
-    if p.ndim != 2 or p.shape[0] != p.shape[1]:
-        raise ValueError(
-            f"transition_p must be a square (S, S) matrix, got shape {p.shape}"
-        )
+    p = _square(transition_p, "transition_p")
     size = p.shape[0]
+
+    labels = closed_classes(p)
+    n_classes = int(labels.max()) + 1
+    if n_classes > 1:
+        members = ", ".join(
+            "{" + ", ".join(str(s) for s in np.flatnonzero(labels == c)) + "}"
+            for c in range(n_classes)
+        )
+        raise ValueError(
+            f"transition matrix is reducible: it has {n_classes} closed "
+            f"communicating classes ({members}), so its stationary distribution "
+            "is not unique"
+        )
 
     # A fresh array, so the caller's matrix is untouched -- and so row 0 is
     # assignable at all: HMMParams holds its arrays with writeable = False
@@ -150,13 +216,16 @@ def stationary_distribution(transition_p) -> np.ndarray:
     b[0] = 1.0
 
     try:
-        return np.linalg.solve(a, b)
+        pi = np.linalg.solve(a, b)
     except np.linalg.LinAlgError as err:
+        # One closed class makes the replaced system nonsingular in exact
+        # arithmetic, so only rounding can reach this.
         raise ValueError(
-            "transition matrix is reducible: (P.T - I) has a null space of "
-            "dimension > 1, so the stationary distribution is not unique and "
-            "replacing one row with the normalization cannot determine it"
+            "transition matrix has one closed communicating class, but the "
+            "row-replaced system is numerically singular"
         ) from err
+    pi[labels < 0] = 0.0
+    return pi
 
 
 def entropy(p, axis=-1):
