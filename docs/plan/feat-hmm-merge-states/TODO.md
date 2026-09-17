@@ -20,9 +20,13 @@
     > **Precision:** the original's locals and storage are single precision (`-float-`, `float-matrix`); the port runs in float64.
   - [x] Identify every `safe-/` call and what each one guards
     > **Note:** The method has seven calls, guarding three kinds of zero. **`:290`, inbound fibre:** the denominator is zero exactly when `j` reaches neither `a` nor `b`; the arc is then dead and the fibre comes out zero, which `HMMParams` already exempts. **`:312-313` and `:345-346`, the weights:** `p-sum = state_p[a] + state_p[b]` is zero when neither state carries stationary mass. Then `p₁ = p₂ = 0`, so **row `a` of `T'` is all zero**, the row `HMMParams` rejects (goal 4's input), and every outbound and self fibre follows it to zero. **`:322` and `:353`, outbound and self fibres:** the denominator is `T'[a,j]`, which is zero when both weighted arcs are. That includes a live arc in one state whose weight is zero, e.g. `p₂ = 0` with `T[b,j] > 0`; the arc comes out dead and its fibre zero, again exempt. So the only zero that yields an array `HMMParams` rejects is `p-sum == 0`.
-- [ ] Confirm the `:262` initial-distribution fix under ADR 0022 §1
-  - [ ] Establish what `:262` does on the tracked fixtures, as goal 2 of the split did for `:172`
-  - [ ] Decide whether ADR 0022 needs an amendment, or already covers the merge
+- [x] Confirm the `:262` initial-distribution fix under ADR 0022 §1
+  > **Q:** ADR 0022 §1 already decides the merge's initial distribution. Does the ADR need an amendment?
+  > **A:** Amend the evidence only. The Decision stays; a dated Evidence bullet and one clause in Context record the 38-pair merge measurement.
+  - [x] Establish what `:262` does on the tracked fixtures, as goal 2 of the split did for `:172`
+    > **Note:** Measured on all 38 merge pairs the fixtures allow (0 from `m001_0001_001`, 10 from `m001_0005_005`, 28 from `m008_0001_008`). The defective vector sums to `Σ_{i≠a,b} state_p[i] + init[a] + init[b]` and **fails `SUM_TOL` in all 38**, missing by 0.10 to 0.84 (sums range from 0.36 to 1.84). Against the fixed vector it moves 0.34 to 1.48 in L1. That is worse than the split's 13 of 14. A merge has no `S = 1` case, where `init` and `state_p` coincide; the one-state model allows no pair. So `HMMParams` cannot hold a verbatim reproduction either. As with the split, the effect is confined to EM's starting point: `try-merge` (`hmm-trainer.lsh:855-875`) runs `run-converge` before `suggest-d` scores anything. **Incidentally for goal 4:** `state_p[a] + state_p[b]` is at least 0.158 in every pair, so no fixture merge reaches the all-zero-row case.
+  - [x] Decide whether ADR 0022 needs an amendment, or already covers the merge
+    > **Done:** ADR 0022 §1 already binds the merge. The amendment adds a clause to Context and a dated Evidence bullet for the merge measurement.
 - [ ] Decide the reducible-chain case
   - [ ] Establish when a merge makes the chain reducible, and whether the merge's own `state_p` read can fail first
   - [ ] Decide: reject at proposal time, or allow `stationary_distribution` to raise

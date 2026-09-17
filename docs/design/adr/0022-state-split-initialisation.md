@@ -33,7 +33,8 @@ That fails `HMMParams`' `SUM_TOL` in **13 of the 14** splits the tracked fixture
 missing by 0.10 to 0.84. It also replaces a trained, concentrated `init` such as
 `[0, 1, 0, 0, 0]` with stationary mass spread over every state. EM re-estimates `init`
 within one cycle, so no scored model ever carried the defect, but it moved EM's starting
-point. `merge-states` repeats it at `:262`.
+point. `merge-states` repeats it at `:262`, where the same reproduction fails `SUM_TOL` in
+all 38 merges the fixtures allow.
 
 **The outbound redraw discards learning.** Trained fibres are sharp: on `m008_0001_008`,
 state 5's outbound fibres are all `[1, 0, 0, 0, 0, 0]`. The redraw replaces them with vectors
@@ -155,6 +156,10 @@ per arm.
 
 - **Axis 1.** All 14 splits of the three `set02a_200` fixtures, measured in the branch plan's
   goal 2.
+- **Axis 1 for the merge** (added 2026-09-17, `feat/hmm-merge-states` goal 2). All 38 merge
+  pairs of the same fixtures: the `:262` vector sums to `Σ_{i≠a,b} state_p[i] + init[a] +
+  init[b]`, from 0.36 to 1.84, and fails `SUM_TOL` in every pair. The Decision is unchanged;
+  §1 already covers the merge.
 - **Constructed cases** (goal 3; synthetic data, EM with the stop rule disabled).
   - **Several predecessors:** twin gap `8e-4` after 1 cycle, `4e-1` by cycle 100, and `0`
     throughout with exact halves.
