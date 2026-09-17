@@ -47,9 +47,9 @@ function. **``d`` comes from** :func:`~._mdl._scan_d`, **not the original's Bren
 search** (ADR 0023 section 5): a bounded scan for the global integer minimum, bounded
 by the trial's own unrounded data length, and run afresh on every trial.
 :func:`~._mdl._suggest_d` stays as the checked reproduction of ``suggest-d``.
-``backend`` runs EM and ``score_backend`` the forward passes inside the scan; they are
-separate because ``forward_backward`` has no ``torch`` phase, and neither is ever
-substituted for the other (ADR 0021).
+``backend`` runs EM and ``score_backend`` the forward passes inside EM's convergence
+check and the scan; they are separate because ``forward_backward`` has no ``torch``
+phase, and neither is ever substituted for the other (ADR 0021).
 """
 
 from __future__ import annotations
@@ -115,7 +115,8 @@ def _try_split(
     :param min_cycles: the fewest EM cycles before the stopping rule may fire.
         Required, because ADR 0022 leaves its size to the search loop.
     :param backend: passed to :func:`~._baum_welch.baum_welch`.
-    :param score_backend: the ``forward_backward`` phase that scores each ``d``.
+    :param score_backend: the ``forward_backward`` phase for EM's convergence check and
+        for scoring each ``d``.
     :param batch_size: passed to :func:`~._baum_welch.baum_welch`.
     :returns: the ``S + 1``-state candidate, re-converged and scored.
     :raises ImpossibleSequenceError: when a record has no path under the incumbent,
@@ -148,7 +149,8 @@ def _try_merge(
     :param min_cycles: the fewest EM cycles before the stopping rule may fire; ``0``,
         the default, is the original's rule.
     :param backend: passed to :func:`~._baum_welch.baum_welch`.
-    :param score_backend: the ``forward_backward`` phase that scores each ``d``.
+    :param score_backend: the ``forward_backward`` phase for EM's convergence check and
+        for scoring each ``d``.
     :param batch_size: passed to :func:`~._baum_welch.baum_welch`.
     :returns: the ``S - 1``-state candidate, re-converged and scored.
     :raises ValueError: from :func:`~._topology._merge_states`, including for a pair of
@@ -165,10 +167,12 @@ def _try_merge(
 def _re_converge_and_score(candidate, records, min_cycles, backend, score_backend, batch_size):
     """What both trials do after their surgery: ``run-converge``, choosing ``d``, the score."""
     converged = baum_welch(
-        candidate, records, backend=backend, batch_size=batch_size, min_cycles=min_cycles
+        candidate, records, backend=backend, score_backend=score_backend,
+        batch_size=batch_size, min_cycles=min_cycles,
     )
-    # baum_welch's last entry is the reference forward pass on every backend,
-    # which is the corpus description length of the returned parameters.
+    # baum_welch's last entry is its check on score_backend, bit-identical to the
+    # reference forward pass, and so the corpus description length of the returned
+    # parameters.
     data_bits = converged.description_lengths[-1]
     d, total_bits = _scan_d(converged.params, records, data_bits, backend=score_backend)
     return TrialResult(

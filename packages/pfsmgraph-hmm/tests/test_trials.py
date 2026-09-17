@@ -134,7 +134,7 @@ def test_the_generator_and_the_floor_have_no_default(case, missing):
         _try_split(params, records, STATE, **keywords)
 
 
-def test_backend_batch_size_and_floor_reach_baum_welch(case, monkeypatch):
+def test_backend_score_backend_batch_size_and_floor_reach_baum_welch(case, monkeypatch):
     params, records, _, _ = case
     seen = {}
 
@@ -150,9 +150,12 @@ def test_backend_batch_size_and_floor_reach_baum_welch(case, monkeypatch):
         rng=np.random.default_rng(SEED),
         min_cycles=7,
         backend="python",
+        score_backend="cython",
         batch_size=1,
     )
-    assert seen == {"backend": "python", "batch_size": 1, "min_cycles": 7}
+    assert seen == {
+        "backend": "python", "score_backend": "cython", "batch_size": 1, "min_cycles": 7,
+    }
 
 
 # --- try-merge -------------------------------------------------------------------
@@ -241,10 +244,13 @@ def test_the_merge_floor_defaults_to_the_original_rule_and_is_passed_through(
 
     monkeypatch.setattr(_trials, "baum_welch", spy)
     _try_merge(params, records, *PAIR)
-    _try_merge(params, records, *PAIR, min_cycles=7, backend="python", batch_size=1)
+    _try_merge(
+        params, records, *PAIR,
+        min_cycles=7, backend="python", score_backend="cython", batch_size=1,
+    )
     assert seen == [
-        {"backend": "python", "batch_size": None, "min_cycles": 0},
-        {"backend": "python", "batch_size": 1, "min_cycles": 7},
+        {"backend": "python", "score_backend": "python", "batch_size": None, "min_cycles": 0},
+        {"backend": "python", "score_backend": "cython", "batch_size": 1, "min_cycles": 7},
     ]
 
 

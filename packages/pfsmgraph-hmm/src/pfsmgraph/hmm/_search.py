@@ -155,7 +155,8 @@ def _search(
     :param min_split_trials: split trials per state, as ``*min-split-trials*``.
     :param split_trials_per_state_p: further split trials per unit of ``state_p``.
     :param backend: the ``baum_welch`` backend for every EM run.
-    :param score_backend: the ``forward_backward`` backend for every score.
+    :param score_backend: the ``forward_backward`` backend for every forward pass: EM's
+        convergence checks and every score.
     :param batch_size: passed to :func:`~._baum_welch.baum_welch`.
     :raises TypeError: for a ``start`` that is neither, a ``seed`` that is not a
         ``SeedSequence``, or a round count that is not an integer.
@@ -171,7 +172,9 @@ def _search(
             np.random.SeedSequence(seed.entropy, spawn_key=seed.spawn_key + (_START_KEY,))
         )
         params = _one_state_model(start, start_rng)
-    converged = baum_welch(params, records, backend=backend, batch_size=batch_size)
+    converged = baum_welch(
+        params, records, backend=backend, score_backend=score_backend, batch_size=batch_size
+    )
     data_bits = converged.description_lengths[-1]
     d, total_bits = _scan_d(converged.params, records, data_bits, backend=score_backend)
     start_result = TrialResult(

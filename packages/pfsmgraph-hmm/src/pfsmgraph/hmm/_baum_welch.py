@@ -117,8 +117,10 @@ class BaumWelchResult:
 
     Each per-cycle entry comes from the E-step of the backend that ran, so on
     ``backend="torch"`` it is torch's own, within ADR 0020's tolerance of the
-    reference; the check at the end of each batch, and so the last entry, is the
-    reference forward pass on every backend.
+    reference. The check at the end of each batch, and so the last entry, is a
+    forward pass on ``score_backend``. Every phase that can run it is bit-identical
+    to the reference, so the stopping rule and the last entry depend on the model
+    reached, never on which phase checked it.
     """
 
     params: HMMParams
@@ -168,6 +170,7 @@ def baum_welch(
     records,
     *,
     backend: BackendName = "python",
+    score_backend: BackendName = "python",
     batch_size: int | None = None,
     device: str | None = None,
     batch_cycles: int = BATCH_CYCLES,
@@ -205,6 +208,12 @@ def baum_welch(
         bit-identical to it on one host; or ``"torch"``, which derives the counts
         as gradients, in float64, within ADR 0020's tolerance of the reference.
         Validated before any work (ADR 0021); see :func:`~pfsmgraph.hmm.backends`.
+    :param score_backend: the ``forward_backward`` phase for the convergence check at
+        the end of each batch -- ``"python"`` (the default), ``"cython"``,
+        ``"cpu_parallel"`` or ``"cuda"``. They are bit-identical on one host (ADR
+        0020), so it changes how fast the check runs and nothing it returns.
+        ``"torch"`` has no forward phase and is refused; nothing substitutes one (ADR
+        0021, ADR 0024 section 2). Validated before any work.
     :param batch_size: how many records each E-step kernel call receives, padded
         together; ``None`` passes the whole corpus at once. It bounds memory, which
         grows as ``batch_size · S² · A``, and changes nothing else: counts come back
@@ -230,14 +239,16 @@ def baum_welch(
         shows the run while it continues. Only already-computed values are
         formatted, so the result is the same with or without it.
     :raises ValueError: if ``backend`` is not a backend name, or names one
-        ``baum_welch`` does not have; if ``device`` names anything but the CPU
+        ``baum_welch`` does not have; if ``score_backend`` is not a backend name,
+        or names one ``forward_backward`` does not have, ``"torch"`` included; if ``device`` names anything but the CPU
         on a CPU backend, anything at all on ``"cuda"``, or is not a torch device
         name on ``"torch"``.
-    :raises BackendUnavailableError: if ``backend`` cannot run in this
-        environment, or ``device`` cannot hold a tensor. Nothing falls back.
+    :raises BackendUnavailableError: if ``backend`` or ``score_backend`` cannot run
+        in this environment, or ``device`` cannot hold a tensor. Nothing falls back.
     :raises TypeError: if ``device`` is not a string or ``None``.
     """
     e_step = _resolve("baum_welch", backend)
+    _resolve("forward_backward", score_backend, "baum_welch's score_backend")
     records = list(records)
     if batch_cycles < 1 or patience < 1:
         raise ValueError(
@@ -284,7 +295,7 @@ def baum_welch(
     while unchanged < patience or cycles < min_cycles:
         for _ in range(batch_cycles):
             if max_cycles is not None and cycles >= max_cycles:
-                result = _finish(params, history, records, cycles, False, degenerate)
+                result = _finish(params, history, records, cycles, False, degenerate, score_backend)
                 if log is not None:
                     _log_budget_stop(log, width, result, old_bits, batch_cycles)
                 return result
@@ -300,7 +311,8 @@ def baum_welch(
             params, degenerate = _re_estimate(params, counts)
             cycles += 1
         new_bits = _corpus_description_length(
-            params.init_state_p, params.transition_p, params.output_p, records
+            params.init_state_p, params.transition_p, params.output_p, records,
+            backend=score_backend,
         )
         if abs(new_bits - old_bits) < change_bits:
             unchanged += 1
@@ -315,10 +327,11 @@ def baum_welch(
     return BaumWelchResult(params, tuple(history), cycles, True, degenerate)
 
 
-def _finish(params, history, records, cycles, converged, degenerate):
+def _finish(params, history, records, cycles, converged, degenerate, score_backend):
     history.append(
         _corpus_description_length(
-            params.init_state_p, params.transition_p, params.output_p, records
+            params.init_state_p, params.transition_p, params.output_p, records,
+            backend=score_backend,
         )
     )
     return BaumWelchResult(params, tuple(history), cycles, converged, degenerate)
