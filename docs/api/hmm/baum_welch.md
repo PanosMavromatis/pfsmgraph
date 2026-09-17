@@ -35,7 +35,7 @@ result = baum_welch(params, ds)
 ## `baum_welch`
 
 ```python
-baum_welch(params: HMMParams, records, *, backend: BackendName = "python", batch_size: int | None = None, device: str | None = None, batch_cycles: int = 10, change_bits: float = 0.1, patience: int = 3, max_cycles: int | None = None, min_cycles: int = 0, log: TextIO | None = None) -> BaumWelchResult
+baum_welch(params: HMMParams, records, *, backend: BackendName = "python", score_backend: BackendName = "python", batch_size: int | None = None, device: str | None = None, batch_cycles: int = 10, change_bits: float = 0.1, patience: int = 3, max_cycles: int | None = None, min_cycles: int = 0, log: TextIO | None = None) -> BaumWelchResult
 ```
 
 Alternates an E-step, the expected counts of every start, arc crossing and emission under
@@ -257,6 +257,57 @@ device other than `"cpu"`, and the tolerance above holds there too.
 
 Every lifecycle phase trains, so `backend=` accepts every name `backends("baum_welch")`
 lists; which of them can run depends on the machine, as [backends.md](backends.md) shows.
+
+Which phase is *fastest* is a property of the model rather than of the phase: the parallel
+ones split a single timestep across its cells, so at small `S` a parallel region or a device
+launch costs more than the work inside it. At `S <= 8` over a 1,268-symbol corpus, `cython`
+was the fastest phase, `cpu_parallel` took 18-24 ms and `cuda` about 500 ms per corpus
+forward pass. Since those four agree to the bit, choosing among them is a speed choice and
+nothing else. `torch` is the one whose result can differ, and on the same fixtures a topology
+search run on it chose the same moves while costing 350-400 times more on the CPU. Those
+figures are dated observations on one host, and they live with their host in
+[`docs/benchmarks/hmm-backends.md`](../../benchmarks/hmm-backends.md).
+
+### The convergence check has its own backend
+
+`backend=` picks the E-step. The stopping rule needs one more forward pass -- the corpus
+description length at the end of every batch of cycles, which is also the last entry of
+`description_lengths` -- and that one is chosen by `score_backend=`, defaulting to
+`"python"` ([ADR 0024](../../design/adr/0024-search-compiled-work.md) section 2). It takes
+the names `forward_backward` has, and is validated before any work.
+
+Those four phases are bit-identical, so it changes how fast the check runs and nothing it
+returns:
+
+```python
+>>> checked = baum_welch(params, ds, backend="cython", score_backend="cython")
+>>> checked.description_lengths == result.description_lengths and checked.cycles == result.cycles
+True
+```
+
+`"torch"` is not among them. `forward_backward` has no torch phase, and nothing is
+substituted for one ([ADR 0021](../../design/adr/0021-runtime-backend-selection.md)), so
+asking for it is an error rather than a silent swap:
+
+```python
+>>> baum_welch(params, ds, score_backend="torch")
+ValueError: baum_welch's score_backend has no 'torch' backend: that lifecycle phase is not implemented for it. It has ['python', 'cython', 'cpu_parallel', 'cuda']
+```
+
+Keeping the two names apart is what lets a torch E-step be checked by a compiled forward
+pass:
+
+```python
+>>> mixed = baum_welch(params, ds, backend="torch", score_backend="cython")
+>>> mixed.cycles == result.cycles
+True
+```
+
+On a single training run the check is a small part of the cost. It dominates a **topology
+search**, which re-converges a candidate model per trial: one measured round took 9.38 s
+with the check on numpy and 1.70 s with it on Cython. The search is not public yet; when it
+is, the guidance above applies to it unchanged, since it reaches these kernels through the
+same two names.
 
 ## Errors
 

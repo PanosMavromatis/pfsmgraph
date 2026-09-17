@@ -64,6 +64,13 @@ an extra or plugging in a GPU never changes what an unqualified call runs.
 ViterbiPath(n_symbols=4, total_bits=5.0180, label='s1')
 ```
 
+**One call can name two.** `baum_welch` takes a second keyword, `score_backend=`, for the
+forward pass its convergence check runs, since that check is a `forward_backward` phase
+rather than an E-step; it defaults to `"python"` too, and neither name is ever substituted
+for the other ([baum_welch.md](baum_welch.md)). Which phase is fastest depends on the model
+size, and dated measurements live in
+[`docs/benchmarks/hmm-backends.md`](../../benchmarks/hmm-backends.md).
+
 `BackendName` in the signature is `Literal["python", "cython", "cpu_parallel", "cuda",
 "torch"]`, a type for annotations rather than a name `pfsmgraph.hmm` exports: pass a plain
 string. It lists every backend any call has, so a type checker accepts
