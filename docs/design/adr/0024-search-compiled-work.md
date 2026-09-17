@@ -117,8 +117,8 @@ documented as interchangeable in result and differing in speed, with two facts a
 
 ### Positive
 
-- **The fix is plumbing over kernels that already exist**, as ADR 0023 §7 was, and removes
-  about 84% of a measured round.
+- **The fix is plumbing over kernels that already exist**, as ADR 0023 §7 was, and made a
+  measured round 5.5 times faster (9.38 to 1.70 s).
 - **One implementation of the search.** Reviewing it against the Lush loop stays a reading of
   one file.
 - **Parallelism, when it comes, needs no new decision about correctness.** §3's conditions
@@ -130,8 +130,8 @@ documented as interchangeable in result and differing in speed, with two facts a
 
 - **`baum_welch`'s public signature grows by one keyword**, and a published parameter
   cannot be withdrawn without a breaking release.
-- **A search is still serial.** A round costs roughly its trial count times a few tenths of a
-  second after §2, and the merge count grows with `S²`.
+- **A search is still serial.** A round costs roughly its trial count times a tenth of a
+  second at `S = 5` after §2 (20 trials in 1.70 s), and the merge count grows with `S²`.
 - **The documented reference-check contract changes**, for callers who asked for a phase other
   than `"python"`: bit-identical on one host, but no longer the numpy code path.
 
@@ -170,8 +170,14 @@ documented as interchangeable in result and differing in speed, with two facts a
   | `_corpus_step`, the Cython E-step and count sums, 2,360 calls | 1.15 s |
   | everything else: search, surgery, `HMMParams` validation, `_scan_d` | about 1 s |
 
-  To be tracked as `.scratch/hmm-lush/measurements/search_round_profile.py`. The round after
-  §2 is estimated at about 2 s and **not yet measured**.
+  Tracked as `.scratch/hmm-lush/measurements/search_round_profile.py`, which rebuilds the
+  numpy check by patching it and reproduces the profile on the same kind of host: 12.65 s
+  under `cProfile`, 10.63 s and 236 calls in the numpy pass, 9.38 s unprofiled.
+- **The round after §2.** Same round, same script, same process: **1.70 s** unprofiled
+  (2.04 s under `cProfile`), 5.5 times faster. The numpy `_forward_backward` is not called
+  at all, and `_corpus_step` is unchanged at 1.13 s over 2,360 calls, so the Cython E-step
+  is now two thirds of a round. Both configurations rank the same 20 moves with
+  bit-identical totals.
 - **It is the second such finding.** `merge_round_cost.py` found `_suggest_d` taking 53–62% of
   a trial through the same numpy forward pass, which ADR 0023 §7 removed.
 - **The original drew the same line.** `HMMLIB-ACCOUNT.md` §12: not one topology-search
@@ -184,7 +190,6 @@ documented as interchangeable in result and differing in speed, with two facts a
 
 ## Open
 
-- **The measured round after §2**, replacing the estimate above.
 - **Whether a search on `torch` actually leaves the serial path** on the tracked fixtures,
   measured rather than inferred from ADR 0023's step sensitivity.
 - **Owed with the implementation, so the record's claims are checkable where they are
