@@ -523,6 +523,19 @@ work — a split trial calls `run-converge`, which is compiled — so leaving th
 interpreted costs little. This is the same judgement `ACCOUNT.md` §7 records on the
 container side, and it is a useful prior for where ADR 0002's phase 2 will actually pay.
 
+*(Qualified 2026-09-17, on `feat/hmm-convergence-backend`. The judgement is true of the
+driver and not of what the driver was calling. A profile of one `_suggest_move` round on
+`m001_0005_005`, with `backend="cython"` throughout, spent 10.6 of 12.7 s in the **numpy**
+forward pass that `baum_welch`'s convergence check ran whatever backend was asked for, and
+about 1 s in the search, the surgery and everything else above the kernels. So the
+interpreted driver did cost about 8%, roughly as §12 predicts, while one uncompiled inner
+loop inside the supposedly compiled path cost 84%; giving that check a named backend took
+the round from 9.38 s to 1.70 s. The prior survives, and its failure mode is worth naming:
+"the driver is interpreted" and "everything the driver calls is compiled" are separate
+claims, and the compile list above shows only the first.
+[ADR 0024](../../docs/design/adr/0024-search-compiled-work.md) is authoritative; the profile
+is `measurements/search_round_profile.py`.)*
+
 ## 13. Duplication, in one place
 
 Three pairs of near-identical code, all involving the recurrences:

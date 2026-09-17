@@ -151,6 +151,13 @@ because `forward_backward` has no `torch` phase, and ADR 0021 forbids substituti
 backend for another. No kernel is written: all four phases already exist and are
 held bit-exact to numpy (ADR 0020), so no score changes with the backend.
 
+**Extended by [ADR 0024](0024-search-compiled-work.md) §2** (2026-09-17). There was a fourth
+forward pass this section could not reach: `baum_welch` checks convergence by computing the
+corpus description length itself, so no `score_backend=` threaded through the trials touched
+it, and it ran on numpy under every backend. It now takes a `score_backend=` of its own,
+which the trials and the search pass through, so one name governs every forward pass a
+search runs.
+
 ## Consequences
 
 ### Positive
