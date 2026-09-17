@@ -1,6 +1,6 @@
 # feat/hmm-scored-primitives
 
-**Status**: active
+**Status**: merged — PR #47 — 2026-09-17
 **Created**: 2026-09-17
 **Subgoal**: Port the scored primitives — `docs/plan/TODO.md`, revision 04-hmm-v0.3.0
 
