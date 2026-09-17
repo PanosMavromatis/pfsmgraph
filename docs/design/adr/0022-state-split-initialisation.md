@@ -117,8 +117,8 @@ the differences being judged.
 - **Splits cost more EM.** The budget in §4 is a real cost per candidate: 200 forced cycles
   against a median of about 30-40 under the default stop in the measurement.
 - **The draw order changes.** The original drew `2S + 2` emission fibres. A split now draws
-  one `u_j` per live predecessor plus one fibre per live outbound arc of each twin. Their
-  order is fixed under **Resolved**.
+  one `u_j` for every predecessor and one fibre for every destination of each twin, live or
+  dead, so the count depends only on `S`. Their order is fixed under **Resolved**.
 - **Rounding still plays a part where the seed is small.** A 1% seed separated every
   single-predecessor split measured. Whether it always does so within the budget of §4 is
   measured only on the corpora below.

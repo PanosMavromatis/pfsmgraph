@@ -427,6 +427,92 @@ def test_run_converge_can_stop_on_the_saddle_itself():
     assert result.description_lengths[-1] > 399
 
 
+def test_a_minimum_budget_carries_the_saddle_run_past_its_early_stop():
+    # The same run with the rule held off for 10 cycles. Measured with the rule
+    # disabled, its batch flags are 1111, then seven 0s while EM escapes, then
+    # 1s: the check at cycle 10 lands on a changed batch, which resets the count,
+    # and four quiet batches after the escape stop it at 30. This is ADR 0022
+    # section 4's failure and its remedy on one fixture.
+    params, records = _near_saddle(1e-5)
+    result = baum_welch(
+        params, records, batch_cycles=2, change_bits=1e-3, patience=4, min_cycles=10
+    )
+
+    assert result.converged and result.cycles == 30
+    assert result.description_lengths[-1] == 0.0
+
+
+def test_no_minimum_budget_is_the_original_rule_bit_for_bit():
+    rng = np.random.default_rng(SEED + 43)
+    params, records = _random_params(rng, 3, 4), _random_corpus(rng, 4, (70, 30))
+    plain = baum_welch(params, records, change_bits=1e-3)
+    floored = baum_welch(params, records, change_bits=1e-3, min_cycles=0)
+
+    assert floored.description_lengths == plain.description_lengths
+    assert floored.cycles == plain.cycles and floored.converged == plain.converged
+    for name in ("init_state_p", "transition_p", "output_p"):
+        assert getattr(floored.params, name).tobytes() == getattr(plain.params, name).tobytes()
+
+
+def test_a_minimum_budget_takes_effect_at_the_next_check():
+    # The fixed point is quiet from the first batch, so the default stops at
+    # PATIENCE batches; a floor between checks runs on to the check past it.
+    output = np.zeros((2, 2, USER_BASE + 2))
+    output[:, :, USER_BASE:] = 0.5
+    params = HMMParams(
+        np.full(2, 0.5), np.full((2, 2), 0.5), output, _vocabulary(USER_BASE + 2)
+    )
+    a, b = USER_BASE, USER_BASE + 1
+    records = [SequenceRecord(np.array([a, b, b, a]))]
+
+    result = baum_welch(params, records, min_cycles=PATIENCE * BATCH_CYCLES + 1)
+
+    assert result.converged and result.cycles == (PATIENCE + 1) * BATCH_CYCLES
+
+
+def test_a_minimum_budget_stops_at_the_first_quiet_check_past_it():
+    # Read back from the trace, as the plain rule's test does: the stop is a
+    # check at or past the floor ending PATIENCE unchanged batches, and no
+    # earlier check at or past the floor ended such a run.
+    rng = np.random.default_rng(SEED + 99)
+    params, records = _random_params(rng, 4, 4), _random_corpus(rng, 4, (80, 50))
+    batch, threshold, patience = 5, 1e-3, 3
+    plain = baum_welch(
+        params, records, batch_cycles=batch, change_bits=threshold, patience=patience
+    )
+    floor = plain.cycles + 2 * batch + 1
+    result = baum_welch(
+        params,
+        records,
+        batch_cycles=batch,
+        change_bits=threshold,
+        patience=patience,
+        min_cycles=floor,
+    )
+
+    assert result.converged and result.cycles >= floor and result.cycles % batch == 0
+    ends = np.array(result.description_lengths[::batch])
+    quiet = 0
+    for check, flag in enumerate(np.abs(np.diff(ends)) < threshold, start=1):
+        quiet = quiet + 1 if flag else 0
+        stops = quiet >= patience and check * batch >= floor
+        assert stops == (check * batch == result.cycles)
+
+
+def test_a_smaller_max_cycles_wins_over_a_minimum_budget():
+    rng = np.random.default_rng(SEED + 44)
+    params, records = _random_params(rng, 3, 3), _random_corpus(rng, 3, (50,))
+    result = baum_welch(params, records, max_cycles=20, min_cycles=50)
+    assert result.cycles == 20 and not result.converged
+
+
+def test_a_negative_minimum_budget_is_refused():
+    rng = np.random.default_rng(SEED + 45)
+    params, records = _random_params(rng, 2, 3), _random_corpus(rng, 3, (20,))
+    with pytest.raises(ValueError, match="min_cycles must be non-negative, got -1"):
+        baum_welch(params, records, min_cycles=-1)
+
+
 def test_the_lush_trained_fixture_is_already_near_its_fixed_point():
     # m008_0001_008 is the original's converged output, trained on this very
     # stream, so the loop should leave it almost where it is. Passing the whole

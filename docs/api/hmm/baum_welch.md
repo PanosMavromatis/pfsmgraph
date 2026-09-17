@@ -35,7 +35,7 @@ result = baum_welch(params, ds)
 ## `baum_welch`
 
 ```python
-baum_welch(params: HMMParams, records, *, backend: BackendName = "python", batch_size: int | None = None, device: str | None = None, batch_cycles: int = 10, change_bits: float = 0.1, patience: int = 3, max_cycles: int | None = None, log: TextIO | None = None) -> BaumWelchResult
+baum_welch(params: HMMParams, records, *, backend: BackendName = "python", batch_size: int | None = None, device: str | None = None, batch_cycles: int = 10, change_bits: float = 0.1, patience: int = 3, max_cycles: int | None = None, min_cycles: int = 0, log: TextIO | None = None) -> BaumWelchResult
 ```
 
 Alternates an E-step, the expected counts of every start, arc crossing and emission under
@@ -101,6 +101,21 @@ that want one; reaching it returns with `converged` false:
 **The rule can stop on a symmetric saddle**, since it watches only how much each batch
 moves. An exactly uniform starting model is one, and it stays uniform. Break symmetry when
 initialising.
+
+**`min_cycles` holds the rule off** for a start known to sit near such a point, as a split
+state's twins do ([ADR 0022](../../design/adr/0022-state-split-initialisation.md) section 4).
+Checks still fall every `batch_cycles` cycles, so the floor takes effect at the first check
+at or past it. The unchanged count keeps running beneath the floor, so a run that is
+already quiet stops at that check, while a batch that changes still resets the count.
+The model above converges in 50 cycles, so a floor of 75 stops it at the check at 80:
+
+```python
+>>> floored = baum_welch(params, ds, min_cycles=75)
+>>> floored.cycles, floored.converged
+(80, True)
+```
+
+A smaller `max_cycles` still wins, and returns with `converged` false.
 
 ### It reports progress on a stream, if given one
 
@@ -260,7 +275,7 @@ Code 1 is `UNK`, whose fibres are zero in every model, so no path emits it. A co
 the model's symbol axis, a corpus with no symbols, and a stopping rule that cannot stop
 (`batch_cycles` or `patience` below 1, `change_bits` not positive) raise `ValueError`.
 
-So do a negative `max_cycles`, a `batch_size` below 1 and a device the backend cannot use. `device=` names a torch
+So do a negative `max_cycles` or `min_cycles`, a `batch_size` below 1 and a device the backend cannot use. `device=` names a torch
 device, so only `"torch"` takes one other than the CPU; `"cuda"` runs on numba-cuda's current
 device and takes none at all, so `backend="cuda", device="cuda"` raises `ValueError` where a
 device exists and `BackendUnavailableError` where none does. A device name must be a string:

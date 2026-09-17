@@ -6,15 +6,44 @@ Shared project knowledge for any coding agent working in this repository.
 
 **`dataseq` and `hmm` are implemented and released — `dataseq` at 0.1.0 (2026-09-02) and `hmm` at 0.2.0 (2026-09-16, after 0.1.0 on 2026-09-13); the other three members are still empty scaffolding.** In place: the uv workspace root `pyproject.toml` (virtual — no `[project]` table), `uv.lock`, all five `packages/*` members with their own `pyproject.toml`, the `meson.build` files for `align` and `hmm` (`align`'s extension block still dormant, `hmm`'s live since the first `.pyx` landed 2026-09-09), and an empty `pfsmgraph/<pkg>/__init__.py` for the three members that have no code yet (plus `dl/rnn/` and `dl/transformer/`). The ADRs in `docs/design/adr/` are authoritative for the decisions they cover — the twelve initial records from the PRD, plus 0013 (how this family documents its public surfaces) and 0014 (how imported migration source is retained), both added 2026-09-01; the PRD remains the narrative design document.
 
-**What `dataseq` now contains.** Six modules under `packages/pfsmgraph-dataseq/src/pfsmgraph/dataseq/` (the container landed 2026-08-31, the encoder API 2026-09-01) and 74 tests — the first tests in this repository, and 74 of the suite's 2905 today; 2779 are `hmm`'s and the remaining 52 are the repo-root backend-matrix, API-docs, release-runbook and meson-source tests. `_reserved.py` hard-codes the ADR 0011 block as module constants, with no class or parameter that could relocate it; `_vocabulary.py` holds the `Vocabulary` protocol and `SymbolTable`, a frozen first-appearance-ordered implementation that encodes strictly and decodes *totally*, reserved codes included; `_record.py` and `_dataset.py` are the ragged container, whose records carry true lengths and never padding; `_collate.py` is `pad_collate`, where padding is introduced and always returned with its mask. The container imports neither torch nor pandas — verified in a subprocess — and its one runtime dependency is `numpy`.
+**What `dataseq` now contains.** Six modules under `packages/pfsmgraph-dataseq/src/pfsmgraph/dataseq/` (the container landed 2026-08-31, the encoder API 2026-09-01) and 74 tests — the first tests in this repository, and 74 of the suite's 2943 today; 2817 are `hmm`'s and the remaining 52 are the repo-root backend-matrix, API-docs, release-runbook and meson-source tests. `_reserved.py` hard-codes the ADR 0011 block as module constants, with no class or parameter that could relocate it; `_vocabulary.py` holds the `Vocabulary` protocol and `SymbolTable`, a frozen first-appearance-ordered implementation that encodes strictly and decodes *totally*, reserved codes included; `_record.py` and `_dataset.py` are the ragged container, whose records carry true lengths and never padding; `_collate.py` is `pad_collate`, where padding is introduced and always returned with its mask. The container imports neither torch nor pandas — verified in a subprocess — and its one runtime dependency is `numpy`.
 
-**What `hmm` now contains.** Thirteen Python modules, two Cython kernels, and 2779 tests. The
+**What `hmm` now contains.** Fourteen Python modules, two Cython kernels, and 2817 tests. The
+fourteenth is `_trials.py`, opened 2026-09-17 on `feat/hmm-scored-primitives` with
+`_try_split(params, records, state, *, rng, min_cycles, ...)`, the port of `try-split`: split,
+re-converge under a minimum EM budget, choose `d` by `_suggest_d`, and score by *calling*
+`_total_description_length`, returning a `TrialResult` that carries the unrounded data length
+beside the total (ADR 0022 sections 4 and 5). `_try_merge(params, records, first, second, *,
+min_cycles=0, ...)` shares the scoring tail, as the two Lush methods share every line but the
+surgery, and keeps stationary-mass weights: on every tracked model, trained flat or per record,
+no state is transient and occupancy agrees with `state_p` to 0.003, because the corpus's
+`begin`/`end` symbols make it one long run of the chain. **A merge can still make a record
+impossible**, but only through a transient state's zero-weighted arcs, and then `_try_merge`
+raises `ImpossibleSequenceError` rather than scoring `+inf`. **`_suggest_split`, `_suggest_merge` and
+`_suggest_move` return every candidate as a `Move`, ranked**, where the original kept a strict-`<`
+argmin: candidates are enumerated in the original's order (states then trials, pairs
+lexicographically, merges before splits) and `sorted` on the total alone, whose *stability* is the
+tie-break -- sorting on `(total, kind)` matches only because `"merge" < "split"`, a coincidence a
+test pins against. An impossible candidate is a `Move` with no result at `+inf`, ranked last, so an
+all-impossible round is an ordinary list rather than the original's crash; a pair of two transient
+states is not a candidate and is filtered by `closed_classes` first. Split trial `(s, t)` draws from
+`SeedSequence(entropy, spawn_key=round_key + (s, t))`, so its candidate is rebuildable from its
+identity alone. Acceptance against the incumbent is still the search loop's. **A merge round
+costs its pair count, and scoring dominates each trial** (`merge_round_cost.py`, 2026-09-17,
+4-vCPU host, `set11a_dInt`): 0.7 to 200 s for 1 to 120 pairs at `S = 2..16`, a log-log slope of
+1.17 against pairs, 1.3 to 1.7 s per pair. Within a trial `_suggest_d` takes 53-62% and `cython`
+EM 35-44%, because `_suggest_d`'s Brent evaluations run the numpy forward pass and take no
+`backend=`. Pruning pairs, as the alignment seed would, and a compiled forward pass inside the
+total are therefore separate savings, and the second roughly halves every trial. Its 32 tests pin the composition, not the parts,
+and **their first floor was vacuous**: the case converged in 180 cycles unfloored, so a floor of
+20 left a dropped `min_cycles` passing everything; assert that a threshold binds before trusting
+a test that passes it through. The
 thirteenth is `_topology.py`, opened 2026-09-16 on `feat/hmm-split-state` with
 `_split_state(params, state, *, rng)`: the candidate-building half of a topology move, private and
 not a transliteration, since [ADR 0022](../design/adr/0022-state-split-initialisation.md) fixes the
 Lush `:172` initial-distribution defect and replaces the original's outbound emission redraw with a
 per-predecessor inbound perturbation and a 1% emission seed. It neither re-converges nor scores a
-candidate; `try-split` belongs to the scored-primitives subgoal. Its random draws follow a fixed
+candidate; `_trials.py` does. Its random draws follow a fixed
 contract whose count depends only on the state count. `tests/test_topology.py` holds 645 tests for it:
 properties rather than a differential oracle, since the split departs from the original on purpose, exact
 `==` wherever the arithmetic allows, mutation-checked against five defects including the `:172` one. Twelve of them build the case revision 02
@@ -32,7 +61,7 @@ state's `state_p` is the pair's sum, and the stationary flow on every arc and sy
 the property its 741 tests lean on, since it checks the inbound, outbound and self-loop blocks
 together without restating them, and it caught three of six mutants on its own. Two consequences are
 worth knowing before the search loop: a transient but occupied state contributes nothing to a merge
-(occupancy weights need records, so they belong to `try-merge`), and a transient state's split
+(occupancy weights need records; `try-merge` kept stationary mass on measurement, see `_trials.py` above), and a transient state's split
 cannot be undone, because both twins are transient and the merge refuses them. The twelfth is `_mdl.py`, the minimum description length criterion revision 04 scores topology
 moves with, opened 2026-09-16 on `feat/hmm-mdl` with its two code-length primitives:
 `_int_code_length`, Rissanen's universal prior, and `_comb_code_length`, the cost of a
@@ -173,7 +202,10 @@ original's flat concatenated stream is the one-record case, and it stops by
 `run-converge`'s rule (batches of 10 cycles, 3 in a row moving under 0.1 bits). **That rule
 can stop on a symmetric saddle**, since it watches only the size of each batch's change: an
 exactly uniform start, which `rand_p_vector(noise_width=0)` returns, is one, so whatever
-initialises a model must break symmetry. The Lush-trained `m008` fixture, run through it
+initialises a model must break symmetry. **`min_cycles=` holds the rule off** (since
+2026-09-17, for ADR 0022 section 4's split twins): the loop runs `while unchanged < patience or
+cycles < min_cycles`, so the floor takes effect at the next check and a batch that changes
+beneath it still resets the count; `0` is the original rule bit for bit. The Lush-trained `m008` fixture, run through it
 as one record, moves 0.002 bits and stops after 30 cycles.
 **The data description length moved out of this module on 2026-09-16** and now lives in
 `_mdl.py` with `_quantize` and `_corpus_description_length`; `_check_codes` went to
@@ -185,7 +217,7 @@ runs `baum_welch`, so two implementations could drift and a candidate would conv
 one definition while being scored under another. That the share is possible at all is owed
 to `_corpus_description_length` taking *arrays* rather than an `HMMParams`, which it does
 because `_quantize` can round a row to all zeros -- a rounded model need not be a valid
-one. `tests/test_baum_welch.py` holds its 83 tests. **`tests/test_hmmlearn_oracle.py` checks the
+one. `tests/test_baum_welch.py` holds its 89 tests. **`tests/test_hmmlearn_oracle.py` checks the
 forward-backward and the E- and M-steps against `hmmlearn`'s `CategoricalHMM`** (21 tests,
 2026-09-14), on the destination-only emission case where arc emission reduces to state
 emission: hmmlearn's `startprob_` is our `init_state_p @ transition_p`, since its first
@@ -503,7 +535,7 @@ claim about the three members that have no code yet, and the test count is a cla
 belonging to other projects, and now also Python of our own — a runnable transliteration of
 the Lush original under `.scratch/hmm-lush/translation/`, written as a reading aid for the
 merge, and since 2026-09-14 the measurement scripts behind ADR 0020 under
-`.scratch/hmm-lush/measurements/`, joined 2026-09-15 by `viterbi_batch_speed.py`, the per-phase batch timings, which unlike the ADR 0020 scripts imports the public `pfsmgraph.hmm`. `param_representation_move_cost.py` followed on 2026-09-16, splitting a topology move's cost into building the candidate and scoring it; building is about 0.005% of the total, which is what settles the parameter representation's dense options on cost. `split_symmetry_breaking.py` joined the same day on `feat/hmm-split-state`, comparing how a split state's twins are told apart: the original's outbound redraw against a per-predecessor inbound perturbation. It is the evidence for [ADR 0022](../design/adr/0022-state-split-initialisation.md). Those are tracked so a decision record's evidence can
+`.scratch/hmm-lush/measurements/`, joined 2026-09-15 by `viterbi_batch_speed.py`, the per-phase batch timings, which unlike the ADR 0020 scripts imports the public `pfsmgraph.hmm`. `param_representation_move_cost.py` followed on 2026-09-16, splitting a topology move's cost into building the candidate and scoring it; building is about 0.005% of the total, which is what settles the parameter representation's dense options on cost. `split_symmetry_breaking.py` joined the same day on `feat/hmm-split-state`, comparing how a split state's twins are told apart: the original's outbound redraw against a per-predecessor inbound perturbation. It is the evidence for [ADR 0022](../design/adr/0022-state-split-initialisation.md). `merge_round_cost.py` joined on 2026-09-17 on `feat/hmm-scored-primitives`, timing a `suggest-merge` round and its phases against model size. Those are tracked so a decision record's evidence can
 be re-run rather than only read. They sit outside `tests/` because they measure the
 alternatives the record rejected.
 
@@ -583,7 +615,7 @@ Still to do, in PRD order (§11): `hmm` (Lush translation), then `align`, then `
 Toolchain: **uv** (workspace) + **pytest**. Requires `uv` and Python ≥ 3.10.
 
 - `uv sync` — create/refresh the venv; installs all five members editable (plain `.pth`) plus the `dev` group (`pytest`).
-- `uv run pytest` — run the suite (2905 tests: 74 in `packages/pfsmgraph-dataseq/tests/`, 2779 in `packages/pfsmgraph-hmm/tests/`, and 52 in the repo-root `tests/` — 23 covering the ADR 0003 backend matrix, 11 executing documented code blocks against their pasted output per ADR 0013, 2 checking that `docs/ops/release.md` names only recipes the root `justfile` defines, and 16 asserting each `meson.build`'s `install_sources` matches the package on disk). That last figure was 7 until 2026-09-04: it is parameterised over `packages/*/meson.build`, so it grew by itself when the three pure members got theirs, and that growth **is** the 271 → 280 — no test was written for the change that occasioned it. That verifier reads `docs/api/*/*.md` **and `packages/*/README.md`**: a member README becomes a PyPI long description under an immutable version, so it is the one documentation surface where drift cannot be corrected in place. Every run opens with the backend header. Two narrow skips are by design: `test_torch_interop.py` verifies the `DataLoader` integration and skips when torch is absent, since `dataseq` does not depend on torch; and the 206 numba-cuda tests (59 in `test_viterbi.py`, 25 in `test_viterbi_batch.py`, 55 in `test_forward_backward_backends.py` and 67 in `test_baum_welch_backends.py`: every shared test's `cuda` parameter plus each file's launch-geometry tests) skip without a CUDA device, with the header reading `cuda ✗ (no CUDA device detected)` — set `PFSMGRAPH_REQUIRE_BACKENDS=cuda` where a GPU is expected, so a lost device fails the run instead.
+- `uv run pytest` — run the suite (2943 tests: 74 in `packages/pfsmgraph-dataseq/tests/`, 2817 in `packages/pfsmgraph-hmm/tests/`, and 52 in the repo-root `tests/` — 23 covering the ADR 0003 backend matrix, 11 executing documented code blocks against their pasted output per ADR 0013, 2 checking that `docs/ops/release.md` names only recipes the root `justfile` defines, and 16 asserting each `meson.build`'s `install_sources` matches the package on disk). That last figure was 7 until 2026-09-04: it is parameterised over `packages/*/meson.build`, so it grew by itself when the three pure members got theirs, and that growth **is** the 271 → 280 — no test was written for the change that occasioned it. That verifier reads `docs/api/*/*.md` **and `packages/*/README.md`**: a member README becomes a PyPI long description under an immutable version, so it is the one documentation surface where drift cannot be corrected in place. Every run opens with the backend header. Two narrow skips are by design: `test_torch_interop.py` verifies the `DataLoader` integration and skips when torch is absent, since `dataseq` does not depend on torch; and the 206 numba-cuda tests (59 in `test_viterbi.py`, 25 in `test_viterbi_batch.py`, 55 in `test_forward_backward_backends.py` and 67 in `test_baum_welch_backends.py`: every shared test's `cuda` parameter plus each file's launch-geometry tests) skip without a CUDA device, with the header reading `cuda ✗ (no CUDA device detected)` — set `PFSMGRAPH_REQUIRE_BACKENDS=cuda` where a GPU is expected, so a lost device fails the run instead.
 - `uv build --package pfsmgraph-<pkg>` — build one member's sdist + wheel.
 - `uv lock` — refresh `uv.lock` (committed; one lockfile for the whole family).
 
