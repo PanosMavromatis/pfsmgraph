@@ -64,7 +64,7 @@ _START_KEY, _ROUND_KEY = 0, 1
 #: lines of different shapes. Header and rows are both built from this, which is what
 #: keeps them aligned: a width lives in one place. A width of 0 is the free last column.
 #:
-#: The first seven are ``training-log-line``'s (``hmm-trainer.lsh:462-477``) in its
+#: The first seven are ``training-log-line``'s (``hmm-trainer.lsh:462-474``) in its
 #: order, less ``test-data-dl``, which the original never assigned -- all seven logged
 #: lines read ``0``. The last three have no counterpart there and could not have: the
 #: original's user ran one trial at a time by hand, so no round of it ever had
@@ -292,7 +292,7 @@ def _check_search(start, seed, max_rounds, patience):
 
 
 def _marker(move: Move) -> str:
-    """``training-log-line``'s move column (``hmm-trainer.lsh:462-467``).
+    """``training-log-line``'s move column (``hmm-trainer.lsh:464-468``).
 
     ``n ^`` for a split of state ``n``, ``i v j`` for a merge of ``i`` and ``j``. The
     starting model's row uses ``-``, the third form. The original padded each to

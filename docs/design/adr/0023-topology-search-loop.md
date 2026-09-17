@@ -237,7 +237,8 @@ fixtures, with the corpus as one record (N = 1268), on a 4-vCPU Xeon.
 
 - **The loop.** `Training/hmm-train-new-nw`, `hmm-train-load-nw` and
   `hmm-trainer-view.lsh`, read in `feat/hmm-search-loop` goal 1. The view has fifteen
-  buttons, not the thirteen §11 listed. `m001_0005_005`'s training log is one kept
+  buttons, not the thirteen §11 listed at the time (§11's list was corrected on
+  `feat/hmm-search-log`, 2026-09-17, and now reads fifteen). `m001_0005_005`'s training log is one kept
   trajectory: 3198.38 → 2433.99 → 2131.1 → 1774.03 → 1748.9, four splits, each lower.
 - **`d_choice.py`** (§5).
   - `total(d)` has **23 local minima on `[1, 300]` at `S = 1`, and one at `S = 5` and `S = 8`**.

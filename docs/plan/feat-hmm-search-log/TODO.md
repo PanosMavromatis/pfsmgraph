@@ -165,7 +165,43 @@ at a time by hand.
         says its `log=` is "not the Lush training log, **which is per-topology history for
         revision 04**", a forward reference this branch discharges.
 
-- [ ] Record that `hmm-trainer-view.lsh` (237 lines) migrated **nowhere**, and why, so the omission reads as a decision rather than an oversight. It is the only file in `Code/HMMlib/` with no destination.
-  - [ ] Decide where the record lives. Four places already name the file and none of them *is* the record: `HMMLIB-ACCOUNT.md` §11 (which says "it migrates nowhere" in passing, inside a section whose headline claim carries a 2026-09-17 correction), `DEFERRED.md:580` (which cites this revision for the reason), ADR 0017 and ADR 0023. The test is where a reader asking "what happened to the GUI?" would actually look.
-  - [ ] Say **both** things the master plan asks for, since either alone misleads. It is "presentation only — every button calls a trainer method and then `update-view`" (§11), which is what makes dropping it lossless; and it is, beside `Training/hmm-train-new-nw`, one of the two written statements of the workflow `_search.py` ports, which is what is lost with it. Its fifteen buttons are the requirements list ADR 0023 read.
-  - [ ] Check the record against the correction §11 already carries. "There is no headless entry point" is false and marked so; a record that leans on §11's framing without noticing would inherit a retracted claim.
+- [x] Record that `hmm-trainer-view.lsh` (237 lines) migrated **nowhere**, and why, so the omission reads as a decision rather than an oversight. It is the only file in `Code/HMMlib/` with no destination.
+  > **Q:** Where should the non-migration record live?
+  > **A:** A new `## 16. What migrated nowhere` in `HMMLIB-ACCOUNT.md`, beside the source
+  > table that already lists the view at 237 lines. The account is the per-file record of
+  > the original, so it is where a reader asking "what happened to this file?" looks, and a
+  > new section avoids inheriting §11's retracted headline. `DEFERRED.md` is deliberately
+  > left alone: its pointer still reads "see revision `04-hmm-v0.3.0`" rather than naming
+  > §16, which was the declined "both ends" option.
+  > **Q:** §11 carries two known-wrong things. How much should this goal fix?
+  > **A:** Both. Correct the button list, and retitle the section so its heading is not a
+  > claim its own body withdraws -- `## 11. How a training run was driven`. The withdrawn
+  > heading is preserved *inside* the existing correction block rather than overwritten,
+  > since a dated retraction is evidence about how the reading went wrong.
+  > **Note:** The undercount was not neutral, and this is the goal's real finding -- though
+  > not the one first written here. §11 listed **thirteen** buttons and the source has
+  > exactly fifteen `stdbutton`s, the two missing being `Keep d` and `Reset d`. The first
+  > draft of this note claimed the correction "never reached §11"; that is **false**, and
+  > was written from §11's body without reading to the end of its own footnote. §11's
+  > correction block, added on `feat/hmm-search-loop`, already said "fifteen buttons, not
+  > thirteen: the list above omits `Keep d` and `Reset d`", and ADR 0023 says it too. The
+  > actual defect is narrower and more ordinary: the correction was filed *beside* the
+  > claim and never applied *into* it, so the section's text and its own footnote
+  > disagreed and a reader of the list alone got thirteen. Worth remembering, because a
+  > dated correction block reads like the job is done. And the pair matters: `Keep d` /
+  > `Reset d` mirror `Keep model` / `Reset model`, so they are the second half of the
+  > commit-and-rollback pattern over a mutable working copy, and `keep-model` opens with
+  > `(==> this reset-d)`. ADR 0017 declines that split citing "two buttons in a GUI that
+  > migrates nowhere"; there are **four**, and the second pair is the stronger evidence,
+  > since `d` is one integer and a working copy for one number is the pattern applied past
+  > the point where it buys anything.
+  > **Note:** The inherited line range `hmm-trainer.lsh:457-477` over-reaches by three
+  > lines -- `training-log-line` ends at 474, and 477 opens `run-add-with-update`. Traced
+  > to `docs/plan/02-hmm-v0.1.0/docs-hmm-migration-plan/TODO.md:79` and propagated forward
+  > since. Corrected in the three live documents this branch wrote (`core.md`, the branch
+  > doc, and `_search.py`, whose `462-477` became `462-474` and whose marker-column
+  > `462-467` became `464-468`, the three forms actually spanning 464-468). The master
+  > plan's and the older revisions' copies are left as the records they are.
+  - [x] Decide where the record lives. Four places already name the file and none of them *is* the record: `HMMLIB-ACCOUNT.md` §11 (which says "it migrates nowhere" in passing, inside a section whose headline claim carries a 2026-09-17 correction), `DEFERRED.md:580` (which cites this revision for the reason), ADR 0017 and ADR 0023. The test is where a reader asking "what happened to the GUI?" would actually look.
+  - [x] Say **both** things the master plan asks for, since either alone misleads. It is "presentation only — every button calls a trainer method and then `update-view`" (§11), which is what makes dropping it lossless; and it is, beside `Training/hmm-train-new-nw`, one of the two written statements of the workflow `_search.py` ports, which is what is lost with it. Its fifteen buttons are the requirements list ADR 0023 read.
+  - [x] Check the record against the correction §11 already carries. "There is no headless entry point" is false and marked so; a record that leans on §11's framing without noticing would inherit a retracted claim.

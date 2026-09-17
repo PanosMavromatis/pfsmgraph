@@ -29,7 +29,7 @@ is a step function of its converged parameters, because the best integer `d` ste
 and each step moves the model half by 58-71 bits at nine states, so rankings closer than that
 are decided by where EM stopped; acceptance has no margin because a margin cannot fix it (ADR
 0023, Open). **Its `log=` is the Lush training log ported** (`feat/hmm-search-log`,
-`update-training-log`/`training-log-line`, `hmm-trainer.lsh:457-477`): a header, a row for the
+`update-training-log`/`training-log-line`, `hmm-trainer.lsh:457-474`): a header, a row for the
 starting model, **one row per round**, and a closing sentence naming the stop. The port keeps the
 original's column order and its three move forms -- `n ^`, `i v j`, `-` -- and leaves its bytes
 behind, a departure measured first by round-tripping all seven oracle lines byte-for-byte through
