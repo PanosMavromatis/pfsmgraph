@@ -1,7 +1,7 @@
 """Tests for ``_trials``: the scored trials and the ``suggest-*`` rankings.
 
 The trial is a composition -- ADR 0022's split, ``baum_welch`` under a minimum
-budget, ``_suggest_d``, ``_total_description_length`` -- each tested in its own
+budget, ``_scan_d``, ``_total_description_length`` -- each tested in its own
 module, so these tests pin the composition rather than re-testing the parts: that
 it is the composition bit for bit, in that order, with the floor and the backend
 passed through; that the score is *called*, not assembled; and that the unrounded
@@ -19,9 +19,10 @@ from pfsmgraph.hmm import _trials
 from pfsmgraph.hmm._mdl import (
     _corpus_description_length,
     _data_description_length,
-    _suggest_d,
+    _scan_d,
     _total_description_length,
 )
+from pfsmgraph.hmm import _mdl
 from pfsmgraph.hmm._topology import _merge_states, _split_state
 from pfsmgraph.hmm._trials import (
     Move,
@@ -87,14 +88,15 @@ def test_the_trial_is_split_then_baum_welch_under_the_floor_bit_for_bit(case):
 def test_the_score_is_the_total_at_the_chosen_d(case):
     _, records, _, trial = case
     assert isinstance(trial, TrialResult)
-    assert trial.d == _suggest_d(trial.params, records)
+    assert (trial.d, trial.total_bits) == _scan_d(trial.params, records, trial.data_bits)
     assert trial.total_bits == _total_description_length(trial.params, records, trial.d)
     assert type(trial.total_bits) is float
 
 
 def test_the_score_is_called_rather_than_assembled(case, monkeypatch):
     params, records, _, _ = case
-    monkeypatch.setattr(_trials, "_total_description_length", lambda *_: 1234.5)
+    # _scan_d is what calls the total now (ADR 0023 section 5), so patch it there.
+    monkeypatch.setattr(_mdl, "_total_description_length", lambda *_, **__: 1234.5)
     trial = _try_split(
         params, records, STATE, rng=np.random.default_rng(SEED + 1), min_cycles=MIN_CYCLES
     )
@@ -178,10 +180,11 @@ def test_the_merge_trial_is_merge_then_baum_welch_bit_for_bit(merge_case):
 
 def test_the_merge_score_is_the_total_at_the_chosen_d_and_is_called(merge_case, monkeypatch):
     params, records, _, trial = merge_case
-    assert trial.d == _suggest_d(trial.params, records)
+    assert (trial.d, trial.total_bits) == _scan_d(trial.params, records, trial.data_bits)
     assert trial.total_bits == _total_description_length(trial.params, records, trial.d)
 
-    monkeypatch.setattr(_trials, "_total_description_length", lambda *_: 1234.5)
+    # _scan_d is what calls the total now (ADR 0023 section 5), so patch it there.
+    monkeypatch.setattr(_mdl, "_total_description_length", lambda *_, **__: 1234.5)
     assert _try_merge(params, records, *PAIR).total_bits == 1234.5
 
 
@@ -281,9 +284,9 @@ def _fake(total):
 def _spy_split(monkeypatch, totals=None):
     calls = []
 
-    def spy(params, records, state, *, rng, min_cycles, backend, batch_size):
+    def spy(params, records, state, *, rng, min_cycles, backend, score_backend, batch_size):
         draw = rng.random()
-        calls.append((state, draw, min_cycles, backend, batch_size))
+        calls.append((state, draw, min_cycles, backend, batch_size, score_backend))
         return _fake(totals(state, len(calls)) if totals else draw)
 
     monkeypatch.setattr(_trials, "_try_split", spy)
@@ -293,8 +296,8 @@ def _spy_split(monkeypatch, totals=None):
 def _spy_merge(monkeypatch, totals=None):
     calls = []
 
-    def spy(params, records, first, second, *, min_cycles, backend, batch_size):
-        calls.append(((first, second), min_cycles, backend, batch_size))
+    def spy(params, records, first, second, *, min_cycles, backend, score_backend, batch_size):
+        calls.append(((first, second), min_cycles, backend, batch_size, score_backend))
         return _fake(totals(first, second) if totals else float(first + second))
 
     monkeypatch.setattr(_trials, "_try_merge", spy)
@@ -305,10 +308,12 @@ def test_suggest_split_runs_each_state_in_order_with_the_shipped_trial_counts(ca
     params, records, _, _ = case
     calls = _spy_split(monkeypatch)
     seed = np.random.SeedSequence(7)
-    moves = _suggest_split(params, records, seed=seed, min_cycles=11, batch_size=2)
+    moves = _suggest_split(
+        params, records, seed=seed, min_cycles=11, batch_size=2, score_backend="cython"
+    )
 
     assert [c[0] for c in calls] == [0, 0, 1, 1]
-    assert {c[2:] for c in calls} == {(11, "python", 2)}
+    assert {c[2:] for c in calls} == {(11, "python", 2, "cython")}
     assert sorted((m.states, m.trial) for m in moves) == [((0,), 0), ((0,), 1), ((1,), 0), ((1,), 1)]
     assert [m.total_bits for m in moves] == sorted(c[1] for c in calls)
 
@@ -353,10 +358,10 @@ def test_suggest_merge_tries_pairs_in_order_and_leaves_out_two_transient_states(
         SymbolTable(["a", "b"]),
     )
     calls = _spy_merge(monkeypatch)
-    moves = _suggest_merge(params, [], min_cycles=4)
+    moves = _suggest_merge(params, [], min_cycles=4, score_backend="cython")
 
     assert [c[0] for c in calls] == [(0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]
-    assert {c[1:] for c in calls} == {(4, "python", None)}
+    assert {c[1:] for c in calls} == {(4, "python", None, "cython")}
     assert [m.states for m in moves] == [(0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]
 
 

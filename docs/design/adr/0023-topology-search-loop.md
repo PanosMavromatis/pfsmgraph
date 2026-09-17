@@ -55,8 +55,8 @@ those was measured on this branch before being changed.
 Each round calls `_suggest_move` on the incumbent: every merge pair except pairs of two
 transient states, then `min_split_trials + int(split_trials_per_state_p · state_p[s])`
 split trials per state. Every candidate is re-converged inside its own trial. The round's
-winner, the first `Move` with a result, becomes the incumbent exactly as that `TrialResult`
-holds it: the same parameters, `d` and total, with no further EM. The only EM the loop runs
+winner, the first `Move` with a finite total, becomes the incumbent exactly as that
+`TrialResult` holds it: the same parameters, `d` and total, with no further EM. The only EM the loop runs
 itself is on the starting model.
 
 Pruning merge pairs is the alignment-seeded revision's job (`DEFERRED.md`), not this one's.
@@ -79,7 +79,8 @@ Each round's winner becomes the incumbent whatever its total, as `keep-model` di
 incumbent, the search keeps the **best** model visited: a winner replaces it only when
 `winner.total_bits < best.total_bits`. The comparison is strict, has no margin, and never
 subtracts, so a tie is not an improvement and `+inf` compares `False`. A `Move` with no
-result is impossible and can never become the incumbent. The search returns the best, not
+result, or with a result that is impossible at every `d` and so scores `+inf`, can never
+become the incumbent. The search returns the best, not
 the last.
 
 With `patience = 0` this is greedy improvement exactly: round `r` draws from `(1, r)`
@@ -90,15 +91,17 @@ until greedy stops, and the walk's best is never worse than greedy's result.
 
 The search stops at whichever comes first:
 
-- **`patience`** consecutive rounds without a new best;
-- **`max_rounds`** rounds, a required keyword with no default, so termination never depends
-  on the data (the original's `N`);
-- **a dead end**: a round with no possible move, because every candidate is impossible or
-  the round is empty (at `S = 1` with `min_split_trials = 0`).
+- **`patience`**: a round that makes `patience + 1` consecutive rounds without a new best, so
+  `patience = 0` stops at the first round that does not improve. It is required, since
+  nothing has measured a good value;
+- **`max_rounds`** rounds, also required, so termination never depends on the data (the
+  original's `N`);
+- **a dead end**: a round with no move of finite total, because every candidate is
+  impossible or the round is empty (at `S = 1` with `min_split_trials = 0`).
 
-`start=None` builds the one-state model, as `hmm-train-new-nw` does. `start=params` resumes
-from a given model, as `hmm-train-load-nw` does. Either way the start is converged under the
-default rule and scored before round 1.
+`start` is required and is either a `Vocabulary`, over which the one-state model is built
+as `hmm-train-new-nw` does, or an `HMMParams` to resume from, as `hmm-train-load-nw` does.
+Either way the start is converged under the default rule and scored before round 1.
 
 The search returns a frozen result: the best `TrialResult`, the start's score, one record per
 round (its winning `Move`, and whether it set a new best), and which stop fired. Runner-up
@@ -142,8 +145,10 @@ since a merge does not start at the incumbent's likelihood.
 ### 7. The total's forward pass takes the search's backend
 
 `_total_description_length`, `_data_description_length` and `_corpus_description_length`
-take `backend=`, resolved through `_backends._TABLE["forward_backward"]`, and `_trials`
-passes its own backend down. No kernel is written: all four phases already exist and are
+take `backend=`, resolved through `_backends._TABLE["forward_backward"]`. The trials and
+the search take it as `score_backend=`, beside the `backend=` that runs EM: they are separate
+because `forward_backward` has no `torch` phase, and ADR 0021 forbids substituting one
+backend for another. No kernel is written: all four phases already exist and are
 held bit-exact to numpy (ADR 0020), so no score changes with the backend.
 
 ## Consequences
@@ -212,6 +217,14 @@ held bit-exact to numpy (ADR 0020), so no score changes with the backend.
 
 ## Evidence
 
+- **The first rounds reproduce the original's.** From the one-state start on
+  `set02a_200` (`cython`, seed 20260917, `max_rounds = 3`), the search split state 0, then
+  0, then 2, to totals of 2434.01, 2130.66 and 1774.03 bits. `m001_0005_005`'s training log
+  records the same three moves at 2433.99, 2131.1 and 1774.03. Only the start differs: 3187.91
+  at `d = 13` against the original's 3198.38 at `d = 29` (§5). So the log is a partial
+  oracle for the moves chosen, although not for the candidates' bits, since ADR 0022 changed
+  the split's draws.
+
 Scripts are tracked under `.scratch/hmm-lush/measurements/` and use the three `set02a_200`
 fixtures, with the corpus as one record (N = 1268), on a 4-vCPU Xeon.
 
@@ -248,11 +261,17 @@ fixtures, with the corpus as one record (N = 1268), on a 4-vCPU Xeon.
 
 ## Open
 
-- **Whether acceptance needs a margin.** On `m008`, totals moved by up to 72 bits between
-  floors whose data lengths differed by at most 2.4. Those trials chose `d` by Brent, whose
-  local minima probably account for part of the spread. It is re-measured once §5 lands, and
-  a margin is added only if the spread under the scan is comparable to the differences
-  rounds are decided by.
+- **Totals closer than one step of `d` are ranked by where EM stopped.** Measured on
+  `m008` (`split_em_floor.py`, `split_total_steps.py`), one split candidate's total moved by
+  up to 72 bits between EM floors of 200, 400 and 800 while its unrounded data length moved
+  by at most 2.4. The cause is not Brent: under §5's scan all 16 trials were bit-identical to
+  the Brent run. It is the integer `d` itself. As EM moves the parameters slightly, the best
+  `d` steps (6 to 5, 5 to 4), and each step changes the model half by 58-71 bits at nine
+  states while the rounded data length moves by 2-3. **§3 therefore has no margin, and
+  deliberately**: a margin only changes which of two such totals is kept as best, and cannot
+  make either less sensitive. On `set02a` the accepted rounds improved by 300-750 bits, far
+  above the step. The remedy, if one is needed, belongs to the criterion (PRD section 8) or to
+  convergence, not to acceptance.
 - **§5's assumption at `S >= 2`**, measured on three trained models and not on the
   candidates a search produces. The implementation's tests check it on constructed
   candidates.

@@ -11,9 +11,12 @@ Each cell reads `floor:Δtotal/Δdata(cycles)` against the 800-cycle run, which 
 EM stopped. `cycles` above the floor means the ordinary stopping rule carried the run on by
 itself.
 
-`d` is chosen by `_suggest_d` (Brent) inside `_try_split`, so a total can move by more than
-its data half through Brent's local minima as well as through rounding. The spread of totals
-is therefore re-measured once the search chooses `d` by the bounded scan (ADR 0023, Open).
+`d` is chosen inside `_try_split`, so what this measures depends on the tree it runs in.
+Before ADR 0023 landed that was `_suggest_d` (Brent), and a total could move by more than its
+data half through Brent's local minima as well as through rounding: up to 72 bits on `m008`
+against 2.4 in data. Since then it is `_scan_d`, the global integer minimum, which is what
+ADR 0023's Open item on an acceptance margin was re-measured with. Scoring runs on `cython`,
+bit-identical to numpy.
 
 Imports private modules and the test suite's fixture reader, as the other measurement
 scripts do; nothing under `packages/` imports this. Run from the repo root with
@@ -60,7 +63,8 @@ def main():
                     rng = np.random.default_rng(np.random.SeedSequence(ENTROPY, spawn_key=(state, trial)))
                     started = time.perf_counter()
                     result = _try_split(
-                        params, records, state, rng=rng, min_cycles=floor, backend="cython"
+                        params, records, state, rng=rng, min_cycles=floor,
+                        backend="cython", score_backend="cython",
                     )
                     runs[floor] = (result, time.perf_counter() - started)
                 ref = runs[reference][0]

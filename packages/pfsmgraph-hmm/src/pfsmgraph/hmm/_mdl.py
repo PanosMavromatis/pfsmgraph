@@ -38,7 +38,8 @@ import numpy as np
 
 from pfsmgraph.dataseq import USER_BASE
 
-from ._forward_backward import _description_length, _forward_backward
+from ._backends import _resolve
+from ._forward_backward import _description_length
 from ._numeric import safe_divide
 from ._params import _check_codes
 
@@ -150,22 +151,27 @@ def _quantize(p, d):
     return safe_divide(rounded, total)
 
 
-def _corpus_description_length(init_state_p, transition_p, output_p, records):
+def _corpus_description_length(init_state_p, transition_p, output_p, records, *, backend="python"):
     """Bits over every record, from arrays rather than an ``HMMParams``.
 
     Arrays because :func:`_data_description_length` passes rounded parameters,
     which need not be a valid model: a row can round to all zeros.
+
+    ``backend`` names a ``forward_backward`` phase (ADR 0021). Every phase is held
+    bit-exact to the numpy reference on its scale factors (ADR 0020), so the bits
+    returned do not depend on it; only the time does (ADR 0023 section 7).
     """
+    forward_backward = _resolve("forward_backward", backend)
     bits_per_record = np.zeros(len(records), dtype=np.float64)
     for index, record in enumerate(records):
-        _, _, scale = _forward_backward(
+        _, _, scale = forward_backward(
             init_state_p, transition_p, output_p, record.codes
         )
         bits_per_record[index] = _description_length(scale)
     return float(np.add.accumulate(bits_per_record)[-1]) if len(records) else 0.0
 
 
-def _data_description_length(params, records, d):
+def _data_description_length(params, records, d, *, backend="python"):
     """The data description length at precision ``d``: ``update-data-dl``.
 
     The original runs its forward pass again over the rounded ``-r`` matrices
@@ -178,7 +184,8 @@ def _data_description_length(params, records, d):
     reports as ``1e100`` through its ``-1`` sentinel (``update-total-dl``). The
     original's final ``bits`` of the last column's sum is 1 within rounding and is
     omitted, as it is in :func:`baum_welch`. Raises ``ValueError`` for a ``d`` that is
-    not positive and finite, and for a code outside the symbol axis.
+    not positive and finite, and for a code outside the symbol axis. ``backend`` is
+    :func:`_corpus_description_length`'s.
     """
     if not (np.isfinite(d) and d > 0):
         raise ValueError(f"d must be positive and finite, got {d}")
@@ -189,6 +196,7 @@ def _data_description_length(params, records, d):
         _quantize(params.transition_p, d),
         _quantize(params.output_p, d),
         records,
+        backend=backend,
     )
 
 
@@ -251,7 +259,7 @@ def _model_description_length(params, d):
     )
 
 
-def _total_description_length(params, records, d):
+def _total_description_length(params, records, d, *, backend="python"):
     """The two-part score: the data half plus the model half, in bits.
 
     ``update-total-dl`` (``hmm-trainer.lsh:430-433``), and **the one function the
@@ -284,11 +292,12 @@ def _total_description_length(params, records, d):
     half's known offset at ``d = 29``.
 
     ``d`` is taken as given; choosing it is ``suggest-d``'s job. Both halves
-    reject a ``d`` that is not positive and finite, the data half first.
+    reject a ``d`` that is not positive and finite, the data half first. ``backend``
+    selects the forward pass and cannot change the result (ADR 0023 section 7).
     """
-    return _data_description_length(params, records, d) + _model_description_length(
-        params, d
-    )
+    return _data_description_length(
+        params, records, d, backend=backend
+    ) + _model_description_length(params, d)
 
 
 #: What ``update-total-dl`` (``hmm-trainer.lsh:430-433``) substitutes for the total of
@@ -445,3 +454,65 @@ def _suggest_d(params, records):
 
     d, _ = _minimize_int(objective, D_LOW, D_START, D_HIGH)
     return d
+
+
+def _d_model_lower_bound(n_states, n_user_symbols, d):
+    """A lower bound on :func:`_model_description_length` at ``d``, non-decreasing in ``d``.
+
+    Every term of the model half but the per-arc one, which counts transitions that
+    survive quantization, is kept exactly. That count is bounded below by ``S`` once
+    ``d >= S``: a row's largest entry is at least ``1/S``, so ``p * d >= 1`` and rounding
+    half up cannot zero it. Below ``S`` it is bounded by zero.
+    """
+    bound = (
+        _int_code_length(n_states)
+        + _int_code_length(d)
+        + (1 + n_states) * _comb_code_length(d, 1 + n_states)
+    )
+    if d >= n_states:
+        bound += n_states * _comb_code_length(d, 1 + n_user_symbols)
+    return bound
+
+
+def _scan_d(params, records, data_bits, *, backend="python"):
+    """The integer ``d`` in ``[1, 10000]`` with the lowest total, by a bounded scan.
+
+    What the topology search chooses ``d`` with (ADR 0023 section 5), in place of
+    :func:`_suggest_d`'s reproduction of the original's Brent search, whose local
+    minimum is 10.46 bits above the global one on the one-state model a search starts
+    from. ``d = 1, 2, ...`` is tried in order and the first ``d`` with the lowest
+    total is kept, so a tie goes to the smaller ``d``. The scan stops at the first
+    ``d`` where
+
+        data_bits + _d_model_lower_bound(S, A, d) >= best
+
+    since no larger ``d`` can then score below ``best``. ``data_bits`` is the
+    unrounded corpus description length of ``params``, which every trial already
+    carries (ADR 0022 section 5).
+
+    **That stop assumes rounding never lowers the data length below** ``data_bits``.
+    It is exact for one state, whose likelihood is concave with EM at its maximum,
+    and measured rather than proven beyond (``.scratch/hmm-lush/measurements/
+    d_choice.py``). A candidate breaking it by ``v`` bits could end the scan early,
+    at a ``d`` no more than ``v`` bits above the minimum. On the tracked models the
+    scan returns 13, 3 and 4 in 16, 7 and 21 evaluations.
+
+    Totals are only compared, never subtracted, so an impossible ``d`` at ``+inf``
+    needs no sentinel. If every ``d`` is impossible the scan runs to 10000 and
+    returns ``1.0``. Returns ``(d, total)`` with ``d`` a float with an integer value.
+    Raises ``ValueError`` for a ``data_bits`` that is not a number.
+    """
+    if not isinstance(data_bits, (int, float, np.floating)) or np.isnan(data_bits):
+        raise ValueError(f"data_bits must be a number, got {data_bits!r}")
+    records = list(records)
+    n_states, n_user_symbols = params.n_states, params.n_symbols - USER_BASE
+    best_d, best = D_LOW, np.inf
+    d = D_LOW
+    while d <= D_HIGH:
+        if data_bits + _d_model_lower_bound(n_states, n_user_symbols, d) >= best:
+            break
+        total = _total_description_length(params, records, d, backend=backend)
+        if total < best:
+            best_d, best = d, total
+        d += 1.0
+    return best_d, best

@@ -14,9 +14,9 @@ which keeps every round's best neighbour unconditionally and stops only at N; th
 `Continue for ` button is the same loop. `HMMLIB-ACCOUNT.md` §11 said no such loop existed,
 and was corrected on this branch. Acceptance against the incumbent, a stopping rule and
 trajectory selection are departures from that loop, and the plan, the docstrings and ADR 0023
-must name them as such. There is still no numeric oracle for a trajectory: the only tracked
-one is `m001_0005_005`'s training log, whose splits used the original's randomness, which
-ADR 0022 changed.
+must name them as such. There is no oracle for a trajectory's bits, since ADR 0022 changed the
+split's draws, but there is one for its moves: the search's first three rounds on `set02a_200`
+choose the splits `m001_0005_005`'s training log records, and a test pins that.
 
 ## Scope
 
@@ -49,3 +49,13 @@ ADR 0022 changed.
 - `Training/hmm-train-new-nw`, `hmm-train-load-nw`: the headless loop being ported
 
 ## Notes
+
+- Goal 1 found the original's headless loop (`Training/hmm-train-new-nw`), which `HMMLIB-ACCOUNT.md`
+  §11 had denied, and the search was reframed as a port with named departures.
+- Goals 2-3 decided `d` by a bounded exact scan, a 200-cycle split floor and a compiled
+  forward pass inside the total, each measured, and recorded all of it as ADR 0023.
+- Goal 4 wrote `_search.py`, `_scan_d` and `score_backend=`, with 32 tests in `test_search.py`
+  and 15 more in `test_mdl.py`, mutation-checked against eight defects. The acceptance margin
+  was measured and declined: a candidate's total steps by 58-71 bits as its integer `d` steps,
+  which no margin can fix.
+

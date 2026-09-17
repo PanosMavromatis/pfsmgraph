@@ -43,8 +43,13 @@ every split from one global stream. No verdict against the incumbent is given.
 
 **The score is obtained by calling** :func:`~._mdl._total_description_length`, never
 by assembling it, so a later change of criterion (PRD section 8) substitutes one
-function. ``d`` comes from :func:`~._mdl._suggest_d`, the original's Brent search
-from 3821 on every trial, not warm-started from the incumbent's ``d``.
+function. **``d`` comes from** :func:`~._mdl._scan_d`, **not the original's Brent
+search** (ADR 0023 section 5): a bounded scan for the global integer minimum, bounded
+by the trial's own unrounded data length, and run afresh on every trial.
+:func:`~._mdl._suggest_d` stays as the checked reproduction of ``suggest-d``.
+``backend`` runs EM and ``score_backend`` the forward passes inside the scan; they are
+separate because ``forward_backward`` has no ``torch`` phase, and neither is ever
+substituted for the other (ADR 0021).
 """
 
 from __future__ import annotations
@@ -56,7 +61,7 @@ from typing import Literal
 import numpy as np
 
 from ._baum_welch import baum_welch
-from ._mdl import _suggest_d, _total_description_length
+from ._mdl import _scan_d
 from ._numeric import closed_classes
 from ._params import HMMParams
 from ._topology import _merge_states, _split_state
@@ -97,6 +102,7 @@ def _try_split(
     rng: np.random.Generator,
     min_cycles: int,
     backend: str = "python",
+    score_backend: str = "python",
     batch_size: int | None = None,
 ) -> TrialResult:
     """Split ``state``, re-converge the candidate, choose its ``d`` and score it.
@@ -109,6 +115,7 @@ def _try_split(
     :param min_cycles: the fewest EM cycles before the stopping rule may fire.
         Required, because ADR 0022 leaves its size to the search loop.
     :param backend: passed to :func:`~._baum_welch.baum_welch`.
+    :param score_backend: the ``forward_backward`` phase that scores each ``d``.
     :param batch_size: passed to :func:`~._baum_welch.baum_welch`.
     :returns: the ``S + 1``-state candidate, re-converged and scored.
     :raises ImpossibleSequenceError: when a record has no path under the incumbent,
@@ -116,7 +123,8 @@ def _try_split(
     """
     records = list(records)
     return _re_converge_and_score(
-        _split_state(params, state, rng=rng), records, min_cycles, backend, batch_size
+        _split_state(params, state, rng=rng), records, min_cycles, backend, score_backend,
+        batch_size,
     )
 
 
@@ -128,6 +136,7 @@ def _try_merge(
     *,
     min_cycles: int = 0,
     backend: str = "python",
+    score_backend: str = "python",
     batch_size: int | None = None,
 ) -> TrialResult:
     """Merge ``first`` and ``second``, re-converge the candidate, choose its ``d`` and score it.
@@ -139,6 +148,7 @@ def _try_merge(
     :param min_cycles: the fewest EM cycles before the stopping rule may fire; ``0``,
         the default, is the original's rule.
     :param backend: passed to :func:`~._baum_welch.baum_welch`.
+    :param score_backend: the ``forward_backward`` phase that scores each ``d``.
     :param batch_size: passed to :func:`~._baum_welch.baum_welch`.
     :returns: the ``S - 1``-state candidate, re-converged and scored.
     :raises ValueError: from :func:`~._topology._merge_states`, including for a pair of
@@ -147,23 +157,25 @@ def _try_merge(
     """
     records = list(records)
     return _re_converge_and_score(
-        _merge_states(params, first, second), records, min_cycles, backend, batch_size
+        _merge_states(params, first, second), records, min_cycles, backend, score_backend,
+        batch_size,
     )
 
 
-def _re_converge_and_score(candidate, records, min_cycles, backend, batch_size):
-    """What both trials do after their surgery: ``run-converge``, ``suggest-d``, the score."""
+def _re_converge_and_score(candidate, records, min_cycles, backend, score_backend, batch_size):
+    """What both trials do after their surgery: ``run-converge``, choosing ``d``, the score."""
     converged = baum_welch(
         candidate, records, backend=backend, batch_size=batch_size, min_cycles=min_cycles
     )
-    d = _suggest_d(converged.params, records)
+    # baum_welch's last entry is the reference forward pass on every backend,
+    # which is the corpus description length of the returned parameters.
+    data_bits = converged.description_lengths[-1]
+    d, total_bits = _scan_d(converged.params, records, data_bits, backend=score_backend)
     return TrialResult(
         params=converged.params,
         d=d,
-        total_bits=_total_description_length(converged.params, records, d),
-        # baum_welch's last entry is the reference forward pass on every backend,
-        # which is the corpus description length of the returned parameters.
-        data_bits=converged.description_lengths[-1],
+        total_bits=total_bits,
+        data_bits=data_bits,
         cycles=converged.cycles,
         converged=converged.converged,
     )
@@ -195,6 +207,7 @@ def _suggest_split(
     min_split_trials: int = MIN_SPLIT_TRIALS,
     split_trials_per_state_p: float = SPLIT_TRIALS_PER_STATE_P,
     backend: str = "python",
+    score_backend: str = "python",
     batch_size: int | None = None,
 ) -> list[Move]:
     """Every split trial of one round, ranked: ``suggest-split``.
@@ -213,7 +226,7 @@ def _suggest_split(
     return _ranked(
         _split_moves(
             params, records, seed, min_cycles, min_split_trials,
-            split_trials_per_state_p, backend, batch_size,
+            split_trials_per_state_p, backend, score_backend, batch_size,
         )
     )
 
@@ -224,6 +237,7 @@ def _suggest_merge(
     *,
     min_cycles: int = 0,
     backend: str = "python",
+    score_backend: str = "python",
     batch_size: int | None = None,
 ) -> list[Move]:
     """Every merge of one round, ranked: ``suggest-merge``.
@@ -232,7 +246,9 @@ def _suggest_merge(
     out. :returns: the moves, stably sorted by ``total_bits``.
     """
     records = list(records)
-    return _ranked(_merge_moves(params, records, min_cycles, backend, batch_size))
+    return _ranked(
+        _merge_moves(params, records, min_cycles, backend, score_backend, batch_size)
+    )
 
 
 def _suggest_move(
@@ -245,6 +261,7 @@ def _suggest_move(
     min_split_trials: int = MIN_SPLIT_TRIALS,
     split_trials_per_state_p: float = SPLIT_TRIALS_PER_STATE_P,
     backend: str = "python",
+    score_backend: str = "python",
     batch_size: int | None = None,
 ) -> list[Move]:
     """Every merge and every split trial of one round, ranked together: ``suggest-move``.
@@ -255,17 +272,17 @@ def _suggest_move(
     records = list(records)
     _check_round(seed, min_split_trials, split_trials_per_state_p)
     return _ranked(
-        _merge_moves(params, records, merge_min_cycles, backend, batch_size)
+        _merge_moves(params, records, merge_min_cycles, backend, score_backend, batch_size)
         + _split_moves(
             params, records, seed, split_min_cycles, min_split_trials,
-            split_trials_per_state_p, backend, batch_size,
+            split_trials_per_state_p, backend, score_backend, batch_size,
         )
     )
 
 
 def _split_moves(
     params, records, seed, min_cycles, min_split_trials, split_trials_per_state_p,
-    backend, batch_size,
+    backend, score_backend, batch_size,
 ):
     moves = []
     state_p = params.state_p
@@ -279,21 +296,21 @@ def _split_moves(
                     "split", (state,), trial,
                     lambda: _try_split(
                         params, records, state, rng=rng, min_cycles=min_cycles,
-                        backend=backend, batch_size=batch_size,
+                        backend=backend, score_backend=score_backend, batch_size=batch_size,
                     ),
                 )
             )
     return moves
 
 
-def _merge_moves(params, records, min_cycles, backend, batch_size):
+def _merge_moves(params, records, min_cycles, backend, score_backend, batch_size):
     transient = closed_classes(params.transition_p) < 0
     return [
         _attempt(
             "merge", (a, b), 0,
             lambda: _try_merge(
                 params, records, a, b, min_cycles=min_cycles,
-                backend=backend, batch_size=batch_size,
+                backend=backend, score_backend=score_backend, batch_size=batch_size,
             ),
         )
         for a, b in combinations(range(params.n_states), 2)
