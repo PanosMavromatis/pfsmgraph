@@ -176,6 +176,10 @@ change, and nothing in revisions 02–04 does.
   library scores candidates through `suggest-split`, `suggest-merge` and `suggest-move`,
   but nothing in the tree loops over them; a training run was a person watching the
   description length and pressing buttons.
+  *(Amended 2026-09-17, `feat/hmm-search-loop`: the premise is false. `Training/hmm-train-new-nw`
+  and `hmm-train-load-nw` loop `suggest-move` then `keep-model` a fixed number of times, and
+  §11 of the account now says so. The decision is unaffected and its ground is firmer: see
+  the amendment under "Reasoned, not observed".)*
 
 **Measured:** 35 verbatim-duplicated lines between `hmm.lsh:228-262` and
 `hmm-param.lsh:66-100`, differing in one symbol (`alphabet-size` versus
@@ -188,6 +192,12 @@ moves than it accepts" is a forward design assumption about a strategy this proj
 for the first time, not a translated fact. Immutable rollback costs the same at one
 acceptance in five as at one in five hundred; a save-point's cost and its
 forgotten-restore risk both grow exactly as trials become cheaper and more numerous.
+*(Amended 2026-09-17: the ratio is not unknown after all — it is fixed by the original's
+code. A `suggest-move` round tries every merge pair and two splits per state, restoring the
+incumbent after each, and keeps exactly one, so it accepts one candidate in `S(S-1)/2 + 2S`:
+1 in 2 at `S = 1`, 1 in 44 at `S = 8`. "Rejects far more moves than it accepts" is therefore a
+translated fact rather than a forward assumption, and the architecture chosen under
+ignorance of the ratio is the one that ratio favours.)*
 
 ## Open
 

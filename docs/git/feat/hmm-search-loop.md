@@ -8,11 +8,15 @@
 
 Design and implement the automatic topology search: starting from a one-state model, propose
 state merges and splits, re-converge and score each candidate by total description length, accept
-or roll back against the incumbent, and stop. **This is new work, not a port.** The Lush original
-has no such loop (`HMMLIB-ACCOUNT.md` §11) — its workflow was a user pressing buttons in
-`hmm-trainer-view.lsh` — so there is nothing to be faithful to and no differential oracle. The
-plan, the docstrings and the ADR must say so, since a reviewer who believes it is a port will
-check it against the wrong thing.
+or roll back against the incumbent, and stop. **This is a port with named departures.** The
+Lush original's driver is `Training/hmm-train-new-nw`, `(repeat N (suggest-move) (keep-model))`,
+which keeps every round's best neighbour unconditionally and stops only at N; the view's
+`Continue for ` button is the same loop. `HMMLIB-ACCOUNT.md` §11 said no such loop existed,
+and was corrected on this branch. Acceptance against the incumbent, a stopping rule and
+trajectory selection are departures from that loop, and the plan, the docstrings and ADR 0023
+must name them as such. There is still no numeric oracle for a trajectory: the only tracked
+one is `m001_0005_005`'s training log, whose splits used the original's randomness, which
+ADR 0022 changed.
 
 ## Scope
 
@@ -41,6 +45,7 @@ check it against the wrong thing.
   `test_mdl.py`; `inf - inf = nan` inside Brent
 - `.scratch/hmm-lush/measurements/merge_round_cost.py`: a merge round costs its pair count, 1.3 to
   1.7 s per pair on a 4-vCPU host, with `_suggest_d` taking 53–62% of each trial
-- `hmm-trainer-view.lsh`: thirteen buttons, read as a requirements list rather than a UI
+- `hmm-trainer-view.lsh`: fifteen buttons, read as a requirements list rather than a UI
+- `Training/hmm-train-new-nw`, `hmm-train-load-nw`: the headless loop being ported
 
 ## Notes
