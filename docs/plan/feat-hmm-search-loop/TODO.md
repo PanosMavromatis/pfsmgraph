@@ -1,6 +1,6 @@
 # feat/hmm-search-loop
 
-**Status**: active
+**Status**: merged — PR #48 — 2026-09-17
 **Created**: 2026-09-17
 **Subgoal**: Design the automatic search loop — `docs/plan/TODO.md`, revision 04-hmm-v0.3.0
 
