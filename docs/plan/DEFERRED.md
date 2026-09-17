@@ -693,6 +693,63 @@ These have no event that will surface them. They need to be looked at on purpose
   carries the operational summary. **PRD §10 is deliberately not amended** — it says the question
   "was not discussed", which is a true claim about that document's scope and stays true.
 
+## Trigger: a topology search too slow to run at the model sizes in use
+
+- **Parallelize the search along trials within a round.** Decided 2026-09-17 on
+  `feat/hmm-convergence-backend` and recorded in
+  [ADR 0024](../design/adr/0024-search-compiled-work.md) section 3, which is
+  authoritative. The search stays serial in revision 04, and when it is parallelized the
+  axis is **trials within a round**, never a kernel's `(record, state)` cells: a round's
+  cost *is* its trials, each takes the same incumbent and returns its own `TrialResult`,
+  and the cells belong to the ADR 0002 phases that already own them.
+
+  **It can be exact, and ADR 0023 is what makes it so.** Seeds are keyed by trial
+  identity, `(1, r, s, t)` for split trial `(s, t)` of round `r`, so no trial's draws
+  depend on which ran first; and the ranking is a stable sort whose enumeration order is
+  the tie-break. Gathering results **in enumeration order** therefore yields a
+  `SearchResult` bit-identical to the serial run. Gathering them as they complete does
+  not, and would be a silent change: the difference shows only on a tie.
+
+  **The hazards are compositional, not algorithmic.** Processes each running
+  `cpu_parallel` oversubscribe threads, and processes sharing one GPU queue on it. At
+  small `S` the natural shape is processes over serial `cython` kernels, which is also the
+  fastest phase there.
+
+  **The test it owes:** a parallel `SearchResult` `==` the serial one, on a seed that
+  exercises ties. `test_trials.py` already pins that the ranking's tie-break is the sort's
+  stability, so a tie-free seed would not see a defect that reordering introduces.
+
+  **Why it waits.** Nothing yet runs a search at a size where a round's wall time blocks
+  work: once the convergence check took `score_backend`, a 20-trial round on a 5-state
+  model cost 1.70 s ([`docs/benchmarks/hmm-backends.md`](../benchmarks/hmm-backends.md)).
+  It would also bring process management into a revision whose remaining goals are the
+  training log, the docs audit and the release.
+
+## Trigger: a search at model sizes where a GPU E-step beats `cython`
+
+- **Thread `device=` through the trials and the search.** Found 2026-09-17 on
+  `feat/hmm-convergence-backend` while measuring a torch search. `baum_welch` takes
+  `device=` for its torch backend, but `_try_split`, `_try_merge`, `_suggest_move` and
+  `_search` do not, so a search on `backend="torch"` runs its E-step on CPU threads
+  whatever hardware is present. The search *does* reach a GPU through numba-cuda, since
+  `backend="cuda"` and `score_backend="cuda"` are ordinary names in the table; it is
+  torch's device alone that is unreachable.
+
+  **What the change is:** a `device=` keyword forwarded down the same path
+  `score_backend` takes, with the validation left to `baum_welch`, which already refuses a
+  device the chosen backend cannot use. All four functions are private, so nothing
+  published changes and adding it later breaks no signature.
+
+  **Why it waits.** At `S <= 8` over a 1,268-symbol corpus, `cuda` costs about 500 ms per
+  forward pass against Cython's fraction of a millisecond, and torch on the CPU was
+  350-400 times slower than `cython` over the same rounds and search
+  ([`docs/benchmarks/hmm-backends.md`](../benchmarks/hmm-backends.md)), which also found
+  that the torch search chose the same moves. A device would be plumbing that nothing here
+  exercises.
+
+  **The test it owes:** a keyword-forwarding spy, like the two `score_backend` has in
+  `test_trials.py`, passing a non-default value so that a dropped keyword cannot pass.
+
 ## Trigger: `align` able to produce a multiple alignment
 
 - **Open a revision for the alignment-seeded topology search.** Decided 2026-09-03, from

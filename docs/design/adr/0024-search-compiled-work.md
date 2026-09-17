@@ -1,7 +1,7 @@
 # 0024. The topology search stays interpreted, and every forward pass it runs takes a named backend
 
-- **Status:** Proposed — held until **Open** chooses how `baum_welch`'s convergence check
-  names its backend.
+- **Status:** Accepted — Proposed 2026-09-17 and accepted the same day, when **Resolved**
+  chose a separate `score_backend=` on `baum_welch`.
 - **Date:** 2026-09-17
 - **Source:** none in the PRD — postdates it. Raised on `main` after PR #48
   (`feat/hmm-search-loop`) merged, in revision `04-hmm-v0.3.0`, as three questions: whether
@@ -63,8 +63,11 @@ implementation that has to be held equal to the first.
 ### 2. Every forward pass the search runs takes a named backend
 
 The convergence check inside `baum_welch` takes a `forward_backward` phase by name, as the
-scan already does, and the trials and the search pass theirs through. **How it is named is
-Open**; the constraints on either answer are decided here:
+scan already does, and the trials and the search pass theirs through. **It is named by a
+separate `score_backend=` on `baum_welch`**, resolved against `forward_backward`'s table
+before any work, as `backend=` is against `baum_welch`'s. The trials and `_search` already
+take a `score_backend` for the scan and forward it, so one name governs every forward pass a
+search runs. It holds these constraints:
 
 - **No result changes on python, cython, cpu_parallel or cuda.** The check's quantity is
   bit-identical across those phases, so every `unchanged` count, every stop and every
@@ -72,8 +75,10 @@ Open**; the constraints on either answer are decided here:
   `SearchResult` equality, against the check on `"python"`.
 - **The default stays `"python"`**, so every existing call, test and executed output in
   `docs/api/` is unchanged unless a caller asks.
-- **`torch` gets no forward phase**, and nothing substitutes one for it (ADR 0021). Under
-  `backend="torch"` the check stays on a phase `forward_backward` actually has.
+- **`torch` gets no forward phase**, and nothing substitutes one for it (ADR 0021).
+  `backend="torch"` pairs with any phase `forward_backward` has, and `score_backend="torch"`
+  is refused with the `ValueError` `_resolve` already raises for a phase an algorithm has not
+  reached.
 - **The contract sentence in `BaumWelchResult` is rewritten**, together with the comments at
   `_trials.py:170` and `_search.py:175` that rely on it, and `docs/api/hmm/baum_welch.md`
   documents the choice with executed output.
@@ -101,9 +106,12 @@ trigger, "a topology search too slow to run at the model sizes in use", carrying
 When the search becomes public, and in `docs/api/hmm/baum_welch.md` now, the backends are
 documented as interchangeable in result and differing in speed, with two facts a caller needs:
 
-- **`backend="torch"` can change the search's path.** Its E-step is held only to ADR 0020's
-  tolerance, and ADR 0023's Open item measured that a candidate's total steps by 58–71 bits
-  when EM stops slightly elsewhere and the best `d` moves. No other phase can.
+- **`backend="torch"` is the only phase whose result can differ at all**, since its E-step is
+  held to ADR 0020's tolerance rather than to equality, and ADR 0023's Open item measured
+  that a candidate's total steps by 58–71 bits when EM stops slightly elsewhere and the best
+  `d` moves. Measured on the tracked fixtures it did not: 66 candidates, identical `d`,
+  identical cycles and bit-identical totals (see **Resolved**). It is also 350–400 times
+  slower than `cython` there, on the CPU, because `_search` takes no `device=`.
 - **At the model sizes measured, Cython is the fastest phase.** The parallel phases split one
   timestep across its cells, and with `S <= 8` a parallel region or device launch per timestep
   costs more than the work inside it.
@@ -112,8 +120,8 @@ documented as interchangeable in result and differing in speed, with two facts a
 
 ### Positive
 
-- **The fix is plumbing over kernels that already exist**, as ADR 0023 §7 was, and removes
-  about 84% of a measured round.
+- **The fix is plumbing over kernels that already exist**, as ADR 0023 §7 was, and made a
+  measured round 5.5 times faster (9.38 to 1.70 s).
 - **One implementation of the search.** Reviewing it against the Lush loop stays a reading of
   one file.
 - **Parallelism, when it comes, needs no new decision about correctness.** §3's conditions
@@ -123,10 +131,10 @@ documented as interchangeable in result and differing in speed, with two facts a
 
 ### Negative / costs
 
-- **`baum_welch`'s public signature may grow**, depending on Open, and a published parameter
+- **`baum_welch`'s public signature grows by one keyword**, and a published parameter
   cannot be withdrawn without a breaking release.
-- **A search is still serial.** A round costs roughly its trial count times a few tenths of a
-  second after §2, and the merge count grows with `S²`.
+- **A search is still serial.** A round costs roughly its trial count times a tenth of a
+  second at `S = 5` after §2 (20 trials in 1.70 s), and the merge count grows with `S²`.
 - **The documented reference-check contract changes**, for callers who asked for a phase other
   than `"python"`: bit-identical on one host, but no longer the numpy code path.
 
@@ -142,6 +150,11 @@ documented as interchangeable in result and differing in speed, with two facts a
   revision whose remaining goals are the training log, the docs audit and the release.
 - **Leaving the check on numpy.** Rejected on the measurement: it is the largest cost in a
   round, and it is the reference only by a sentence that described what the code did.
+- **Deriving the check's phase from `backend=`.** Rejected 2026-09-17. It needs no signature
+  change, but it maps a request for one algorithm's backend onto another algorithm's phase,
+  and onto `"python"` under `"torch"`: the substitution ADR 0021 forbids, done silently. It
+  would also make two combinations impossible to ask for: Cython EM with a `cpu_parallel` or
+  `cuda` check, and torch EM with a compiled check.
 - **Computing the check on the E-step's own bits.** Rejected: `torch`'s per-cycle entries are
   its own, within tolerance, so the stopping rule would then depend on the backend.
 
@@ -160,36 +173,63 @@ documented as interchangeable in result and differing in speed, with two facts a
   | `_corpus_step`, the Cython E-step and count sums, 2,360 calls | 1.15 s |
   | everything else: search, surgery, `HMMParams` validation, `_scan_d` | about 1 s |
 
-  To be tracked as `.scratch/hmm-lush/measurements/search_round_profile.py`. The round after
-  §2 is estimated at about 2 s and **not yet measured**.
+  Tracked as `.scratch/hmm-lush/measurements/search_round_profile.py`, which rebuilds the
+  numpy check by patching it and reproduces the profile on the same kind of host: 12.65 s
+  under `cProfile`, 10.63 s and 236 calls in the numpy pass, 9.38 s unprofiled.
+- **The round after §2.** Same round, same script, same process: **1.70 s** unprofiled
+  (2.04 s under `cProfile`), 5.5 times faster. The numpy `_forward_backward` is not called
+  at all, and `_corpus_step` is unchanged at 1.13 s over 2,360 calls, so the Cython E-step
+  is now two thirds of a round. Both configurations rank the same 20 moves with
+  bit-identical totals.
 - **It is the second such finding.** `merge_round_cost.py` found `_suggest_d` taking 53–62% of
   a trial through the same numpy forward pass, which ADR 0023 §7 removed.
 - **The original drew the same line.** `HMMLIB-ACCOUNT.md` §12: not one topology-search
   method was compiled, since "search *drives* compiled work … so leaving the driver
   interpreted costs little". §1 agrees for the driver. The profile qualifies the conclusion:
   the driver was running the one uncompiled forward pass.
+- **Whether a torch search leaves the serial path** (`torch_search_path.py`, 2026-09-17,
+  4-vCPU Xeon, `score_backend="cython"` throughout so only the E-step differs). One
+  `_suggest_move` round from each saved model, split floor 200, seed
+  `SeedSequence(1, spawn_key=(1, 0))`, and the 3-round search from the one-state start:
+
+  | Round from | Candidates | cython | torch | EM cycles summed | `d` differs | Totals |
+  |---|---|---|---|---|---|---|
+  | `m001_0001_001`, S = 1 | 2 | 0 s | 124 s | 400 / 400 | 0 | tie, 2 of 2 |
+  | `m001_0005_005`, S = 5 | 20 | 2 s | 742 s | 2,340 / 2,340 | 0 | tie, 20 of 20 |
+  | `m008_0001_008`, S = 8 | 44 | 8 s | 2,768 s | 8,500 / 8,500 | 0 | tie, 44 of 44 |
+  | 3-round search from S = 1 | 3 rounds | 2 s | 802 s | same at every round | 0 | same moves, best 1774.0328 |
+
+  The unrounded data lengths differed by at most 1e-11 bits.
 - **Bit-identity of the phases**: ADR 0020, `test_forward_backward_backends.py` (on
   `tobytes()`), and `docs/api/hmm/baum_welch.md`'s executed comparison of compiled and
   reference `description_lengths`.
 
 ## Open
 
-- **How the check names its phase**, which holds this record at Proposed:
-  - **(a) A separate `score_backend=` on `baum_welch`**, defaulting to `"python"` and
-    validated before any work, mirroring the trials and the search. Explicit, consistent with
-    ADR 0023 §7, and a new public keyword.
-  - **(b) Derived from `backend=`**: the same name where `forward_backward` has that phase,
-    `"python"` under `"torch"`. No signature change, but an implicit rule that maps one
-    backend's request onto another phase, which sits uneasily with ADR 0021's
-    no-substitution rule.
-
-  The trials' precedent and ADR 0021 favour (a). Decide it, then mark this record Accepted.
-- **The measured round after §2**, replacing the estimate above.
-- **Whether a search on `torch` actually leaves the serial path** on the tracked fixtures,
-  measured rather than inferred from ADR 0023's step sensitivity.
 - **Owed with the implementation, so the record's claims are checkable where they are
   read:** the profiler tracked as `search_round_profile.py`; the `DEFERRED.md` trigger of §3;
   §4's guidance in `docs/api/hmm/baum_welch.md` with executed output; a qualifying note under
   `HMMLIB-ACCOUNT.md` §12 pointing at the profile; and a pointer from ADR 0023 §7 to §2 here,
-  which extends it to the convergence check. The master plan's revision 04 goal for this
-  record lists them as acceptance criteria.
+  which extends it to the convergence check. The branch plan `feat-hmm-convergence-backend`
+  lists them as goals, moved there from the master plan's revision 04 goal for this record.
+
+## Resolved
+
+- **How the check names its phase.** Settled 2026-09-17 on `feat/hmm-convergence-backend`:
+  a separate `score_backend=` on `baum_welch`, defaulting to `"python"`, and not a phase
+  derived from `backend=` (see *Alternatives considered*). The trials' precedent decided it.
+  `_trials.py` already carried the keyword but passed it only to `_scan_d`, so the check was
+  the one forward pass a named phase did not reach. Under ADR 0021, a separate name is how a
+  caller asks for a phase, and nothing chooses one for them.
+- **Whether a torch search leaves the serial path.** Measured 2026-09-17 on the tracked
+  fixtures (`torch_search_path.py`, figures under **Evidence**) and, on these, **it does
+  not**. With `score_backend="cython"` on both sides, so that only the E-step differs, all
+  66 candidates chose the same `d`, converged in the same number of EM cycles, and scored
+  **bit-identical** totals, so every ranking, winner and move agreed — including at `m008`,
+  where the winner led the runner-up by 0.0513 bits. The unrounded data lengths differed by
+  at most 1e-11 bits, which is torch's tolerance; the total absorbs it because the criterion
+  quantizes the parameters at `d` before scoring, and `TrialResult` keeps both quantities so
+  the difference is visible in `data_bits` and gone from `total_bits`. ADR 0023's step
+  sensitivity needs EM to stop somewhere materially different, which an ulp is not. Torch
+  stays the only phase that *could* differ, so §4 keeps the caution and attaches the
+  measurement to it.

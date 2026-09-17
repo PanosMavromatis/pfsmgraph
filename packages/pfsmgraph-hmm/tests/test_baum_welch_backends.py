@@ -51,8 +51,11 @@ from pfsmgraph.hmm import (
     backends,
     baum_welch,
 )
+import pfsmgraph.hmm._backends as backends_module
+import pfsmgraph.hmm._baum_welch as baum_welch_module
+from pfsmgraph.hmm import _mdl
 from pfsmgraph.hmm._backends import _TABLE, _resolve
-from pfsmgraph.hmm._baum_welch import _corpus_step, _re_estimate
+from pfsmgraph.hmm._baum_welch import BATCH_CYCLES, _corpus_step, _re_estimate
 
 from _lush_fixtures import FIXTURES, SAVED_MODELS, load_corpus_record, load_params
 
@@ -191,6 +194,104 @@ def test_the_progress_log_changes_no_result_on_any_backend(max_cycles, backend):
         assert np.array_equal(logged_array, silent_array)
     stop = "converged after" if max_cycles is None else "stopped at max_cycles after"
     assert log.getvalue().endswith(f"  {stop} {silent.cycles} cycles\n")
+
+
+# === public API: the check's phase changes no result (ADR 0024 section 2) =====
+#
+# `score_backend` names the `forward_backward` phase of the convergence check. Every
+# phase is bit-identical to the reference (ADR 0020), so with the E-step held fixed a
+# run is compared with `==`, never a tolerance. Equality alone would also pass if the
+# keyword were ignored, so a spy shows each check running on the named phase.
+
+
+def _assert_identical_runs(ours, reference):
+    assert (ours.cycles, ours.converged, ours.degenerate_states) == (
+        reference.cycles, reference.converged, reference.degenerate_states,
+    )
+    assert ours.description_lengths == reference.description_lengths
+    for ours_array, reference_array in zip(_arrays(ours.params), _arrays(reference.params)):
+        assert ours_array.tobytes() == reference_array.tobytes()
+
+
+@pytest.mark.parametrize("max_cycles", [None, 7])
+@pytest.mark.parametrize("key", [*range(8), "fixture"])
+def test_the_check_on_any_phase_returns_the_reference_result(key, max_cycles, score_backend):
+    # `max_cycles=7` stops before the first check at cycle 10, so `_finish` makes the
+    # run's only check: the budget-stop path the converging cases never take.
+    params, records, cached = _reference_run(key)
+    reference = cached if max_cycles is None else baum_welch(params, records, max_cycles=7)
+    ours = baum_welch(params, records, score_backend=score_backend, max_cycles=max_cycles)
+    _assert_identical_runs(ours, reference)
+
+
+@pytest.mark.parametrize("max_cycles", [None, 7])
+def test_every_check_runs_on_the_named_phase(monkeypatch, max_cycles, score_backend):
+    seen = []
+
+    def spy(algorithm, backend, *rest):
+        seen.append((algorithm, backend))
+        return _resolve(algorithm, backend, *rest)
+
+    monkeypatch.setattr(_mdl, "_resolve", spy)
+    params, records = _trainings(SEED, 1)[0]
+    result = baum_welch(params, records, score_backend=score_backend, max_cycles=max_cycles)
+    checks = 1 if max_cycles is not None else result.cycles // BATCH_CYCLES
+    assert checks >= 1
+    assert seen == [("forward_backward", score_backend)] * checks
+
+
+def test_torch_em_returns_the_same_result_with_any_phase_checking_it(score_backend):
+    """The pairing that deriving the check from `backend=` could not express."""
+    status = {s.name: s for s in backends("baum_welch")}["torch"]
+    if not status.available:
+        pytest.skip(f"backend 'torch' unavailable: {status.reason}")
+    params, records = _trainings(SEED + 2, 1)[0]
+    reference = baum_welch(params, records, backend="torch")
+    ours = baum_welch(params, records, backend="torch", score_backend=score_backend)
+    _assert_identical_runs(ours, reference)
+
+
+def _no_e_step(*_, **__):
+    raise AssertionError("an E-step ran before the check's phase was validated")
+
+
+@pytest.mark.parametrize(
+    "score, error, message",
+    [
+        ("torch", ValueError, "baum_welch's score_backend has no 'torch' backend"),
+        ("numpy", ValueError, "backend must be one of"),
+    ],
+)
+@pytest.mark.parametrize("backend_name", ["python", "torch"])
+def test_a_check_phase_forward_backward_lacks_is_refused_before_training(
+    monkeypatch, backend_name, score, error, message
+):
+    status = {s.name: s for s in backends("baum_welch")}[backend_name]
+    if not status.available:
+        pytest.skip(f"backend {backend_name!r} unavailable: {status.reason}")
+    monkeypatch.setattr(baum_welch_module, "_corpus_step", _no_e_step)
+    params, records = _one_symbol_training()
+    with pytest.raises(error, match=message):
+        baum_welch(params, records, backend=backend_name, score_backend=score)
+
+
+def test_an_unavailable_check_phase_raises_before_training_and_does_not_fall_back(monkeypatch):
+    # Only the check's row is withheld: the E-step's own cython row stays available.
+    probe = backends_module._probe
+
+    def withholding(algorithm, row):
+        if (algorithm, row.name) == ("forward_backward", "cython"):
+            return None, "withheld for this test"
+        return probe(algorithm, row)
+
+    monkeypatch.setattr(backends_module, "_probe", withholding)
+    monkeypatch.setattr(baum_welch_module, "_corpus_step", _no_e_step)
+    params, records = _one_symbol_training()
+    with pytest.raises(
+        BackendUnavailableError,
+        match="backend 'cython' for baum_welch's score_backend cannot run here: withheld",
+    ):
+        baum_welch(params, records, backend="cython", score_backend="cython")
 
 
 # --- kernel-level: deliberately NOT public-API -------------------------------

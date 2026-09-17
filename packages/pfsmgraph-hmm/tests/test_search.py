@@ -385,3 +385,60 @@ def test_the_first_rounds_choose_the_moves_the_lush_training_log_records():
     assert result.start.d == 13.0
     assert result.best is result.rounds[-1].move.result
     assert result.best.params.n_states == 4
+
+
+# ---------------------------------------------------------------------------
+# The check's phase (ADR 0024 section 2).
+
+
+def _assert_same_trial(ours, reference):
+    for got, want in zip(
+        (ours.params.init_state_p, ours.params.transition_p, ours.params.output_p),
+        (reference.params.init_state_p, reference.params.transition_p, reference.params.output_p),
+    ):
+        assert got.tobytes() == want.tobytes()
+    assert (ours.d, ours.total_bits, ours.data_bits, ours.cycles, ours.converged) == (
+        reference.d, reference.total_bits, reference.data_bits, reference.cycles,
+        reference.converged,
+    )
+
+
+def _two_rounds(score_backend):
+    return _search(
+        _corpus(), start=VOCABULARY, seed=np.random.SeedSequence(SEED), max_rounds=2, patience=2,
+        backend="cython", score_backend=score_backend,
+    )
+
+
+@pytest.fixture(scope="module")
+def reference_search():
+    return _two_rounds("python")
+
+
+def test_the_check_phase_changes_no_search(reference_search, score_backend):
+    ours = _two_rounds(score_backend)
+    assert ours.stop == reference_search.stop
+    _assert_same_trial(ours.start, reference_search.start)
+    _assert_same_trial(ours.best, reference_search.best)
+    assert len(ours.rounds) == len(reference_search.rounds) >= 1
+    for a, b in zip(ours.rounds, reference_search.rounds):
+        assert (a.index, a.improved, a.move.kind, a.move.states, a.move.trial, a.move.total_bits) == (
+            b.index, b.improved, b.move.kind, b.move.states, b.move.trial, b.move.total_bits,
+        )
+        _assert_same_trial(a.move.result, b.move.result)
+
+
+def test_the_start_passes_score_backend_to_baum_welch(monkeypatch):
+    # Equality above cannot see a dropped keyword, since every phase gives the same bits.
+    seen = []
+
+    def spy(params, records, **keywords):
+        seen.append(keywords)
+        return baum_welch(params, records, **keywords)
+
+    monkeypatch.setattr(search_module, "baum_welch", spy)
+    _search(
+        _corpus(), start=VOCABULARY, seed=np.random.SeedSequence(SEED), max_rounds=0, patience=0,
+        score_backend="cython",
+    )
+    assert [keywords.get("score_backend") for keywords in seen] == ["cython"]
