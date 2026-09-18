@@ -43,3 +43,25 @@ asked, and two documents already lean the other way.
   **before** the release, since `__all__` is frozen by a published version.
 
 ## Notes
+
+- **2026-09-18 — decided: no.** The search is not exported at 0.3.0; `__all__` stays at
+  the ten names it has carried since `viterbi_batch`. Recorded as
+  [ADR 0025](../design/adr/0025-topology-search-not-exported.md), with a `DEFERRED.md`
+  trigger keyed on PRD §8 settling or `hmm` 0.4.0 so the question is re-made rather than
+  inherited. The decision rests on reversibility, not on a judgement that the current
+  surface is wrong: `__all__` may widen later at no cost to any consumer and may never
+  narrow, so 0.3.0 is the wrong version to make a promise it cannot withdraw.
+- **What settled it beyond the asymmetry**: exporting the search is five names, not one,
+  since the whole frozen dataclass graph is reachable from `SearchResult`; and one of
+  those five, `TrialResult`, carries `d` and `data_bits`, which assert the two-part
+  description length that `_total_description_length` returns a bare `float` precisely to
+  avoid asserting (PRD §8). Publishing it would have contradicted a decision written two
+  modules away.
+- **Scope shrank on contact with the code.** The branch opened saying two documents lean
+  toward exporting; one had already been turned by PR #50, which gave
+  `docs/api/hmm/baum_welch.md` the paragraph stating the search is private. So the "if it
+  does not" arm is one phrase in the master plan's audit subgoal, not two documents.
+- **Strongest alternative, rejected on timing rather than merit**: a narrowed public
+  result carrying `params`, `total_bits`, `cycles` and `converged` while withholding `d`
+  and `data_bits`. It is written into ADR 0025's Open section and the trigger, so whoever
+  reopens this finds the argument instead of rebuilding it.

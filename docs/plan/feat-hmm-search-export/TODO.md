@@ -73,10 +73,43 @@ Markers: `[ ]` not started · `[~]` in progress · `[x]` complete · `[!]` block
     > search loop and training log export" is still standing, so this plan's goal-3 "if
     > not" arm is one phrase in the master plan rather than two documents.
 
-- [ ] Decide, and record the decision where the next revision will find it
-  - [ ] Choose the venue: an ADR, or a section in an existing document. An ADR only if
+- [x] Decide, and record the decision where the next revision will find it
+  > **Done:** the search is **not** exported at 0.3.0; `__all__` stays at ten names. The
+  > decision rests on the reversibility asymmetry, not on a judgement that the surface is
+  > wrong, and it is recorded in ADR 0025 with a `DEFERRED.md` trigger so it is re-made
+  > rather than inherited. The strongest alternative — a narrowed result withholding `d`
+  > and `data_bits` — is rejected on timing and written into the record's Open section and
+  > the trigger, so the next reader finds the argument instead of rebuilding it.
+  > **Q:** Does revision 04 make the topology search part of `pfsmgraph.hmm`'s public API
+  > at 0.3.0 — no (keep `__all__` at ten names), yes (export the five-name dataclass graph
+  > as it stands), or a narrowed surface designed to withhold `d` and `data_bits`?
+  > **A:** No — keep it private. `__all__` stays at the ten names it has carried since
+  > `viterbi_batch`, and the question is revisited at 0.4.0 or when PRD §8 settles. The
+  > reversibility asymmetry decided it: `__all__` may widen later at no cost to any
+  > consumer and may never narrow. The accepted cost is that 0.3.0 ships a headline feature
+  > no pip user can call, and the release notes have to say so.
+  - [x] Choose the venue: an ADR, or a section in an existing document. An ADR only if
+  > **Q:** Where does the decision get recorded, so revision 04's audit and 0.4.0 both find
+  > it — a new ADR, a new ADR plus a `DEFERRED.md` trigger, a `DEFERRED.md` entry alone, or
+  > a section amending ADR 0023?
+  > **A:** A new ADR plus a `DEFERRED.md` trigger, and a row in `adr/README.md`. The ADR
+  > holds the argument, since the subgoal's own test is met — three alternatives were live
+  > and the narrowed export is a design someone will re-propose. The `DEFERRED.md` entry
+  > holds only what fires it, which is the mechanism this repository already has for
+  > decided-but-not-yet-actionable work indexed by its trigger. ADR 0023 was not amended:
+  > its Open section is part of what this decision rests on, so a surface decision inside
+  > it would make that record argue with itself.
         the decision has alternatives worth arguing rather than a single reason.
-  - [ ] Write the decision with its reason, in the terms the plan asked for.
+  - [x] Write the decision with its reason, in the terms the plan asked for.
+    > **Note:** written as [ADR 0025](../../design/adr/0025-topology-search-not-exported.md),
+    > 151 lines, with the index's four places updated (the table row, a "reads after"
+    > bullet, the no-PRD-counterpart list and the closing sentence) and a `DEFERRED.md`
+    > trigger keyed on PRD §8 settling or `hmm` 0.4.0, placed beside the alignment
+    > entry it cross-references. Two sections of the record are worth knowing before
+    > reopening it: §6 says private means out of contract rather than unreachable, since
+    > `pfsmgraph.hmm._search` imports and runs and what is withheld is the promise, not the
+    > capability; and §7 names the cost instead of arguing it away, which obliges 0.3.0's
+    > release notes to say the headline feature has no supported entry point.
 
 - [ ] Carry out whatever the decision requires
   - [ ] If export: names, `__all__`, `docs/api/hmm/search.md` under ADR 0013 with every
