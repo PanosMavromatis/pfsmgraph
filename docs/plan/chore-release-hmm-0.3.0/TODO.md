@@ -6,14 +6,61 @@
 
 ## Goals
 
-- [ ] Verify what 0.3.0 adds to what ships, rather than assuming it
-  - [ ] No new ADR 0002 lifecycle phase or backend row, as `HMMLIB-ACCOUNT.md` §12
+- [x] Verify what 0.3.0 adds to what ships, rather than assuming it
+  > **Q:** What should 0.3.0 do with `_trials._suggest_split` and `_suggest_merge` — keep
+  > with the reason recorded in the plan, keep with the reason in their docstrings, or
+  > remove both?
+  > **A:** Keep, reason in the plan. No shipped-code change.
+  > **Done:** What ships differs from 0.2.0 by four new private modules (`_mdl`,
+  > `_search`, `_topology`, `_trials`) and nothing else a consumer can reach: the backend
+  > table, `__init__.py` and both `.pyx` are unchanged, the header is byte-identical, and
+  > the invariant holds. §12's prediction is confirmed rather than assumed.
+  - [x] No new ADR 0002 lifecycle phase or backend row, as `HMMLIB-ACCOUNT.md` §12
     predicts; the ADR 0003 backend header byte-identical to 0.2.0's
-  - [ ] The four-file release invariant (member README, `LICENSE` file, `Typing :: Typed`,
+    > **Note:** `git diff pfsmgraph-hmm-v0.2.0..HEAD` over the package's `src/`,
+    > `meson.build` and `pyproject.toml` touches twelve files: the four new modules and
+    > their `install_sources` entries, the `.dev0` version, and in the five existing
+    > modules docstrings and code. **Of the kernels, only comments moved** —
+    > `_viterbi.py` (one tense), `_viterbi_cuda.py` and `_forward_backward_cuda.py` (the
+    > `_THREADS_PER_BLOCK` comment); `_baum_welch.py` gained `min_cycles=` and
+    > `score_backend=`, `_numeric.py` gained `closed_classes`, and `_params.py` gained
+    > `_check_codes` (moved from `_baum_welch`) and `state_p`'s exact transient zeros —
+    > none of them a phase or a row. `_backends.py`, `__init__.py`, both `.pyx`, the root `conftest.py` and
+    > `_backends.py`, and `dp-compile.toml` are byte-identical to the tag.
+    > **Note:** The header is 307 bytes and `cmp`-identical to the literal `core.md`
+    > carried at the tag, rejoined across its line wrap. That is two grounds, not one: a
+    > recorded 0.2.0 header matches a live one today, *and* every input that forms it is
+    > unchanged. The test-side `packages/pfsmgraph-hmm/tests/conftest.py` did change — it
+    > gained the `score_backend` fixture over `_TABLE["forward_backward"]` — but the
+    > header comes from the root `pytest_report_header`, which reads neither. Watch for
+    > `pytest --co -q`: `-q` suppresses report headers, so a grep of it finds nothing and
+    > reads like an empty matrix.
+  - [x] The four-file release invariant (member README, `LICENSE` file, `Typing :: Typed`,
     `py.typed` in `install_sources`) and `license-files = ["LICENSE"]` still intact
-  - [ ] Decide `_trials._suggest_split` and `_suggest_merge`, which only the tests call
+    > **Note:** All five hold in the tree: `LICENSE` a regular file `cmp`-identical to the
+    > root one, the classifier at `pyproject.toml:40`, `license-files` at `:13`, `py.typed`
+    > at `meson.build:94`, and `tests/test_meson_sources.py` 16/16. No `VERSION` at the
+    > root and no namespace `__init__.py`. Only `README.md` changed since the tag (+7/-1),
+    > which goal 2 re-reads. This checks the *tree*; goal 3's clean-venv install is what
+    > checks the wheel.
+    > **Note:** `meson.build:31-32` still reads "py.typed arrives at the release commit",
+    > written before 0.1.0 when it had not. It ships in the sdist, so goal 2 is the place
+    > to put it in the past tense if it is worth the line.
+  - [x] Decide `_trials._suggest_split` and `_suggest_merge`, which only the tests call
     since `_suggest_move` ranks every candidate in one stable sort: remove, or keep with a
     stated reason
+    > **Note:** Kept. **The premise was incomplete**: the tests are not the only caller.
+    > `.scratch/hmm-lush/measurements/merge_round_cost.py` imports `_suggest_merge` and
+    > times a whole round through it, and ADR 0023 (§6 and Evidence) and ADR 0024 cite that
+    > script, so removal would break evidence behind two Accepted records. The stated
+    > reason has three parts. They are the ports of `suggest-split` and `suggest-merge`,
+    > which exist in the original, and the only calls that rank one kind alone.
+    > `_suggest_move` cannot be composed from them, since a merge wins a tie only because
+    > both kinds share one stable sort. And they are the seam `test_trials.py` pins
+    > per-kind enumeration order, trial counts and the transient-pair exclusion through.
+    > Under ADR 0025 they are out of contract, so keeping them freezes nothing. This is
+    > the third time the question has opened (`feat-hmm-scored-primitives`,
+    > `chore-hmm-0.3.0-audit`, here) — point the next audit at this note.
 - [ ] Settle what 0.3.0's immutable text says
   - [ ] Release notes meeting ADR 0025 §7 — topology search ships with no supported entry
     point, said plainly. No `CHANGELOG` exists and 0.2.0 wrote none, so decide where they
