@@ -1,6 +1,6 @@
 # feat/hmm-search-export
 
-**Status**: active
+**Status**: merged — PR #51 — 2026-09-18
 **Created**: 2026-09-17
 **Subgoal**: Decide whether revision 04 **exports** the topology search, and record the
 decision either way (`docs/plan/TODO.md`, revision 04-hmm-v0.3.0)
