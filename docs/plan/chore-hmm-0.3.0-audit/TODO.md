@@ -1,6 +1,6 @@
 # chore/hmm-0.3.0-audit
 
-**Status**: active
+**Status**: merged — PR #52 — 2026-09-18
 **Created**: 2026-09-18
 **Subgoal**: Review the whole `hmm` codebase and audit `docs/api/` against what 0.3.0 ships (revision 04)
 
