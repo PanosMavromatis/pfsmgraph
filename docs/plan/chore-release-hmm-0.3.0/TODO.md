@@ -210,10 +210,22 @@
     > change. Nothing in `src/` or the tests reads that metadata (no `__version__`, no
     > `importlib.metadata` call), so it affects nothing today. It would mislead the first
     > code that asks the installed version.
-- [ ] Release: publish, tag, and close what the branch discharged
-  - [ ] Release commit: `version` to `0.3.0`, date the `CHANGELOG.md` 0.3.0 heading, relock,
+- [~] Release: publish, tag, and close what the branch discharged
+  - [~] Release commit: `version` to `0.3.0`, date the `CHANGELOG.md` 0.3.0 heading, relock,
     rebuild and re-verify — then
     `0.4.0.dev0` straight after, closing the window `core.md` "Versioning" names
+    > **Note:** **The order is forced, so the window cannot be zero.** `release-ci` tags
+    > HEAD, and its `_version-matches` prerequisite reads the version from the tree. So
+    > `0.4.0.dev0` cannot share the tagged commit. It is the next commit, made right after the
+    > tag push, which narrows the window to the gap between two commits. 0.1.0 and 0.2.0
+    > left days.
+    > **Note:** The release commit changes five lines and nothing else: `version` to
+    > `0.3.0`, the lockfile's one matching line (`uv lock`: "Updated pfsmgraph-hmm
+    > v0.3.0.dev0 -> v0.3.0"), the CHANGELOG heading dated 2026-09-18, `core.md`'s
+    > Versioning history, and the regenerated `AGENTS.md`. `uv lock --check`, the agents-docs
+    > sync check and the 52 repo-root tests pass. `release-ci` runs the full suite itself as
+    > a prerequisite. The content is otherwise `3316ff1`'s, which run `35301984370` built
+    > and the clean venv verified.
   - [ ] **User:** publish (irreversible): `just release-ci 0.3.0` pushes the
     `pfsmgraph-hmm-v0.3.0` tag that triggers the publish job
   - [ ] Confirm PyPI's digests match the verified build and the tag points at the release

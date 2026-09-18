@@ -5,7 +5,7 @@ Changes to `pfsmgraph-hmm`, newest first. The public API is the names in
 underscore, is out of contract and may change in any release. The decisions behind each
 change are in [`docs/design/adr/`](https://github.com/PanosMavromatis/pfsmgraph/blob/main/docs/design/adr/README.md).
 
-## 0.3.0 — unreleased
+## 0.3.0 — 2026-09-18
 
 **Topology search ships in this release, and there is no supported way to call it.**
 Growing and shrinking a model by state split and merge, scored by minimum description
