@@ -820,6 +820,36 @@ These have no event that will surface them. They need to be looked at on purpose
 
 ---
 
+## Trigger: PRD §8 settling, or `hmm` 0.4.0 — whichever comes first
+
+- **Decide again whether to export the topology search.** Decided *not* to at 0.3.0 by
+  [ADR 0025](../design/adr/0025-topology-search-not-exported.md), on the asymmetry that
+  `__all__` may widen at no cost and may never narrow. That record holds the argument;
+  this entry holds only what fires it.
+
+  **Why these two triggers.** [PRD §8](../design/PRD.md) is the open question that makes
+  `TrialResult`'s `d` and `data_bits` unsafe to publish — settle which description length
+  scores the search and §4 of that record dissolves, because a criterion that is no longer
+  provisional can have its structure asserted in a return type. 0.4.0 is the
+  alignment-seeded search, the first version with a second reason to offer a public entry
+  point, and its own entry below leaves the seed's exposure undecided ("a caller who can
+  still start merge/split from a single state may never need `align`"). The two questions
+  should be answered together rather than one of them constraining the other by accident,
+  which is what freezing a signature at 0.3.0 would have done.
+
+  **When it fires**, start from ADR 0025's alternative 2 — the narrowed result carrying
+  `params`, `total_bits`, `cycles` and `converged` while withholding `d` and `data_bits`,
+  which was rejected on timing rather than on merit. Check
+  [ADR 0023](../design/adr/0023-topology-search-loop.md)'s Open section first: a public
+  signature also freezes `split_min_cycles`, the `spawn_key` seeding contract and the stop
+  set, and 0023 records all three as unresolved. Whatever is exported then owes
+  `docs/api/hmm/search.md` under [ADR 0013](../design/adr/0013-api-documentation-layout-and-tooling.md)
+  with every block executed, the public-surface table in `docs/api/hmm/README.md`, and
+  `packages/pfsmgraph-hmm/README.md`, which becomes a PyPI long description under an
+  immutable version.
+
+---
+
 ## Trigger: the next `workflow-claude` revision
 
 The plugin lives at `plugins/workflow-claude/` in

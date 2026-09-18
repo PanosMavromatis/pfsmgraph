@@ -153,8 +153,15 @@ These hold for every caller and are not configurable.
 ## The public surface
 
 `pfsmgraph.hmm.__all__` is exactly ten names. Anything underscore-prefixed — the
-`_params`, `_viterbi`, `_baum_welch`, `_forward_backward`, `_backends` and `_numeric` modules, the backend kernels, and every
+`_params`, `_viterbi`, `_baum_welch`, `_forward_backward`, `_backends`, `_numeric`,
+`_search`, `_trials`, `_topology` and `_mdl` modules, the backend kernels, and every
 attribute beginning with `_` — is private, out of contract, and may change without notice.
+
+The last four are revision 04's topology search, and their privacy is a decision rather
+than an omission: [ADR 0025](../../design/adr/0025-topology-search-not-exported.md) keeps
+`__all__` at ten names at 0.3.0, because `__all__` may widen at a later version at no cost
+to any consumer and may never narrow. Private here means out of contract, not unreachable —
+`_search` imports and runs, and what is withheld is the promise that it will keep working.
 
 ```python
 >>> import pfsmgraph.hmm
