@@ -29,8 +29,8 @@ fs = import('fs')
 
 # --- Pure-Python sources -----------------------------------------------------
 # meson does not glob: append each new .py module to this list as it lands, and
-# any package data too -- py.typed arrives at the release commit and is not a
-# .py file. tests/test_meson_sources.py asserts this list matches what is on
+# any package data too -- py.typed is listed below although it is not a .py
+# file. tests/test_meson_sources.py asserts this list matches what is on
 # disk; it drifted once already, silently, because the dormant block below meant
 # nothing ever built these files.
 py.install_sources(

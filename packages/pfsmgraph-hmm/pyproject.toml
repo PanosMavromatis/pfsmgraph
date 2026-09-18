@@ -5,8 +5,8 @@
 
 [project]
 name = "pfsmgraph-hmm"
-version = "0.3.0.dev0"
-description = "Arc-emission hidden Markov models for the pfsmgraph family: frozen parameters, batched Viterbi decoding and Baum-Welch training, with selectable backends; topology search forthcoming."
+version = "0.4.0.dev0"
+description = "Arc-emission hidden Markov models for the pfsmgraph family: frozen parameters, batched Viterbi decoding and Baum-Welch training, with selectable backends; topology search included but not yet public."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
@@ -94,6 +94,7 @@ torch = ["torch>=2.13"]
 Homepage = "https://github.com/PanosMavromatis/pfsmgraph"
 Repository = "https://github.com/PanosMavromatis/pfsmgraph"
 Documentation = "https://github.com/PanosMavromatis/pfsmgraph/blob/main/docs/api/hmm/README.md"
+Changelog = "https://github.com/PanosMavromatis/pfsmgraph/blob/main/packages/pfsmgraph-hmm/CHANGELOG.md"
 
 [build-system]
 # meson-python. The Viterbi decode has a compiled phase-2 kernel, built by

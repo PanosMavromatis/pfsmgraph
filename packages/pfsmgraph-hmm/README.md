@@ -145,6 +145,8 @@ code block in both, this README included, is executed and its output pasted from
 
 The decisions behind them are recorded in
 [`docs/design/adr/`](https://github.com/PanosMavromatis/pfsmgraph/blob/main/docs/design/adr/README.md).
+What changed in each release is in
+[`CHANGELOG.md`](https://github.com/PanosMavromatis/pfsmgraph/blob/main/packages/pfsmgraph-hmm/CHANGELOG.md).
 
 ## License
 
