@@ -749,6 +749,37 @@ These have no event that will surface them. They need to be looked at on purpose
 
   **The test it owes:** a keyword-forwarding spy, like the two `score_backend` has in
   `test_trials.py`, passing a non-default value so that a dropped keyword cannot pass.
+- **Measure `baum_welch(backend="torch", device=)` where the guidance says to use it.**
+  Raised 2026-09-18 on `main`, after the benchmark page landed.
+  [`docs/benchmarks/hmm-backends.md`](../benchmarks/hmm-backends.md) tells a caller to
+  choose `torch` for gradient-based work or for training on a GPU, and **neither has been
+  measured.** Every torch figure on record is the opposite case: CPU, `S <= 8`, over 1,268
+  symbols, and inside a topology search, which the same table marks "not for topology
+  search". So the page's only positive recommendation about torch rests on reasoning rather
+  than on numbers, which is the one thing a `docs/benchmarks/` page is supposed not to do.
+
+  **This is not the question "why keep a torch backend at all".** That one is closed:
+  `backend="torch"` shipped in 0.2.0 with a documented page, a declared `torch` extra and a
+  row in `backends()`, so removing it is a breaking change to a published surface rather
+  than a benchmark result — the asymmetry
+  [ADR 0025](../design/adr/0025-topology-search-not-exported.md) argues, pointing the other
+  way. It could be deprecated over a major version; it cannot be dropped for being slow.
+  And the 350-400x figure measures `backend="torch"` *inside the search*, on the CPU
+  because the private search carries no `device=` — the entry above — so it is a
+  measurement of the one use the documentation already tells people to avoid.
+
+  **Torch also earns its place for a reason speed cannot touch.** It is the only backend
+  that is **not** a transliteration of the numpy reference: `cython`, `cpu_parallel` and
+  `cuda` are ports held bit-identical, so none of them can independently confirm the
+  reference is right. Torch derives the counts as reverse-mode gradients, which is why it
+  is held to a tolerance instead of to bits, and why building it surfaced two real defects
+  — the scale factors needing detachment, and the leaf having to be the arc table.
+
+  **What to measure when it fires:** `baum_welch` alone, never a search — one corpus and
+  one `S` large enough that the E-step dominates, on the CPU against `cython` and on a
+  device against `cuda`, with the tolerance re-checked at that size rather than assumed
+  from `S <= 8`. If the numbers do not support the guidance table's `torch` row, change the
+  row.
 
 ## Trigger: `align` able to produce a multiple alignment
 
