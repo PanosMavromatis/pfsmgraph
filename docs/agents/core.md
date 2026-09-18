@@ -66,8 +66,10 @@ raises `ImpossibleSequenceError` rather than scoring `+inf`. **`_suggest_split`,
 `_suggest_move` return every candidate as a `Move`, ranked**, where the original kept a strict-`<`
 argmin: candidates are enumerated in the original's order (states then trials, pairs
 lexicographically, merges before splits) and `sorted` on the total alone, whose *stability* is the
-tie-break -- sorting on `(total, kind)` matches only because `"merge" < "split"`, a coincidence a
-test pins against. An impossible candidate is a `Move` with no result at `+inf`, ranked last, so an
+tie-break -- sorting on `(total, kind)` matches only because `"merge" < "split"`, a coincidence
+**no test distinguishes**: that key passes every `_trials` and `_search` test, since `_ranked` is
+never handed a split ahead of an equal-total merge. *(Corrected 2026-09-18 by a mutation run on
+the 0.3.0 release branch; this read "a coincidence a test pins against".)* An impossible candidate is a `Move` with no result at `+inf`, ranked last, so an
 all-impossible round is an ordinary list rather than the original's crash; a pair of two transient
 states is not a candidate and is filtered by `closed_classes` first. Split trial `(s, t)` draws from
 `SeedSequence(entropy, spawn_key=round_key + (s, t))`, so its candidate is rebuildable from its

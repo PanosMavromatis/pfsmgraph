@@ -36,12 +36,15 @@ code actually does, say so — that divergence is worth more than a style commen
 
 ### High-signal review targets
 
-**`dataseq` is implemented and released; `hmm` has begun; the other three members are still
-scaffolding (2026-09-04).** There is real code to review in two packages now.
-`packages/pfsmgraph-dataseq/` is six modules and 74 tests, covered further down.
-`packages/pfsmgraph-hmm/` is three modules and 167 tests — the numeric Utility code migrated
-from the Lush original, `HMMParams`, and `_viterbi.py`, the project's first
-dynamic-programming kernel and the first row in the ADR 0003 backend matrix. Review it
+**`dataseq` and `hmm` are implemented and released; the other three members are still
+scaffolding.** What each contains, its module and test counts and its released version are
+in `AGENTS.md` under "Current state", which is kept current. This file does not restate
+them, because it takes precedence over `AGENTS.md` and a stale count here would override a
+correct one there. *(It read "`hmm` is three modules and 167 tests" from 2026-09-04 until
+the 0.3.0 release branch, by which time `hmm` was fifteen modules, two `.pyx` kernels and
+2973 tests.)* `dataseq` is covered further down. `hmm`'s oldest code -- the numeric Utility
+functions migrated from the Lush original, `HMMParams`, and `_viterbi.py`, the project's
+first dynamic-programming kernel -- is what the paragraphs below cover first. Review it
 against
 `.scratch/hmm-lush/Code/Utility/util.lsh`, `Code/HMMlib/hmm.lsh:228-262`, and
 `HMMLIB-ACCOUNT.md` §3 and §4, and know the one fact
@@ -110,6 +113,45 @@ not probabilities); that no comparison over description lengths reaches for `max
 `docs/agents/core.md`'s test counts still match `uv run pytest`, since they have moved four
 times in this branch alone.
 
+**Revision 04's topology search, new in 0.3.0, departs from the original on purpose, and
+five of its departures read as defects.** `_search`, `_trials`, `_topology` and `_mdl` are
+private and out of contract under
+[ADR 0025](../design/adr/0025-topology-search-not-exported.md). So **a missing export, a
+missing `docs/api/` page or an unstable signature there is not a finding**, and a name added
+to `__all__` without a record superseding 0025 is one.
+
+- **A tie goes to the first-enumerated move, through `sorted`'s stability.** Candidates are
+  sorted on the total alone, and merges are enumerated first. Sorting on `(total, kind)`
+  gives the same order only because `"merge" < "split"`, and **no test tells the two
+  apart**: that mutant passed all 84 `_trials` and `_search` tests (measured 2026-09-18),
+  since `_ranked` is never handed a split ahead of an equal-total merge. So "make the
+  tie-break explicit" is not an improvement. The added key changes nothing today, and it
+  breaks silently the day a kind is renamed.
+- **A merge weights by stationary mass, not by occupancy**, and refuses a pair of two
+  transient states. This was measured, not assumed: on every tracked model, occupancy agrees
+  with `state_p` to 0.003. It is also what makes a merge an exact lumping of the stationary
+  chain.
+- **`+inf` is the impossible total. Brent's objective alone maps it back to the original's
+  `1e100`.** Brent subtracts scores, `inf - inf` is `nan`, and that changed the chosen `d` on
+  a real model. Everything that only *compares* totals keeps `+inf`. Reporting the two as
+  inconsistent, or making either side match the other, reintroduces one of the two bugs.
+- **The search chooses `d` by a bounded exact scan, not by `_suggest_d`'s Brent** (ADR 0023
+  §5), because Brent stops in a local minimum on the one-state start: it picks `d = 29`,
+  where 13 is 10.46 bits cheaper. `_suggest_d` is kept as the reproduction of the original,
+  not left behind as dead code.
+- **`_trials._suggest_split` and `_suggest_merge` have no caller in `src/`, and are kept.**
+  They are the ports of `suggest-split` and `suggest-merge`. `_suggest_move` cannot be
+  composed from them without losing the rule that a merge wins a tie. The tests pin
+  per-kind enumeration through them, and an ADR 0023/0024 evidence script calls
+  `_suggest_merge`. This was decided on the 0.3.0 release branch, after the question had
+  been raised twice before.
+
+These would be findings:
+- a total assembled from the MDL pieces anywhere except `_total_description_length`, which
+  returns a bare `float` precisely so the criterion can be swapped;
+- a margin in the acceptance rule taken by subtraction without an `inf` guard;
+- a split trial whose generator cannot be rebuilt from `seed.spawn_key + (s, t)` alone.
+
 **A green differential suite is weaker evidence than it looks, and this is the highest-signal
 thing to probe in `hmm`.** The `.vpath.xls` oracles are real and the agreement is
 position-for-position, but the tracked models exercise a narrow slice: mutation testing found
@@ -156,8 +198,9 @@ fix and most expensive to leave:
   real-file `LICENSE`, a member-specific `README.md` with absolute links only (a relative
   link 404s on PyPI), the `Typing :: Typed` classifier, and the marker at the path inside the
   importable package — never at the `pfsmgraph/` namespace level, which no one distribution
-  owns. `dataseq` has all four as of 2026-09-02; the other four members have none, correctly,
-  until they release. A release commit missing any of them is a finding.
+  owns. `dataseq` has all four as of 2026-09-02 and `hmm` as of 0.1.0 (2026-09-13); the other
+  three members have none, correctly, until they release. A release commit missing any of
+  them is a finding.
   **Since 2026-09-04 there is a third way `py.typed` misses the wheel**, and it is the one
   a release commit will actually hit: all five members build through meson-python (ADR
   0018), `meson.build` does not glob, so a marker at the correct path but absent from that
@@ -166,13 +209,19 @@ fix and most expensive to leave:
   docstring that this is the case it exists for more than the modules -- so do not report
   it as a silent-failure finding. What is worth checking is the pairing: a release commit
   that adds `src/pfsmgraph/<pkg>/py.typed` must add it to `install_sources` in the same
-  commit, and `pfsmgraph-hmm` 0.1.0 is where this lands first, being the first meson-built
-  wheel this project will publish.
-  Two further silent variants, both measured 2026-09-02: the wheel ships the **member's**
-  `LICENSE`, not the repo-root one, so editing only the root file changes nothing a consumer
-  sees and the two silently diverge; and package metadata — `authors`, `maintainers`, the
-  copyright holder — passes `twine check` and the whole suite whatever it says, so a wrong
-  address or name is caught by a human reading the diff or not at all.
+  commit, as `pfsmgraph-hmm` 0.1.0's did, the first meson-built wheel this project
+  published.
+  Two further silent variants. **A `LICENSE` reaches a meson-python wheel only if
+  `license-files = ["LICENSE"]` declares it**: `pfsmgraph-hmm` 0.1.0 shipped no license text,
+  with `License-Expression: MIT` in its METADATA passing `twine check` (measured 2026-09-16;
+  `AGENTS.md`'s release invariant has the detail), so a released member without that line
+  is a finding. *(This read "the wheel ships the member's `LICENSE`, not the repo-root one"
+  until 2026-09-18, which was true under hatchling, whose default globs `LICENSE*`, and
+  false under meson-python.)* Editing only the root `LICENSE` still changes nothing a
+  consumer sees, so the two copies must be kept byte-identical by hand. And package
+  metadata — `authors`, `maintainers`, the copyright holder — passes `twine check` and the
+  whole suite whatever it says, so a wrong address or name is caught by a human reading the
+  diff or not at all.
 - **The repo-root `justfile`'s guard ordering.** `just` runs every recipe body line *after*
   every prerequisite, `publish` included, so a check written into the body of `release`
   executes after the irreversible upload. Guards therefore live in the `preflight` recipe,
@@ -277,18 +326,21 @@ fix and most expensive to leave:
   `pytest_report_header` is a startup hook, and a conftest loaded during collection has its
   hook discarded with no warning. `tests/test_backends.py` pins the placement for that
   reason; treat a change that deletes those wiring tests as the same finding.
-  **The matrix holds two rows as of 2026-09-09 and the suites are still not parameterized,
-  which is a constraint rather than the finding it looks like.** ADR 0003 wants the backend
-  as a fixture parameter *and* the tests written against the public API only;
-  `viterbi(params, record)` has nowhere to put a backend, and adding one is the
-  backend-selection API that ADR's Open section routes to `align`. So "a test that quietly
-  exercises only one backend" describes every test *above the line* in `hmm` today, by
-  design. Below it, the labelled kernel-level section now holds six tests that call both
-  kernels and compare — the only equivalence assertions here, added with phase 2. What *is*
-  a finding: reading `backends: python ✓ · cython ✓` as evidence that the shared cases ran
-  twice (they ran once), or folding that labelled section back in among the public-API
-  tests — ADR 0003 asks for the separation unconditionally, and folding it in would also
-  break it, since those tests import a backend module by name.
+  **The suites have been backend-parameterized since ADR 0021 (2026-09-14). Until
+  2026-09-18 this paragraph said the opposite.** Every public DP call takes a keyword-only
+  `backend=`, and the `backend` fixture in `packages/pfsmgraph-hmm/tests/conftest.py` runs
+  each shared case on every backend in the table, skipping an unavailable one with its
+  `backends()` reason. So `backends: python ✓ · cython ✓ · …` now does mean each shared case
+  ran on each backend, and **a test of a public call that exercises only one backend is a
+  finding**. That reverses what this said while `viterbi(params, record)` had nowhere to
+  put a backend. Forward-backward has no public call, so its phases are compared in
+  `test_forward_backward_backends.py` through a `phase` fixture over every row but `torch`.
+  `baum_welch`'s phases are compared through its own module-level fixture, the one place
+  `torch` is a parameter. Folding the labelled kernel-level section back in among the
+  public-API tests is still a finding. That section holds the kernel contract, reached
+  through `_resolve`, phase 3's thread-count tests and phase 4's launch geometry. ADR 0003
+  asks for the separation unconditionally, and folding it in would also break it, since
+  those tests import a backend module by name.
 - **`docs/api/` and the test that executes it** (ADR 0013). The pages are hand-written, so
   their examples are the only guard against prose drifting from the code they describe;
   `tests/test_api_docs.py` executes every block and compares its output — pasted exception

@@ -104,8 +104,27 @@
     > `0.3.0 ships it private, with no supported entry point`; line 71
     > `` `pfsmgraph-hmm` at 0.2.0 `` → `` `pfsmgraph-hmm` at 0.3.0 ``. The sentence calling
     > 0.2.0 the first release of platform wheels stays, being history rather than status.
-  - [ ] Refresh `codex.md`'s review guide, which still describes `hmm` as "three modules
+  - [x] Refresh `codex.md`'s review guide, which still describes `hmm` as "three modules
     and 167 tests" (2026-09-04)
+    > **Q:** How far should this take `codex.md` — fix what contradicts `core.md` and point
+    > at it, contradictions only, or a full refresh with revision 03 and 04 targets?
+    > **A:** Fix the contradictions, replace the overview's counts with a pointer to
+    > `AGENTS.md`'s current state, and add one short block of revision-04 false positives
+    > for reviewing this release. Rebuild `AGENTS.override.md`.
+    > **Note:** The named line was one of four passages that contradicted `core.md`. That
+    > matters more than staleness usually does, because `AGENTS.override.md` outranks
+    > `AGENTS.md`, so a wrong claim in `codex.md` beats a right one in `core.md` for Codex.
+    > The worst was the backend matrix. It still said the suites were not parameterized,
+    > which told Codex *not* to flag a one-backend test of a public call; since ADR 0021 that
+    > is exactly the finding. The other two: `hmm`'s four release files, and a `LICENSE`
+    > claim written in the hatchling era that meson-python falsified.
+    > **Note:** **`core.md` carried a false claim, now corrected.** It said sorting moves on
+    > `(total, kind)` instead of the total alone was "a coincidence a test pins against".
+    > Mutated, that key passes all 84 `_trials` and `_search` tests: `_ranked` is always
+    > handed merges first, so no input tells the two keys apart. The first draft of the new
+    > revision-04 block repeated the claim from `core.md`, and the mutation run caught it
+    > before it was written. No test was added. A test feeding `_ranked` a split ahead of
+    > an equal-total merge would pin it, if that is ever wanted.
   - [ ] Re-read `packages/pfsmgraph-hmm/README.md` and the metadata (`description`,
     classifiers, extras) as the 0.3.0 PyPI page will show them
 - [ ] Verify what a consumer installs
