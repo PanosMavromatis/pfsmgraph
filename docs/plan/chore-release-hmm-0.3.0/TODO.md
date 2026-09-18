@@ -211,7 +211,7 @@
     > `importlib.metadata` call), so it affects nothing today. It would mislead the first
     > code that asks the installed version.
 - [~] Release: publish, tag, and close what the branch discharged
-  - [~] Release commit: `version` to `0.3.0`, date the `CHANGELOG.md` 0.3.0 heading, relock,
+  - [x] Release commit: `version` to `0.3.0`, date the `CHANGELOG.md` 0.3.0 heading, relock,
     rebuild and re-verify — then
     `0.4.0.dev0` straight after, closing the window `core.md` "Versioning" names
     > **Note:** **The order is forced, so the window cannot be zero.** `release-ci` tags
@@ -226,8 +226,20 @@
     > sync check and the 52 repo-root tests pass. `release-ci` runs the full suite itself as
     > a prerequisite. The content is otherwise `3316ff1`'s, which run `35301984370` built
     > and the clean venv verified.
-  - [ ] **User:** publish (irreversible): `just release-ci 0.3.0` pushes the
+    > **Result (2026-09-18):** the release commit is `78f04a3`. Its sdist, built here, reads
+    > `Version: 0.3.0` in both `PKG-INFO` and the packed `pyproject.toml`, and carries
+    > `## 0.3.0 — 2026-09-18`. Its sha256 is
+    > `746cd411ad01032ba8381d4fd599f9af3e9359c82875801596c661b8ddecceeb`, the digest PyPI's
+    > copy should match. The bump to `0.4.0.dev0` is the next commit, pushed minutes after
+    > the tag while the publish run was still building. That run builds from the tag, which
+    > the branch tip moving cannot change.
+  - [x] **User:** publish (irreversible): `just release-ci 0.3.0` pushes the
     `pfsmgraph-hmm-v0.3.0` tag that triggers the publish job
+    > **Ran (2026-09-18):** `just release-ci 0.3.0`, by the user. All four prerequisites
+    > held. The full suite passed, **3099 in 5m40s**, with every backend available on this
+    > host. `_tree-pushed` pushed `e4752de..78f04a3`. The tag `pfsmgraph-hmm-v0.3.0` points
+    > at `78f04a3`, locally and on origin (`git ls-remote`). The push started run
+    > `35303614122`, event `push` on the tag.
   - [ ] Confirm PyPI's digests match the verified build and the tag points at the release
     commit
   - [ ] Record commit: the "released" statements in `core.md`, the root README and the
