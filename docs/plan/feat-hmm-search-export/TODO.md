@@ -111,11 +111,39 @@ Markers: `[ ]` not started · `[~]` in progress · `[x]` complete · `[!]` block
     > capability; and §7 names the cost instead of arguing it away, which obliges 0.3.0's
     > release notes to say the headline feature has no supported entry point.
 
-- [ ] Carry out whatever the decision requires
-  - [ ] If export: names, `__all__`, `docs/api/hmm/search.md` under ADR 0013 with every
+- [x] Carry out whatever the decision requires
+  > **Done:** the export arm is `[-]`, since ADR 0025 decided against it. What the "if
+  > not" arm actually required was two edits, not the one it named: the master plan's
+  > audit subgoal no longer presumes a surface, and `docs/api/hmm/README.md`'s
+  > public-surface paragraph now lists all ten private modules and says why the last four
+  > are private, citing ADR 0025. The API-docs guard passes at 11.
+  - [-] If export: names, `__all__`, `docs/api/hmm/search.md` under ADR 0013 with every
         block executed and its output pasted, `docs/api/hmm/README.md`'s public-surface
         table, `packages/pfsmgraph-hmm/README.md`.
-  - [ ] If not: close `docs/api/hmm/baum_welch.md:160`'s pointer and the audit subgoal's
+    > **Descoped:** [ADR 0025](../../design/adr/0025-topology-search-not-exported.md)
+    > decided not to export, so none of this is owed at 0.3.0. The page, the
+    > public-surface table row and the PyPI long description all become due together if
+    > the `DEFERRED.md` trigger fires, and that entry names them so they are not
+    > re-derived from scratch.
+  - [x] If not: close `docs/api/hmm/baum_welch.md:160`'s pointer and the audit subgoal's
+    > **Note:** the two things this subgoal named cost one edit between them.
+    > `docs/api/hmm/baum_welch.md`'s pointer was already closed by PR #50 before the
+    > branch opened, so only the master plan's audit subgoal needed repairing: "whatever
+    > the search loop and training log export" now says they export nothing, and cites
+    > ADR 0025.
+    > **Note:** the code turned up the mirror-image defect, which this subgoal did not
+    > predict and the audit would have found. `docs/api/hmm/README.md`'s public-surface
+    > paragraph enumerated six private modules and **omitted all four revision 04 added**
+    > — `_search`, `_trials`, `_topology` and `_mdl` — so the page defining what is
+    > private was silent about the four things this branch decided are private. The list
+    > was written in the 0.2.0 era and nothing makes it grow when a module lands. Both
+    > are drift in one sentence; only the false-positive direction was anticipated.
+    > **Note:** the asymmetry that let it drift is worth carrying to any ADR 0013 page.
+    > `tests/test_api_docs.py` executes the code blocks against pasted output, so the
+    > ten-name `__all__` listing beneath that paragraph *cannot* drift — but the prose
+    > around it is unexecutable and drifts freely. The blocks are verified; the sentences
+    > are not.
+    > **Ran:** `uv run pytest tests/test_api_docs.py -q` — 11 passed, after the edit.
         "whatever the search loop and training log export", so neither is left asserting
         a surface that does not exist.
 

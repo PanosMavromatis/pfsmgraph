@@ -65,3 +65,15 @@ asked, and two documents already lean the other way.
   result carrying `params`, `total_bits`, `cycles` and `converged` while withholding `d`
   and `data_bits`. It is written into ADR 0025's Open section and the trigger, so whoever
   reopens this finds the argument instead of rebuilding it.
+- **The drift found was the mirror image of the drift expected.** The plan said to close
+  documents "left asserting a surface that does not exist". One of the two was already
+  closed by PR #50. What the code turned up instead was the opposite: the
+  *public-surface* paragraph of `docs/api/hmm/README.md` enumerated six private modules
+  and omitted all four revision 04 added — `_search`, `_trials`, `_topology` and `_mdl` —
+  so the page that defines what is private was silent about the four things this branch
+  decided are private. It now lists all ten and says why the last four are, citing
+  ADR 0025.
+- **Why that sentence could drift at all**, which generalises to every ADR 0013 page:
+  `tests/test_api_docs.py` executes the code blocks against pasted output, so the ten-name
+  `__all__` listing beneath that paragraph cannot go stale — but the prose around it is
+  unexecutable and is checked by nobody. The blocks are verified; the sentences are not.
