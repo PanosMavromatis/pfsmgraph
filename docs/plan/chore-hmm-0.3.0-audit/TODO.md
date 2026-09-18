@@ -28,9 +28,17 @@
     > **Note:** Intact. `_search` keys the start `spawn_key + (0,)` and round `r` `+ (1, r)`; `_trials._split_moves` appends `(s, t)`, giving the `(1, r, s, t)` its own docstring claims; `_try_split` forwards `rng=`; `_split_state` requires it as a keyword with no default and no module state. All draws happen before any array is built, so a dead arc never shifts a later draw.
     > **Note:** The draw count was verified by running it, not by reading it — a counting wrapper over `Generator.uniform` gave 13, 20, 27 draws at `S` = 1, 2, 3 with `n_user = 3`, matching the docstring's `S + 2*(S+1)*(n_symbols - USER_BASE)` exactly.
     > **Note:** This subgoal's own wording says "the public search call". There is none — ADR 0025 keeps the search private, so the chain starts at `_search`. Worth catching here rather than in the release notes.
-- [ ] Verify the counts and the backend header against the tree rather than against the prose
-  - [ ] `uv run pytest` — the suite count, and the ADR 0003 header unchanged from 0.2.0
-  - [ ] Module count and ADR count in `core.md`
+- [x] Verify the counts and the backend header against the tree rather than against the prose
+  > **Done:** Four of five claims verified correct against the tree; one was stale and is fixed. The suite is green at 3099 in 378 s with no failures and no skips, since this host has both a CUDA device and torch.
+  - [x] `uv run pytest` — the suite count, and the ADR 0003 header unchanged from 0.2.0
+    > **Note:** `3099 passed in 378.36s`, exit 0. The count matches `core.md` exactly, and so does its breakdown: 74 in `pfsmgraph-dataseq/tests`, 2973 in `pfsmgraph-hmm/tests`, 52 in the repo-root `tests/`, derived per directory with `--collect-only`.
+    > **Note:** The ADR 0003 header is byte-identical to the one `core.md` documents for 0.2.0, compared programmatically after unwrapping rather than by eye: `viterbi`, `viterbi_batch`, `forward_backward` at four backends each and `baum_welch` at five, all ✓. Revision 04 added no row, which `_backends._TABLE` confirms structurally — `_search`, `_trials`, `_topology` and `_mdl` take `backend=`/`score_backend=` and delegate rather than registering a kernel.
+    > **Note:** Zero skips on this host. `core.md`'s two by-design skips — `test_torch_interop.py` and the 229 numba-cuda tests — both need something absent here, so a green run of 3099 on a GPU host with torch is a *stronger* result than the same number on a laptop, where 230 of them would not have executed.
+  - [x] Module count and ADR count in `core.md`
+    > **Note:** Both correct. Fifteen Python modules excluding `__init__.py`, two `.pyx` kernels. Twenty-five ADRs: 26 files in `docs/design/adr/` less `0000-template.md`, matching "the twelve initial ADRs from the PRD plus 0013 through 0025"; `adr/README.md` carries all 25 rows, and 0025's date of 2026-09-18 matches the commit that decided it.
+    > **Note:** One count was stale and is fixed: `core.md` said `tests/test_search.py` "holds its 37 tests" where it holds **48**. It grew twice without either branch updating the figure — 20 to 22 test functions on `feat/hmm-convergence-backend`, then 22 to 33 on `feat/hmm-search-log`.
+    > **Note:** The failure mode is the reason this subgoal exists. Both totals — the suite's 3099 and the package's 2973 — stayed correct throughout, because the added tests were counted and merely attributed to the wrong file. No aggregate check could see the drift; only a per-file derivation catches it.
+    > **Note:** `core.md`'s two figures for `test_topology.py` look contradictory and are not: 645 tests for `_split_state` and 741 for `_merge_states`, written by two different branches, sum to the 1386 the file actually collects. Each is scoped to its own function. Left as written.
 - [ ] Audit `docs/api/` against the ten names 0.3.0 ships
   - [ ] Every `__all__` name against its page: parameters, return fields, raised errors
   - [ ] `docs/api/hmm/README.md` — index, contracts and example, against a package that now searches topology as well as trains

@@ -69,3 +69,19 @@ becomes the PyPI long description.
   `_suggest_merge`, which only tests call, because `_suggest_move` must rank merges and
   splits in one stable sort and so cannot compose their two rankings. Left alone
   deliberately: resolving them is a code change, not an audit.
+- **2026-09-18, goal 2 — the counts.** Four of five claims in `core.md` verified correct
+  against the tree: the suite at 3099 (74 / 2973 / 52, derived per directory), the ADR 0003
+  header byte-identical to 0.2.0's, fifteen Python modules and two Cython kernels, and
+  twenty-five ADRs. `uv run pytest` is green at 3099 in 378 s with **no skips**, since this
+  host carries both a CUDA device and torch — so the 229 numba-cuda tests and
+  `test_torch_interop.py` all executed, which a GPU-less run would not have done.
+- The one wrong count was `tests/test_search.py`, claimed at 37 and holding 48. It grew on
+  `feat/hmm-convergence-backend` and again on `feat/hmm-search-log` with neither branch
+  updating the figure, and **both totals stayed correct throughout** — the tests were counted,
+  merely attributed to the wrong file, so no aggregate check could have seen it. Fixed, with a
+  parenthetical recording the failure mode rather than just the number.
+- Noted and deliberately not acted on: `docs/agents/codex.md` still describes `hmm` as "three
+  modules and 167 tests", under a heading dated 2026-09-04. The date makes it honest rather
+  than false, so it is not drift in the sense this audit fixes — but it points a Codex
+  reviewer at revision 02's surface, with Baum-Welch, the MDL criterion and the whole search
+  invisible. Refreshing it is a `codex.md` job, outside this branch's `docs/api/` scope.
