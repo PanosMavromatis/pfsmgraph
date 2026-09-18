@@ -2,8 +2,10 @@
 
 Hidden Markov models in the arc-emission formulation, translated from a Lush original.
 Version 0.1.0 carried the model's parameters and its decode. 0.2.0 adds a batched decode,
-Baum-Welch training over a fixed topology, and a choice of backend for each; topology
-search is a later revision.
+Baum-Welch training over a fixed topology, and a choice of backend for each. 0.3.0 adds
+topology search by state merge and split, scored by minimum description length, and keeps
+it private: the public surface is still the ten names 0.2.0 shipped, for the reasons
+[The public surface](#the-public-surface) below gives.
 
 - **Parameters** — [`params.md`](params.md): `HMMParams`.
 - **Decode** — [`viterbi.md`](viterbi.md): `viterbi`, `viterbi_batch`, `ViterbiPath`,

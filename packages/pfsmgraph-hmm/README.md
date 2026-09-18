@@ -3,7 +3,13 @@
 Hidden Markov models in the arc-emission formulation, for the
 [`pfsmgraph`](https://github.com/PanosMavromatis/pfsmgraph) family: a model's parameters,
 its Viterbi decode, one record at a time or many padded together, and Baum-Welch training
-over a fixed topology, each with a choice of backend. Topology search is forthcoming.
+over a fixed topology, each with a choice of backend.
+
+0.3.0 adds topology search — growing and shrinking a model by state split and merge,
+scored by minimum description length — but not as public API. It ships private in this
+release: nothing new is exported, so there is no supported way to call it. The reasons are
+in [ADR 0025](https://github.com/PanosMavromatis/pfsmgraph/blob/main/docs/design/adr/0025-topology-search-not-exported.md);
+whether and how to export it is decided in a later release.
 
 It depends on `pfsmgraph-dataseq`, for its vocabulary and its records, and on numpy.
 

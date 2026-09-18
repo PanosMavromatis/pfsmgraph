@@ -85,3 +85,17 @@ becomes the PyPI long description.
   than false, so it is not drift in the sense this audit fixes — but it points a Codex
   reviewer at revision 02's surface, with Baum-Welch, the MDL criterion and the whole search
   invisible. Refreshing it is a `codex.md` job, outside this branch's `docs/api/` scope.
+- **2026-09-18, goal 3 — `docs/api/` and the PyPI README.** All ten names match their pages
+  exactly — signatures, defaults, fields and raised errors, checked by introspection. The
+  one real finding spanned two surfaces: the api index called topology search "a later
+  revision", four paragraphs above its own statement that revision 04's search ships
+  private, and `packages/pfsmgraph-hmm/README.md` called it "forthcoming". The second would
+  have become 0.3.0's immutable PyPI page. That was literally true of the public API but
+  read backwards for the release that *is* topology search. Both now say 0.3.0 adds it and
+  ships it private, as ADR 0025 §7 asks. The PyPI text links the ADR absolutely and names no
+  private function.
+- `tests/test_api_docs.py` is green at 11, and was shown to bind before it was trusted: a
+  scratch copy with one digit changed in the fourth decimal fails, naming the line.
+- **Handed to the release subgoal**: the root `README.md` still says topology search "is a
+  later revision" beside "released at 0.2.0". Both are release facts that turn false together
+  at the release commit, so they change there, alongside ADR 0025 §7's release notes.
