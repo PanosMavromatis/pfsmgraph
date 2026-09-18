@@ -86,8 +86,24 @@
     > `docs/api/`, so a block here would be the one unexecuted example in the package.
     > Both links point at `main` and return 404 from the tag push until this PR merges.
     > `uv lock --check` is unaffected, since the lockfile records no project URLs.
-  - [ ] The root `README.md`'s status line: "released at **0.2.0**" and the search as a
+  - [x] The root `README.md`'s status line: "released at **0.2.0**" and the search as a
     later revision turn false together at the release commit
+    > **Q:** When should the root README's `hmm` statements change — split by truth
+    > (already-false ones now, "released" ones at the record commit from text drafted
+    > here), all at the record commit, or all now?
+    > **A:** Split by truth.
+    > **Note:** The premise was half right. The "released" claims turn false at the
+    > *publish*, not the release commit, since the root README ships in no artifact and
+    > names a PyPI fact. Two other claims were false already. Line 16's table row still read
+    > "Baum-Welch … to follow", stale since 0.2.0 shipped it. Line 5's "a later revision"
+    > was stale since PR #48 implemented the search. Both are fixed now, in wording that
+    > carries no version claim (the row) or is future tense until the tag (line 5).
+    > **Note:** Drafted for goal 4's record commit, to apply verbatim once PyPI confirms:
+    > line 5 `released at **0.2.0** (2026-09-16)` → `released at **0.3.0** (<publish
+    > date>)`; line 5 `it will ship private in 0.3.0, with no supported entry point` →
+    > `0.3.0 ships it private, with no supported entry point`; line 71
+    > `` `pfsmgraph-hmm` at 0.2.0 `` → `` `pfsmgraph-hmm` at 0.3.0 ``. The sentence calling
+    > 0.2.0 the first release of platform wheels stays, being history rather than status.
   - [ ] Refresh `codex.md`'s review guide, which still describes `hmm` as "three modules
     and 167 tests" (2026-09-04)
   - [ ] Re-read `packages/pfsmgraph-hmm/README.md` and the metadata (`description`,
