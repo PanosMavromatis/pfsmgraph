@@ -1,8 +1,11 @@
 """The topology search: a walk over state merges and splits that keeps the best model.
 
 Private to ``pfsmgraph.hmm``: nothing here is re-exported from the package's
-``__init__``. [ADR 0023](../../../../../docs/design/adr/0023-topology-search-loop.md) is
-authoritative for everything below.
+``__init__``, and ADR 0025
+(``docs/design/adr/0025-topology-search-not-exported.md``) keeps it that way at
+0.3.0 -- the version ships this capability with no supported entry point. ADR 0023
+(``docs/design/adr/0023-topology-search-loop.md``) is authoritative for everything
+below.
 
 **This is a port, and the original is not the GUI.** ``Training/hmm-train-new-nw`` and
 ``hmm-train-load-nw`` build a trainer and run ::

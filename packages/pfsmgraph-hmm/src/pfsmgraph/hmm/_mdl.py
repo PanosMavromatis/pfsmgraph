@@ -1,10 +1,11 @@
 """The minimum description length criterion the topology search scores moves with.
 
 Private to ``pfsmgraph.hmm``: nothing here is re-exported from the package's
-``__init__``, and nothing outside this distribution may import it. Promotion to
-a shared home is reconsidered if ``hseg`` ever scores segmentations the same
-way; inventing a sixth distribution before a second consumer exists is not
-warranted (master plan, revision ``04-hmm-v0.3.0``).
+``__init__``, and nothing outside this distribution may import it; ADR 0025
+(``docs/design/adr/0025-topology-search-not-exported.md``) keeps it private at
+0.3.0. Promotion to a shared home is reconsidered if ``hseg`` ever scores
+segmentations the same way; inventing a sixth distribution before a second
+consumer exists is not warranted (master plan, revision ``04-hmm-v0.3.0``).
 
 The two code-length primitives are ``int-code-length`` and ``comb-code-length``
 (``.scratch/hmm-lush/Code/Utility/util.lsh:463-486``), read together with the DH
@@ -312,10 +313,10 @@ def _total_description_length(params, records, d, *, backend="python"):
 #: that differences scores.
 _IMPOSSIBLE_TOTAL = 1e100
 
-#: The golden-section fraction, ``(3 - sqrt 5) / 2`` (``util.lsh:124``).
+#: The golden-section fraction, ``(3 - sqrt 5) / 2`` (``util.lsh:125``).
 _CGOLD = (3.0 - float(np.sqrt(5.0))) / 2.0
 
-#: Brent's absolute tolerance floor, protecting a minimum at exactly zero (``util.lsh:125``).
+#: Brent's absolute tolerance floor, protecting a minimum at exactly zero (``util.lsh:126``).
 _ZEPS = 1e-10
 
 #: ``suggest-d``'s search interval and starting probe (``hmm-trainer.lsh:445``).

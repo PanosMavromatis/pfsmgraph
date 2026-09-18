@@ -79,9 +79,11 @@ def safe_divide(numerator, denominator) -> np.ndarray:
     ``inf`` respectively, and either would propagate into a parameter array as
     a silent corruption, where a zero is at least visible.
 
-    No call site in 0.1.0 reaches this yet -- all fifteen are in the forward
-    pass, the M-step and the topology surgery, which arrive in revisions 03
-    and 04.
+    It had no call site at 0.1.0; revisions 03 and 04 brought all of them, and
+    there are thirteen today -- in the forward pass (:mod:`._forward_backward`),
+    the M-step (:mod:`._baum_welch`), the topology surgery (:mod:`._topology`)
+    and the quantizer (:mod:`._mdl`). Every one is a place where a zero
+    denominator is an ordinary model rather than a defect.
     """
     num = np.asarray(numerator, dtype=np.float64)
     den = np.asarray(denominator, dtype=np.float64)

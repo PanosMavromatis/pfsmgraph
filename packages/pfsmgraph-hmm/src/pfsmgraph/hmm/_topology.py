@@ -1,9 +1,11 @@
 """Topology moves for the revision 04 search: state split and state merge.
 
 Private to ``pfsmgraph.hmm``: nothing here is re-exported from the package's
-``__init__``. The public surface for topology search arrives with the search loop,
-which is also where a move is re-converged and scored; this module only builds the
-candidate (master plan, revision ``04-hmm-v0.3.0``).
+``__init__``, and nothing here becomes public at 0.3.0: ADR 0025
+(``docs/design/adr/0025-topology-search-not-exported.md``) keeps the whole topology
+search private, so 0.3.0 ships it with no supported entry point. Where a move is
+re-converged and scored is :mod:`._trials`; this module only builds the candidate
+(master plan, revision ``04-hmm-v0.3.0``).
 
 Each move is a free function over :class:`~._params.HMMParams` that returns a new
 value built from fresh arrays, as ``baum_welch`` does after each M-step (ADR 0017,

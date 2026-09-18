@@ -181,7 +181,7 @@ class ImpossibleSequenceError(ValueError):
     dead arc.
 
     A subclass of ``ValueError`` so that ``except ValueError`` keeps working,
-    and a distinct type because revision 04's topology search will decode many
+    and a distinct type because revision 04's topology search decodes many
     sequences against many candidate topologies, where an impossible sequence is
     an ordinary *search outcome* rather than a malformed input. Discriminating
     the two on an error message would not survive the first rewording.

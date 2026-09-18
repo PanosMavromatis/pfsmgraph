@@ -22,8 +22,12 @@ are the named departures. Round `r` is seeded `seed.spawn_key + (1, r)` and the 
 so every trial is rebuildable from its identity. It returns a frozen `SearchResult(start, best,
 rounds, stop)`. **Its first three rounds on `set02a_200` choose the moves the Lush training log
 of `m001_0005_005` records** (split 0, 0, 2, to within a bit of each logged total), which makes
-that log a partial oracle for moves, though not for bits. `tests/test_search.py` holds its 37
-tests, mostly against a scripted `_suggest_move`, mutation-checked against eight defects. **One
+that log a partial oracle for moves, though not for bits. `tests/test_search.py` holds its 48
+tests, mostly against a scripted `_suggest_move`, mutation-checked against eight defects.
+*(48 as of 2026-09-18. It was 37 when written, and grew on `feat/hmm-convergence-backend`
+and then `feat/hmm-search-log` without either branch updating the figure. The suite and
+package totals stayed correct throughout, which is why no aggregate check could see it --
+the eleven tests were counted, just attributed to the wrong file.)* **One
 limit is measured and deliberately not engineered around**: near the optimum a candidate's total
 is a step function of its converged parameters, because the best integer `d` steps as EM runs on
 and each step moves the model half by 58-71 bits at nine states, so rankings closer than that
@@ -356,9 +360,12 @@ library; nothing on this side carries that suffix. The original's `-1` log-zero 
 **not** reproduced: `bits(0)` is `+inf`, which absorbs under addition and sorts where it
 means, so `safe->--log` dissolves into plain `>` and `int-delta` into `np.eye`. Faithfulness
 to `-1` was declined as uncheckable — there is no Lush runtime in this repository, and the
-sentinel reaches no persisted artifact. One live loose end: `safe_divide` has **no consumer
-in 0.1.0**, since all fifteen of its call sites are in the forward pass, the M-step, or the
-topology surgery, which arrive in revisions 03 and 04.
+sentinel reaches no persisted artifact. That loose end is closed: `safe_divide` had **no
+consumer in 0.1.0**, and revisions 03 and 04 brought thirteen call sites — six in the forward
+pass, three in the M-step, three in the topology surgery and one in `_mdl`'s quantizer.
+*(Corrected 2026-09-18 by the revision 04 audit, which corrected the same claim in the
+function's own docstring at the same time. The earlier wording put the count at fifteen; the
+tree has thirteen.)*
 
 **The stationary solve carries the second fact a port loses.** `state_p` is the stationary
 distribution of `transition_p`, and `(Pᵀ - I)π = 0` is singular *by construction* — that is
