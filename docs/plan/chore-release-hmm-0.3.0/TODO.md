@@ -147,11 +147,69 @@
     > comment ships in the sdist. There are no `Topic ::` or `Operating System ::`
     > classifiers, and 0.2.0 had none either. That is a finding rather than a gap this
     > release must close.
-- [ ] Verify what a consumer installs
-  - [ ] CI dry run of the twenty wheels and the sdist from this branch, as 0.2.0's run
+- [x] Verify what a consumer installs
+  > **Done:** Run `35301984370` built all twenty wheels and the sdist from `3316ff1` and
+  > skipped `publish`. The sdist is byte-identical to one built locally from the same
+  > commit. The `cp312` Linux wheel, installed alone into a clean venv with
+  > `pfsmgraph-dataseq` 0.1.0 from PyPI, carries the four files, `license-files`, the new
+  > summary and the ten names. Its Cython kernels are bit-identical to the numpy reference
+  > in 330 of 330 comparisons.
+  - [x] CI dry run of the twenty wheels and the sdist from this branch, as 0.2.0's run
     35049292620 did, with the temporary trigger removed before merge
-  - [ ] Install into a clean venv outside the workspace; check the four files, the ten
+    > **Q:** Trigger the dry run by `workflow_dispatch` against this branch, or by a
+    > temporary push trigger as 0.2.0 did?
+    > **A:** `workflow_dispatch`: `gh workflow run release.yml --ref chore/release-hmm-0.3.0`.
+    > **Note:** The temporary trigger this subgoal names is superseded, not skipped. 0.2.0
+    > needed one because GitHub offers `workflow_dispatch` only for a workflow already on
+    > the default branch, and `release.yml` was not yet on `main`. It has been since the
+    > 0.2.0 merge, and it keeps `workflow_dispatch:`. A dispatched run takes the workflow
+    > file from the ref and builds its tip. `publish` stays skipped, because its `if:`
+    > requires a `refs/tags/pfsmgraph-hmm-v*` ref. Nothing is edited, so nothing needs
+    > removing before merge, and later pushes to this branch do not fire the matrix.
+    > **Ran (2026-09-18):** run `35301984370`, dispatched by the user against `3316ff1`.
+    > **Success, 11m26s** (03:07:09 → 03:18:35 UTC), against 0.2.0's 7m48s. `publish to
+    > PyPI` **skipped**. It produced twenty `0.3.0.dev0` wheels, five per platform on
+    > cp310–cp314, with the same glibc 2.17 manylinux floor
+    > (`manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64`), plus
+    > `pfsmgraph_hmm-0.3.0.dev0.tar.gz`. Every wheel's test session opened on `cython ✓`
+    > (20 of 20 headers), with `cpu_parallel`, `cuda` and `torch` absent and naming their
+    > extras. **2378 passed / 574 skipped** on every interpreter, except two Windows ones
+    > at 2379 / 573: the libm-vs-numpy `log2` test again, as in 0.2.0's run.
+    > **Note:** **The sdist reproduces byte for byte**: sha256 `25f7f0b9…a2f82d` for both
+    > CI's and `uv build --sdist` here from the same commit. It contains `CHANGELOG.md`,
+    > with no `meson.build` entry needed, since the sdist is a `git archive`.
+    > **Note:** Windows logs print the header **escaped**, `cython \u2713 \xb7 cpu_parallel
+    > \u2717`, because its console encoding cannot carry the symbols. So a grep for
+    > `cython ✓` counts **0** on Windows and reads like a missing kernel. Match
+    > `cython (✓|\\u2713)` instead; all five Windows headers say available.
+  - [x] Install into a clean venv outside the workspace; check the four files, the ten
     names, and the compiled kernels bit-exact against the numpy reference
+    > **Result (2026-09-18):** a `uv venv` under the session scratchpad, outside the
+    > repository, holding only the `cp312` manylinux x86_64 wheel from run `35301984370` and
+    > what it resolved from PyPI: `pfsmgraph-dataseq` **0.1.0** and numpy **2.5.3**. That numpy
+    > is newer than the workspace's 2.4.6, which the `numba-cuda` cap holds back, so the
+    > kernels also ran against a numpy the workspace never exercises. `sys.path` held no
+    > workspace entry, and `hmm` imported from the venv's `site-packages`. Metadata: version
+    > `0.3.0.dev0`, the new summary, `dist-info/licenses/LICENSE` with `License-File:
+    > LICENSE`, `pfsmgraph/hmm/py.typed`, `Typing :: Typed`, the README as long description,
+    > the `Changelog` URL, and no namespace `__init__.py`. `__all__` is the ten names.
+    > `backends()` reports `python ✓ · cython ✓`, with the three optional backends absent.
+    > **Cython against python: 330 comparisons, 0 not bit-identical.** Those are `viterbi`
+    > and `viterbi_batch` over 40 random models of 1–8 states, empty records included, and
+    > `baum_welch` with `score_backend="cython"` compared on its cycles, its
+    > description-length trace and all three parameter arrays. The public API only, by a
+    > scratchpad script run once first against the workspace so that a failure here would
+    > point at the wheel rather than the script.
+    > **Note:** **The workspace venv's own metadata is stale, and that is a second reason
+    > this check needs a clean venv.** Rehearsing the check script under `uv run`,
+    > `importlib.metadata` reported `pfsmgraph-hmm` **0.1.0**, with 0.1.0's summary, no
+    > license file and no `py.typed`. That comes from `.venv/.../pfsmgraph_hmm-0.1.0.dist-info`,
+    > written 2026-09-14 and not rewritten through three version changes since. The
+    > meson-python editable finder serves live source, so imports stay current. Nothing
+    > rewrites the `dist-info` beside it, and `uv sync` did not reinstall on a version
+    > change. Nothing in `src/` or the tests reads that metadata (no `__version__`, no
+    > `importlib.metadata` call), so it affects nothing today. It would mislead the first
+    > code that asks the installed version.
 - [ ] Release: publish, tag, and close what the branch discharged
   - [ ] Release commit: `version` to `0.3.0`, date the `CHANGELOG.md` 0.3.0 heading, relock,
     rebuild and re-verify — then

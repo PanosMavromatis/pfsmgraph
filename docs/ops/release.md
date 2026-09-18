@@ -218,6 +218,18 @@ same outcome -- it is the token path, without PEP 740 attestations, which are si
 the Trusted Publishing identity. The artifacts *are* downloadable (`gh run download <run-id>`
 fetches all of them in seconds); the reason not to is the identity, not access.
 
+**Dry-run the CI path before the tag, by dispatching the workflow against the release
+branch**: `gh workflow run release.yml --ref <branch>`. The run builds every wheel and the
+sdist from the branch tip and tests each installed wheel, and it cannot publish, because the
+`publish` job's `if:` requires a `refs/tags/pfsmgraph-hmm-v*` ref. Then `gh run download`
+the artifacts and install one into a clean venv outside the workspace, since the workspace
+venv's own `dist-info` is not refreshed on a version change and reports a stale version.
+0.3.0 did this as run `35301984370` (2026-09-18). 0.2.0 had to add a temporary branch
+trigger instead, because GitHub offers dispatch only for a workflow already on the default
+branch and `release.yml` was not yet there. On Windows the test header prints its marks
+escaped (`cython \u2713`), so match that form too when grepping the logs for `cython ✓`.
+Only `just release-ci` pushes the tag that publishes.
+
 `just` is a command runner: named recipes, arguments, no build graph and no `make` tab
 traps. The `justfile` sits at the workspace root beside the root `pyproject.toml`, because
 the recipes assume that working directory -- `uv build --package` and the shared `dist/`
