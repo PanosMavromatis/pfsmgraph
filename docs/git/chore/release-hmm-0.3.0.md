@@ -27,8 +27,8 @@ this branch verifies rather than assumes.
 - Decide the two `_trials` helpers no module in `src/` calls (`_suggest_split`,
   `_suggest_merge`), handed on by PR #52. Kept: an ADR 0023/0024 evidence script calls
   `_suggest_merge` too, so "only the tests" was incomplete (plan, goal 1).
-- Release notes meeting ADR 0025 §7. No `CHANGELOG` exists and 0.2.0 wrote none, so where
-  they live is itself a decision.
+- Release notes meeting ADR 0025 §7. No `CHANGELOG` existed and 0.2.0 wrote none; decided
+  as `packages/pfsmgraph-hmm/CHANGELOG.md`, backfilled to 0.1.0 (plan, goal 2).
 - The root `README.md`'s status line ("released at **0.2.0**", the search as a later
   revision) and `codex.md`'s review guide, which still describes `hmm` as "three modules
   and 167 tests" as of 2026-09-04 — both handed on by PR #52.

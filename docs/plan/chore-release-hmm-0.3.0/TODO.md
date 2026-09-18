@@ -12,9 +12,15 @@
   > remove both?
   > **A:** Keep, reason in the plan. No shipped-code change.
   > **Done:** What ships differs from 0.2.0 by four new private modules (`_mdl`,
-  > `_search`, `_topology`, `_trials`) and nothing else a consumer can reach: the backend
-  > table, `__init__.py` and both `.pyx` are unchanged, the header is byte-identical, and
-  > the invariant holds. §12's prediction is confirmed rather than assumed.
+  > `_search`, `_topology`, `_trials`) and two public changes: the backend table,
+  > `__init__.py` and both `.pyx` are unchanged, the header is byte-identical, and the
+  > invariant holds. §12's prediction is confirmed rather than assumed.
+  > **Note:** *(Corrected in goal 2.)* This read "and nothing else a consumer can reach",
+  > and so does the body of `0f671c0`, which is pushed and stays as written. It was
+  > checked against `__all__` and the backend table, which see a new name or row and not a
+  > new keyword. A signature diff across the tag found `baum_welch`'s `score_backend=` and
+  > `min_cycles=`, and `HMMParams.state_p` changed behaviour: a reducible chain now always
+  > raises, and transient states are exactly `0.0`. All three are in `CHANGELOG.md`.
   - [x] No new ADR 0002 lifecycle phase or backend row, as `HMMLIB-ACCOUNT.md` §12
     predicts; the ADR 0003 backend header byte-identical to 0.2.0's
     > **Note:** `git diff pfsmgraph-hmm-v0.2.0..HEAD` over the package's `src/`,
@@ -61,10 +67,25 @@
     > Under ADR 0025 they are out of contract, so keeping them freezes nothing. This is
     > the third time the question has opened (`feat-hmm-scored-primitives`,
     > `chore-hmm-0.3.0-audit`, here) — point the next audit at this note.
-- [ ] Settle what 0.3.0's immutable text says
-  - [ ] Release notes meeting ADR 0025 §7 — topology search ships with no supported entry
+- [~] Settle what 0.3.0's immutable text says
+  > **Q:** Where should hmm 0.3.0's release notes live — a package `CHANGELOG.md` backfilled
+  > to 0.1.0, one starting at 0.3.0, a GitHub Release on the tag, or the member README's
+  > existing ADR 0025 paragraph alone?
+  > **A:** `packages/pfsmgraph-hmm/CHANGELOG.md`, with a 0.3.0 entry and short 0.2.0 and
+  > 0.1.0 entries rebuilt from the record. Reviewed in this PR, shipped in the sdist,
+  > linked from the README; the other four members adopt it at their first release.
+  - [x] Release notes meeting ADR 0025 §7 — topology search ships with no supported entry
     point, said plainly. No `CHANGELOG` exists and 0.2.0 wrote none, so decide where they
     live before writing them
+    > **Note:** `packages/pfsmgraph-hmm/CHANGELOG.md`, linked from the member README and
+    > from `[project.urls]` as `Changelog`. 0.3.0 opens with the §7 sentence in bold, ahead
+    > of any list. The member README already met §7 before this, since `f511026`
+    > (PR #52), so what this adds is the change list. 0.2.0 and 0.1.0 were rebuilt from
+    > each tag's `__all__`, signatures and `pyproject.toml`, not from memory. The file has
+    > **no fenced code blocks** on purpose: `tests/test_api_docs.py` reads `README.md` and
+    > `docs/api/`, so a block here would be the one unexecuted example in the package.
+    > Both links point at `main` and return 404 from the tag push until this PR merges.
+    > `uv lock --check` is unaffected, since the lockfile records no project URLs.
   - [ ] The root `README.md`'s status line: "released at **0.2.0**" and the search as a
     later revision turn false together at the release commit
   - [ ] Refresh `codex.md`'s review guide, which still describes `hmm` as "three modules
@@ -77,7 +98,8 @@
   - [ ] Install into a clean venv outside the workspace; check the four files, the ten
     names, and the compiled kernels bit-exact against the numpy reference
 - [ ] Release: publish, tag, and close what the branch discharged
-  - [ ] Release commit: `version` to `0.3.0`, relock, rebuild and re-verify — then
+  - [ ] Release commit: `version` to `0.3.0`, date the `CHANGELOG.md` 0.3.0 heading, relock,
+    rebuild and re-verify — then
     `0.4.0.dev0` straight after, closing the window `core.md` "Versioning" names
   - [ ] **User:** publish (irreversible): `just release-ci 0.3.0` pushes the
     `pfsmgraph-hmm-v0.3.0` tag that triggers the publish job

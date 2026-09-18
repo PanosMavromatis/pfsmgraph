@@ -66,6 +66,15 @@ A member's release commit must contain all four, inside `packages/pfsmgraph-<pkg
 its 0.1.0 release branch. Each remaining member owes them in its own release commit; see
 `docs/plan/DEFERRED.md`.
 
+**A member's release notes are its `CHANGELOG.md`, beside its README**, since
+`pfsmgraph-hmm` 0.3.0 (2026-09-18), whose notes ADR 0025 §7 required. It is not a fifth
+invariant file, because nothing about it fails silently: it reaches the sdist as every
+tracked file at the member root does, reaches no wheel, and is linked from the README and
+from `[project.urls]` as `Changelog`. Its newest heading reads `unreleased` until the
+release commit dates it, for the same reason the version keeps `.dev0` until then. It holds
+no fenced code blocks, since `tests/test_api_docs.py` executes only READMEs and
+`docs/api/`. The other members start theirs at their first release.
+
 **`just build` builds the last commit, not the working tree.** meson-python makes the sdist
 with `meson dist`, which archives `HEAD` even under `--allow-dirty`, and `uv build` then
 builds the wheel from that sdist. So an uncommitted change reaches neither artifact, and a

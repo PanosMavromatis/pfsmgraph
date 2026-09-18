@@ -94,6 +94,7 @@ torch = ["torch>=2.13"]
 Homepage = "https://github.com/PanosMavromatis/pfsmgraph"
 Repository = "https://github.com/PanosMavromatis/pfsmgraph"
 Documentation = "https://github.com/PanosMavromatis/pfsmgraph/blob/main/docs/api/hmm/README.md"
+Changelog = "https://github.com/PanosMavromatis/pfsmgraph/blob/main/packages/pfsmgraph-hmm/CHANGELOG.md"
 
 [build-system]
 # meson-python. The Viterbi decode has a compiled phase-2 kernel, built by
