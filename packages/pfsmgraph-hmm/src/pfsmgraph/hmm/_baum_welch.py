@@ -49,7 +49,8 @@ symmetric saddle stops *on* the saddle, and an exactly uniform start is one.
 **The data description length at a precision ``d`` is the same forward pass over
 rounded parameters**, which is what the original's ``update-data-dl`` is. Rounding
 is what makes precision cost bits, so the value means nothing apart from ``d``;
-choosing ``d`` belongs with the model description length in revision 04.
+choosing ``d`` belongs with the model description length, and lives in
+:mod:`._mdl` since revision 04.
 
 .. [ADR 0002] ``docs/design/adr/0002-three-phase-algorithm-lifecycle.md``
 .. [ADR 0020] ``docs/design/adr/0020-scaled-probability-domain-forward-backward.md``

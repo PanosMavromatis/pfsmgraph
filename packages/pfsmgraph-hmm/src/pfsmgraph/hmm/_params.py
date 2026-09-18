@@ -223,9 +223,10 @@ class HMMParams:
             # an oversight to be exempted. HMMLIB-ACCOUNT.md section 5 records that
             # merge-states divides with safe-/, so merging two unreachable states
             # yields zeros -- meaning revision 04's topology search can construct
-            # exactly this. Rejecting it makes that surface at construction, where
-            # revision 04 has to decide what an unreachable state means, rather
-            # than silently downstream in a stationary solve that has none.
+            # exactly this. Rejecting it makes that surface at construction rather
+            # than silently downstream in a stationary solve that has no answer.
+            # Revision 04 decided: _merge_states refuses a pair of two transient
+            # states outright, so the all-zero row is never built.
             first = int(bad_rows[0])
             raise ValueError(
                 f"{bad_rows.size} row(s) of transition_p do not sum to 1: row "

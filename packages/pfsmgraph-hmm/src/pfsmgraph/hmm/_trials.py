@@ -1,7 +1,13 @@
 """Scored trials of topology moves for the revision 04 search, and their rankings.
 
 Private to ``pfsmgraph.hmm``: nothing here is re-exported from the package's
-``__init__``. A trial builds one candidate with :mod:`._topology`, re-converges it
+``__init__``, and ADR 0025
+(``docs/design/adr/0025-topology-search-not-exported.md``) keeps it that way at
+0.3.0: ``TrialResult``'s ``d`` and ``data_bits`` would assert the two-part
+description length that :func:`~._mdl._total_description_length` returns a bare
+``float`` precisely to avoid asserting.
+
+A trial builds one candidate with :mod:`._topology`, re-converges it
 with :func:`~._baum_welch.baum_welch`, chooses its ``d`` and scores it:
 ``try-split`` and ``try-merge``. ``suggest-split``, ``suggest-merge`` and
 ``suggest-move`` run every trial of a round and rank them. Deciding whether the

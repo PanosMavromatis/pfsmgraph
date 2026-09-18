@@ -56,3 +56,16 @@ becomes the PyPI long description.
   rediscovered.
 
 ## Notes
+
+- **2026-09-18, goal 1 — the module read.** Six stale docstrings found and fixed. One was
+  substantive rather than merely stale: `_topology.py` promised that "the public surface for
+  topology search arrives with the search loop", which ADR 0025 overturned four days later —
+  and no module cited 0025 at all, including the four it governs. All four now do, each
+  naming the cost 0025 accepts for it. Also two off-by-one `util.lsh` line numbers in
+  `_mdl.py` (`:124`/`:125` for `CGOLD`/`ZEPS`, actually 125/126), and `_search.py`'s Markdown
+  ADR link converted to reST, where it had been rendering as literal text under `help()`.
+- `safe_divide`'s loose end is closed at thirteen call sites, and the same claim was stale in
+  `core.md` too. Two new orphans opened in its place — `_trials._suggest_split` and
+  `_suggest_merge`, which only tests call, because `_suggest_move` must rank merges and
+  splits in one stable sort and so cannot compose their two rankings. Left alone
+  deliberately: resolving them is a code change, not an audit.

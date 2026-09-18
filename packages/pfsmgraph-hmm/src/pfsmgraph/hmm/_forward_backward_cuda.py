@@ -80,7 +80,8 @@ if not cuda.is_available():
         "CUDA device and driver, and numba-cuda reports none"
     )
 
-#: Threads per block. A placeholder: no occupancy tuning before the answer is right.
+#: Threads per block. Still a placeholder: the rule is no occupancy tuning before
+#: the answer is right, and once it was the phase was complete.
 _THREADS_PER_BLOCK = 64
 
 
