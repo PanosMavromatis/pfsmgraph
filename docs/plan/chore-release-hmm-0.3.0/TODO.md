@@ -67,7 +67,14 @@
     > Under ADR 0025 they are out of contract, so keeping them freezes nothing. This is
     > the third time the question has opened (`feat-hmm-scored-primitives`,
     > `chore-hmm-0.3.0-audit`, here) — point the next audit at this note.
-- [~] Settle what 0.3.0's immutable text says
+- [x] Settle what 0.3.0's immutable text says
+  > **Done:** Every text 0.3.0 freezes or points at now says what ships. The new
+  > `CHANGELOG.md` is backfilled to 0.1.0 and opens on ADR 0025 §7. The PyPI summary
+  > reads "topology search included but not yet public". The root README's already-false
+  > claims are fixed, with the PyPI-dependent ones drafted for the record commit.
+  > `codex.md` no longer overrides a current `core.md` in four places. Two false claims
+  > were corrected along the way, with dated notes: goal 1's "nothing a consumer can
+  > reach" and `core.md`'s "a coincidence a test pins against".
   > **Q:** Where should hmm 0.3.0's release notes live — a package `CHANGELOG.md` backfilled
   > to 0.1.0, one starting at 0.3.0, a GitHub Release on the tag, or the member README's
   > existing ADR 0025 paragraph alone?
@@ -125,8 +132,21 @@
     > revision-04 block repeated the claim from `core.md`, and the mutation run caught it
     > before it was written. No test was added. A test feeding `_ranked` a split ahead of
     > an equal-total merge would pin it, if that is ever wanted.
-  - [ ] Re-read `packages/pfsmgraph-hmm/README.md` and the metadata (`description`,
+  - [x] Re-read `packages/pfsmgraph-hmm/README.md` and the metadata (`description`,
     classifiers, extras) as the 0.3.0 PyPI page will show them
+    > **Q:** What should 0.3.0's one-line PyPI summary say about topology search — "included
+    > but not yet public", drop the clause, or keep "forthcoming"?
+    > **A:** "topology search included but not yet public".
+    > **Note:** The `description` was the only field wrong for 0.3.0. The classifiers
+    > match the cp310–cp314 wheels and keep `Typing :: Typed`, the extras are unchanged
+    > since 0.2.0, and `[project.urls]` gained `Changelog` in goal 2's first subgoal. The
+    > member README already stated ADR 0025 §7 since PR #52. It does not mention
+    > `score_backend=` or `min_cycles=`, correctly: its Training section shows the call,
+    > and `docs/api/hmm/` and the CHANGELOG carry the keywords. `meson.build:31-32` no
+    > longer says `py.typed` "arrives at the release commit" (goal 1's note), since that
+    > comment ships in the sdist. There are no `Topic ::` or `Operating System ::`
+    > classifiers, and 0.2.0 had none either. That is a finding rather than a gap this
+    > release must close.
 - [ ] Verify what a consumer installs
   - [ ] CI dry run of the twenty wheels and the sdist from this branch, as 0.2.0's run
     35049292620 did, with the temporary trigger removed before merge
