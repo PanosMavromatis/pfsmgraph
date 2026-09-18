@@ -147,6 +147,36 @@ Markers: `[ ]` not started · `[~]` in progress · `[x]` complete · `[!]` block
         "whatever the search loop and training log export", so neither is left asserting
         a surface that does not exist.
 
-- [ ] Sync the docs and leave the audit a smaller job than it was
-  - [ ] `docs/agents/core.md` and `AGENTS.md`, including test counts if any moved.
-  - [ ] Say in the master plan's audit subgoal what this branch already settled.
+- [x] Sync the docs and leave the audit a smaller job than it was
+  > **Done:** `core.md` and `AGENTS.md` carry the decision, and the master plan's audit
+  > subgoal now says both what it no longer needs to ask and what this branch already
+  > repaired. Nothing was pre-empted from `/smart-merge`: the export subgoal at
+  > `docs/plan/TODO.md:225` stays open for it to close with the PR number.
+  - [x] `docs/agents/core.md` and `AGENTS.md`, including test counts if any moved.
+    > **Note:** `core.md` gains the decision in two places, for two readers: the `hmm`
+    > section's export sentence, which now says the ten names are ten *by decision* and
+    > names the four modules that stay out of contract, and the ADR paragraph, which
+    > describes 0025 as it already describes 0015, 0017, 0020, 0022, 0023 and 0024. The
+    > ADR count was repaired earlier on this branch, from twenty-four to twenty-five.
+    > `AGENTS.md` rebuilt to 906 lines from 897, the nine being the wrapped insert;
+    > `AGENTS.override.md` rebuilt byte-identical, since `codex.md` never moved.
+    > **Note:** **no test count moved, and that is established by the diff rather than by
+    > a run.** `git diff main...HEAD --stat` shows nine files, every one under `docs/` or
+    > the generated `AGENTS.md` — nothing under `packages/` or `tests/` — so the suite
+    > cannot have changed and stands at 3099. Running it would have confirmed a number the
+    > diff already proves. The one guard that *could* have been disturbed was run, since
+    > the branch edited a page it reads: `uv run pytest tests/test_api_docs.py -q`, 11
+    > passed.
+  - [x] Say in the master plan's audit subgoal what this branch already settled.
+    > **Note:** said in two places, because they answer different questions. The subgoal's
+    > own sentence no longer presumes a surface — "whatever the search loop and training
+    > log export" now says they export nothing and cites ADR 0025 — and a second
+    > `> **Note:**` beneath it lists the three parts of the audit this branch discharged,
+    > so the auditor learns what to *stop* checking in the place they will be reading. An
+    > audit that re-verifies what was already verified costs the same as one that never
+    > knew, so the whole saving is in where the note sits.
+    > **Note:** `docs/plan/TODO.md:225`, the export subgoal itself, is deliberately left
+    > `[ ]` with its `> **Branch:**` backlink intact. `/smart-merge` step 7 marks it
+    > complete and writes its `> **Done:**` with the PR number, which is the only moment
+    > when both the PR number and the open branch exist. Closing it here would leave the
+    > merge nothing to record.

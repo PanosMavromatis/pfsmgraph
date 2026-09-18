@@ -77,3 +77,12 @@ asked, and two documents already lean the other way.
   `tests/test_api_docs.py` executes the code blocks against pasted output, so the ten-name
   `__all__` listing beneath that paragraph cannot go stale — but the prose around it is
   unexecutable and is checked by nobody. The blocks are verified; the sentences are not.
+- **What the audit no longer has to do**, recorded in the audit subgoal itself rather than
+  here, so the auditor reads it where they are already looking: the export question is
+  settled, `docs/api/hmm/README.md`'s private-module list can be confirmed rather than
+  rebuilt, and `core.md`'s ADR count was corrected from twenty-four to twenty-five. The
+  module and test counts did not move, because this branch changed no code and no tests.
+- **Left for the release subgoal, not done here.** ADR 0025 §7 obliges 0.3.0's release
+  notes to say the headline capability has no supported entry point. The root `README.md`
+  will need the same when 0.3.0 ships — it currently describes the released 0.2.0 and says
+  topology search "is a later revision", which is still true and so was left alone.
