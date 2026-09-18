@@ -210,7 +210,12 @@
     > change. Nothing in `src/` or the tests reads that metadata (no `__version__`, no
     > `importlib.metadata` call), so it affects nothing today. It would mislead the first
     > code that asks the installed version.
-- [~] Release: publish, tag, and close what the branch discharged
+- [x] Release: publish, tag, and close what the branch discharged
+  > **Done:** `pfsmgraph-hmm` 0.3.0 is on PyPI as of 2026-09-18 03:40 UTC, tagged
+  > `pfsmgraph-hmm-v0.3.0` at `78f04a3`. It is twenty wheels and an sdist from run
+  > `35303614122`, each with a PEP 740 attestation, and the sdist digest was predicted
+  > before the tag. `0.4.0.dev0` followed in the next commit, `67b887f`. `core.md` and the
+  > root README now say released at 0.3.0. The master plan's item closes at `/smart-merge`.
   - [x] Release commit: `version` to `0.3.0`, date the `CHANGELOG.md` 0.3.0 heading, relock,
     rebuild and re-verify — then
     `0.4.0.dev0` straight after, closing the window `core.md` "Versioning" names
@@ -240,7 +245,30 @@
     > host. `_tree-pushed` pushed `e4752de..78f04a3`. The tag `pfsmgraph-hmm-v0.3.0` points
     > at `78f04a3`, locally and on origin (`git ls-remote`). The push started run
     > `35303614122`, event `push` on the tag.
-  - [ ] Confirm PyPI's digests match the verified build and the tag points at the release
+  - [x] Confirm PyPI's digests match the verified build and the tag points at the release
     commit
-  - [ ] Record commit: the "released" statements in `core.md`, the root README and the
+    > **Result (2026-09-18):** run `35303614122` (tag push, 03:32:50 → 03:40:49 UTC) built
+    > and published. Its publish job's assertion printed "all 21 artifacts carry version
+    > 0.3.0", and PyPI shows 0.3.0 uploaded at 03:40:18 UTC with 20 wheels and 1 sdist, not
+    > yanked. **The sdist's sha256 is `746cd411…ddecceeb`, the digest the local build of
+    > `78f04a3` predicted before the tag existed.** All 21 PyPI digests equal the run's
+    > downloaded artifacts file for file. All 21 files have a PEP 740 provenance attestation
+    > (`/integrity/…/provenance` returns 200), published by `GitHub
+    > PanosMavromatis/pfsmgraph`, workflow `release.yml`, environment `pypi`. The tag is
+    > `78f04a3`, locally and on origin. Installed from PyPI with `--refresh --no-cache` into
+    > a fresh venv, the consumer check passes again: version 0.3.0, the four files, ten
+    > names, `cython ✓`, and 330 of 330 bit-identical against the numpy reference.
+    > **Note:** The subgoal's "verified build" could not be the dry run's own artifacts,
+    > which carry `0.3.0.dev0` and so differ in every byte that names the version. What
+    > makes the verification carry over is the reproducible sdist. The dry run established
+    > that CI's sdist and a local one agree byte for byte. That made the release sdist's
+    > digest predictable, and the prediction held.
+  - [x] Record commit: the "released" statements in `core.md`, the root README and the
     master plan
+    > **Note:** `core.md` now says `hmm` is released at 0.3.0 (2026-09-18), in its headline
+    > and in the release history, where one passage records the private search, the first
+    > CHANGELOG, the predicted digest and the attestations. The root README took goal 2's
+    > three drafted edits verbatim. **The master plan is left to `/smart-merge`**, whose
+    > step 7 marks the backlinked item `[x]` and writes its `Done:` line with the PR
+    > number. Editing it here would touch that item twice, the first time without the one
+    > fact the second adds.
